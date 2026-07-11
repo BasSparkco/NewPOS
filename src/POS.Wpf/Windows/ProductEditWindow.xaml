@@ -45,15 +45,15 @@
                 <StackPanel x:Name="FieldsPanel">
 
                     <!-- Name -->
-                    <TextBlock Text="Product name *" Style="{StaticResource FieldLabel}"/>
+                    <TextBlock x:Name="PeNameLbl" Style="{StaticResource FieldLabel}"/>
                     <TextBox x:Name="NameBox" Style="{StaticResource Field}"/>
 
                     <!-- Barcode -->
-                    <TextBlock Text="Barcode" Style="{StaticResource FieldLabel}"/>
+                    <TextBlock x:Name="PeBarcodeLbl" Style="{StaticResource FieldLabel}"/>
                     <TextBox x:Name="BarcodeBox" Style="{StaticResource Field}"/>
 
                     <!-- Category -->
-                    <TextBlock Text="Category" Style="{StaticResource FieldLabel}"/>
+                    <TextBlock x:Name="PeCategoryLbl" Style="{StaticResource FieldLabel}"/>
                     <ComboBox x:Name="CategoryBox"
                               DisplayMemberPath="Name"
                               SelectedValuePath="Id"
@@ -69,21 +69,21 @@
                             <ColumnDefinition Width="*"/>
                         </Grid.ColumnDefinitions>
                         <StackPanel Grid.Column="0">
-                            <TextBlock Text="Selling price *" Style="{StaticResource FieldLabel}"/>
+                            <TextBlock x:Name="PePriceLbl" Style="{StaticResource FieldLabel}"/>
                             <TextBox x:Name="PriceBox" Style="{StaticResource PosTextBox}"/>
                         </StackPanel>
                         <StackPanel Grid.Column="2">
-                            <TextBlock Text="Cost price" Style="{StaticResource FieldLabel}"/>
+                            <TextBlock x:Name="PeCostLbl" Style="{StaticResource FieldLabel}"/>
                             <TextBox x:Name="CostBox" Style="{StaticResource PosTextBox}"/>
                         </StackPanel>
                     </Grid>
 
                     <!-- Stock -->
-                    <TextBlock Text="Initial stock" Style="{StaticResource FieldLabel}"/>
+                    <TextBlock x:Name="PeStockLbl" Style="{StaticResource FieldLabel}"/>
                     <TextBox x:Name="StockBox" Style="{StaticResource Field}"/>
 
                     <!-- Image picker -->
-                    <TextBlock Text="Product image" Style="{StaticResource FieldLabel}"/>
+                    <TextBlock x:Name="PeImageLbl" Style="{StaticResource FieldLabel}"/>
                     <Grid Margin="0,0,0,10">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"/>
@@ -98,7 +98,7 @@
                                 BorderThickness="0.5"
                                 ClipToBounds="True">
                             <Grid>
-                                <TextBlock Text="No image selected"
+                                <TextBlock x:Name="PeNoImageTb"
                                            FontSize="11"
                                            Foreground="{StaticResource TextTertiaryBrush}"
                                            HorizontalAlignment="Center"
@@ -109,12 +109,12 @@
                         </Border>
 
                         <StackPanel Grid.Column="2" VerticalAlignment="Center">
-                            <Button Content="Browse…"
+                            <Button x:Name="PeBrowseBtn"
                                     Click="BrowseImage_Click"
                                     Style="{StaticResource GhostButton}"
                                     HorizontalAlignment="Stretch"
                                     Margin="0,0,0,6"/>
-                            <Button Content="Clear"
+                            <Button x:Name="PeClearBtn"
                                     Click="ClearImage_Click"
                                     Style="{StaticResource DangerButton}"
                                     HorizontalAlignment="Stretch"/>
@@ -125,7 +125,7 @@
                     <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
                         <CheckBox x:Name="ActiveCheck" VerticalAlignment="Center"
                                   Margin="0,0,8,0"/>
-                        <TextBlock Text="Product is active (visible in POS)" Style="{StaticResource CheckLabel}"/>
+                        <TextBlock x:Name="PeActiveLbl" Style="{StaticResource CheckLabel}"/>
                     </StackPanel>
 
                 </StackPanel>
@@ -138,13 +138,13 @@
                     Margin="-20,0,-20,0"
                     Padding="20,12,20,0">
                 <DockPanel LastChildFill="False">
-                    <Button DockPanel.Dock="Left"
-                            Content="Cancel"
+                    <Button x:Name="PeCancelBtn"
+                            DockPanel.Dock="Left"
                             Click="Cancel_Click"
                             Style="{StaticResource GhostButton}"
                             Width="80"/>
-                    <Button DockPanel.Dock="Right"
-                            Content="Save"
+                    <Button x:Name="PeSaveBtn"
+                            DockPanel.Dock="Right"
                             Click="Ok_Click"
                             Style="{StaticResource AccentButton}"
                             Width="80"/>

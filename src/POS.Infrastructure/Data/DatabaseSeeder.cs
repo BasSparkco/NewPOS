@@ -7,8 +7,7 @@ public static class DatabaseSeeder
 {
     public static void SeedIfNeeded(PosDbContext db)
     {
-        if (db.Users.Any())
-            return;
+        NormalizeBrokenDemoPasswordHashes(db);
 
         var now = DateTime.UtcNow;
 
@@ -23,46 +22,66 @@ public static class DatabaseSeeder
         var adminRoleId = db.Roles.Single(r => r.Name == "Admin").Id;
         var cashierRoleId = db.Roles.Single(r => r.Name == "Cashier").Id;
 
+        var ilsCurrency = db.Currencies.FirstOrDefault(c => c.Code == "ILS" && !c.IsDeleted)
+            ?? throw new InvalidOperationException("Currencies seed missing ILS — apply migrations first.");
+
         var store = db.Stores.FirstOrDefault();
         if (store is null)
         {
             store = new Store
             {
-                Id = Guid.NewGuid(),
-                Name = "Main Store",
-                Address = null,
-                Phone = null,
-                CreatedAt = now,
-                UpdatedAt = now
+                Id              = Guid.NewGuid(),
+                Name            = "Main Store",
+                Address         = null,
+                Phone           = null,
+                BaseCurrencyId  = ilsCurrency.Id,
+                CreatedAt       = now,
+                UpdatedAt       = now
             };
             db.Stores.Add(store);
             db.SaveChanges();
         }
+        else if (store.BaseCurrencyId == Guid.Empty)
+        {
+            store.BaseCurrencyId = ilsCurrency.Id;
+            store.UpdatedAt      = now;
+            db.SaveChanges();
+        }
 
-        var adminUser = new User
+        if (!db.Users.Any(u => u.Username.ToLower() == "admin" && !u.IsDeleted))
         {
-            Id = Guid.NewGuid(),
-            Username = "admin",
-            PasswordHash = BCrypt.Net.BCrypt.HashPassword("admin"),
-            RoleId = adminRoleId,
-            StoreId = store.Id,
-            IsActive = true,
-            CreatedAt = now,
-            UpdatedAt = now
-        };
-        var cashierUser = new User
+            var adminUser = new User
+            {
+                Id = Guid.NewGuid(),
+                Username = "admin",
+                PasswordHash = BCrypt.Net.BCrypt.HashPassword("admin"),
+                RoleId = adminRoleId,
+                StoreId = store.Id,
+                IsActive = true,
+                CreatedAt = now,
+                UpdatedAt = now
+            };
+            db.Users.Add(adminUser);
+        }
+
+        if (!db.Users.Any(u => u.Username.ToLower() == "cashier" && !u.IsDeleted))
         {
-            Id = Guid.NewGuid(),
-            Username = "cashier",
-            PasswordHash = BCrypt.Net.BCrypt.HashPassword("cashier"),
-            RoleId = cashierRoleId,
-            StoreId = store.Id,
-            IsActive = true,
-            CreatedAt = now,
-            UpdatedAt = now
-        };
-        db.Users.AddRange(adminUser, cashierUser);
-        db.SaveChanges();
+            var cashierUser = new User
+            {
+                Id = Guid.NewGuid(),
+                Username = "cashier",
+                PasswordHash = BCrypt.Net.BCrypt.HashPassword("cashier"),
+                RoleId = cashierRoleId,
+                StoreId = store.Id,
+                IsActive = true,
+                CreatedAt = now,
+                UpdatedAt = now
+            };
+            db.Users.Add(cashierUser);
+        }
+
+        if (db.ChangeTracker.HasChanges())
+            db.SaveChanges();
 
         if (db.Categories.Any() || db.Products.Any())
             return;
@@ -143,4 +162,46 @@ public static class DatabaseSeeder
 
         db.SaveChanges();
     }
+
+    /// <summary>
+    /// If demo users have plaintext or corrupted hashes, re-hash to the default passwords.
+    /// Does not change valid BCrypt hashes that already use a different password.
+    /// </summary>
+    private static void NormalizeBrokenDemoPasswordHashes(PosDbContext db)
+    {
+        (string Login, string Plain)[] demo = [("admin", "admin"), ("cashier", "cashier")];
+        var now = DateTime.UtcNow;
+        var changed = false;
+
+        foreach (var (login, plain) in demo)
+        {
+            var user = db.Users.FirstOrDefault(u => u.Username.ToLower() == login && !u.IsDeleted);
+            if (user is null)
+                continue;
+
+            if (LooksLikeBcrypt(user.PasswordHash))
+            {
+                try
+                {
+                    if (BCrypt.Net.BCrypt.Verify(plain, user.PasswordHash))
+                        continue;
+                    continue; // different password — leave unchanged
+                }
+                catch
+                {
+                    // malformed bcrypt — replace below
+                }
+            }
+
+            user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(plain);
+            user.UpdatedAt    = now;
+            changed             = true;
+        }
+
+        if (changed)
+            db.SaveChanges();
+    }
+
+    private static bool LooksLikeBcrypt(string hash) =>
+        hash.Length >= 59 && hash.StartsWith("$2", StringComparison.Ordinal);
 }

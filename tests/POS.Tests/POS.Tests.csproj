@@ -10,12 +10,17 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\..\src\POS.Api\POS.Api.csproj" />
     <ProjectReference Include="..\..\src\POS.Application\POS.Application.csproj" />
     <ProjectReference Include="..\..\src\POS.Core\POS.Core.csproj" />
+    <ProjectReference Include="..\..\src\POS.Infrastructure\POS.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\src\POS.Web\POS.Web.csproj" />
   </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="coverlet.collector" Version="6.0.0" />
+    <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" Version="8.0.11" />
+    <PackageReference Include="Microsoft.Extensions.Configuration" Version="8.0.0" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.8.0" />
     <PackageReference Include="xunit" Version="2.5.3" />
     <PackageReference Include="xunit.runner.visualstudio" Version="2.5.3" />

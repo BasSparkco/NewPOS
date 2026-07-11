@@ -67,6 +67,20 @@ public partial class MainWindow : Window
     private void SearchBox_OnLostKeyboardFocus(object sender, KeyboardFocusChangedEventArgs e)
         => ResetScannerTracking();
 
+    // Clicking/tabbing into a cart line's Qty or Discount box also routes the on-screen
+    // calculator to that field, so the cashier can use either the keyboard or the keypad.
+    private void CartLineQtyBox_OnGotFocus(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement { DataContext: CartLineItem line })
+            _vm.SelectLineQtyFieldCommand.Execute(line);
+    }
+
+    private void CartLineDiscBox_OnGotFocus(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement { DataContext: CartLineItem line })
+            _vm.SelectLineDiscFieldCommand.Execute(line);
+    }
+
     private bool IsScannerBurst(string code)
     {
         if (code.Length < ScannerMinLength || _scannerGapsMs.Count == 0)

@@ -1,0 +1,62 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TestRun id="2423afb2-4b34-48c3-9ec8-6585478998b6" name="User@ASUS 2026-05-18 23:04:25" runUser="Asus\User" xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010">
+  <Times creation="2026-05-18T23:04:25.5510952+03:00" queuing="2026-05-18T23:04:25.5510973+03:00" start="2026-05-18T23:04:15.3190184+03:00" finish="2026-05-18T23:04:34.5457369+03:00" />
+  <TestSettings name="default" id="5308b13f-9f5a-4cdb-9022-6d8299f8bbb5">
+    <Deployment runDeploymentRoot="User_ASUS_2026-05-18_23_04_25" />
+  </TestSettings>
+  <Results>
+    <UnitTestResult executionId="4e1f03a1-39c3-4774-9773-3abd58a83d4a" testId="3bab6a12-176a-4b40-df1c-1344d20e4493" testName="POS.Tests.ApiIntegrationTests.Sync_endpoint_applies_invoice_snapshot_and_reports_conflict_for_stale_version" computerName="ASUS" duration="00:00:02.3995458" startTime="2026-05-18T23:04:29.4418391+03:00" endTime="2026-05-18T23:04:29.4418401+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="4e1f03a1-39c3-4774-9773-3abd58a83d4a" />
+    <UnitTestResult executionId="cdb85327-1e91-4ae0-9ab8-8109ad0332a6" testId="92deb2b5-8a60-64f9-32a1-d5189eb1991a" testName="POS.Tests.InvoiceSyncServiceTests.Push_unsynced_invoices_marks_local_invoice_synced_when_server_accepts" computerName="ASUS" duration="00:00:08.0172653" startTime="2026-05-18T23:04:25.1286716+03:00" endTime="2026-05-18T23:04:25.1287047+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="cdb85327-1e91-4ae0-9ab8-8109ad0332a6" />
+    <UnitTestResult executionId="05efd885-2857-43fb-b47d-bbf82ed79a9b" testId="c066c2df-147c-a15a-a61f-ea4ea453263b" testName="POS.Tests.ApiIntegrationTests.Cash_sale_flow_returns_updated_snapshots_and_receipt" computerName="ASUS" duration="00:00:02.3159096" startTime="2026-05-18T23:04:31.7583936+03:00" endTime="2026-05-18T23:04:31.7583943+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="05efd885-2857-43fb-b47d-bbf82ed79a9b" />
+    <UnitTestResult executionId="9faae297-0dd8-463b-92a6-3431dbf3d492" testId="daadd110-ba0d-c21e-bd3c-a936ce19c5d5" testName="POS.Tests.ApiIntegrationTests.Lifecycle_endpoints_transition_invoice_status_and_allow_refund_after_payment" computerName="ASUS" duration="00:00:09.9309087" startTime="2026-05-18T23:04:27.0394335+03:00" endTime="2026-05-18T23:04:27.0394342+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="9faae297-0dd8-463b-92a6-3431dbf3d492" />
+    <UnitTestResult executionId="a0509612-9909-43ee-bbf1-6ead0c600d34" testId="1591ecf0-66d5-413a-ed23-c8a2ebf63ec4" testName="POS.Tests.ApiIntegrationTests.Login_and_catalog_endpoints_return_seeded_data" computerName="ASUS" duration="00:00:02.4522126" startTime="2026-05-18T23:04:34.2112690+03:00" endTime="2026-05-18T23:04:34.2112696+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="a0509612-9909-43ee-bbf1-6ead0c600d34" />
+  </Results>
+  <TestDefinitions>
+    <UnitTest name="POS.Tests.InvoiceSyncServiceTests.Push_unsynced_invoices_marks_local_invoice_synced_when_server_accepts" storage="c:\projects\pos\tests\pos.tests\bin\debug\net8.0\pos.tests.dll" id="92deb2b5-8a60-64f9-32a1-d5189eb1991a">
+      <Execution id="cdb85327-1e91-4ae0-9ab8-8109ad0332a6" />
+      <TestMethod codeBase="C:\projects\POS\tests\POS.Tests\bin\Debug\net8.0\POS.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="POS.Tests.InvoiceSyncServiceTests" name="Push_unsynced_invoices_marks_local_invoice_synced_when_server_accepts" />
+    </UnitTest>
+    <UnitTest name="POS.Tests.ApiIntegrationTests.Sync_endpoint_applies_invoice_snapshot_and_reports_conflict_for_stale_version" storage="c:\projects\pos\tests\pos.tests\bin\debug\net8.0\pos.tests.dll" id="3bab6a12-176a-4b40-df1c-1344d20e4493">
+      <Execution id="4e1f03a1-39c3-4774-9773-3abd58a83d4a" />
+      <TestMethod codeBase="C:\projects\POS\tests\POS.Tests\bin\Debug\net8.0\POS.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="POS.Tests.ApiIntegrationTests" name="Sync_endpoint_applies_invoice_snapshot_and_reports_conflict_for_stale_version" />
+    </UnitTest>
+    <UnitTest name="POS.Tests.ApiIntegrationTests.Login_and_catalog_endpoints_return_seeded_data" storage="c:\projects\pos\tests\pos.tests\bin\debug\net8.0\pos.tests.dll" id="1591ecf0-66d5-413a-ed23-c8a2ebf63ec4">
+      <Execution id="a0509612-9909-43ee-bbf1-6ead0c600d34" />
+      <TestMethod codeBase="C:\projects\POS\tests\POS.Tests\bin\Debug\net8.0\POS.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="POS.Tests.ApiIntegrationTests" name="Login_and_catalog_endpoints_return_seeded_data" />
+    </UnitTest>
+    <UnitTest name="POS.Tests.ApiIntegrationTests.Cash_sale_flow_returns_updated_snapshots_and_receipt" storage="c:\projects\pos\tests\pos.tests\bin\debug\net8.0\pos.tests.dll" id="c066c2df-147c-a15a-a61f-ea4ea453263b">
+      <Execution id="05efd885-2857-43fb-b47d-bbf82ed79a9b" />
+      <TestMethod codeBase="C:\projects\POS\tests\POS.Tests\bin\Debug\net8.0\POS.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="POS.Tests.ApiIntegrationTests" name="Cash_sale_flow_returns_updated_snapshots_and_receipt" />
+    </UnitTest>
+    <UnitTest name="POS.Tests.ApiIntegrationTests.Lifecycle_endpoints_transition_invoice_status_and_allow_refund_after_payment" storage="c:\projects\pos\tests\pos.tests\bin\debug\net8.0\pos.tests.dll" id="daadd110-ba0d-c21e-bd3c-a936ce19c5d5">
+      <Execution id="9faae297-0dd8-463b-92a6-3431dbf3d492" />
+      <TestMethod codeBase="C:\projects\POS\tests\POS.Tests\bin\Debug\net8.0\POS.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="POS.Tests.ApiIntegrationTests" name="Lifecycle_endpoints_transition_invoice_status_and_allow_refund_after_payment" />
+    </UnitTest>
+  </TestDefinitions>
+  <TestEntries>
+    <TestEntry testId="3bab6a12-176a-4b40-df1c-1344d20e4493" executionId="4e1f03a1-39c3-4774-9773-3abd58a83d4a" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="92deb2b5-8a60-64f9-32a1-d5189eb1991a" executionId="cdb85327-1e91-4ae0-9ab8-8109ad0332a6" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="c066c2df-147c-a15a-a61f-ea4ea453263b" executionId="05efd885-2857-43fb-b47d-bbf82ed79a9b" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="daadd110-ba0d-c21e-bd3c-a936ce19c5d5" executionId="9faae297-0dd8-463b-92a6-3431dbf3d492" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="1591ecf0-66d5-413a-ed23-c8a2ebf63ec4" executionId="a0509612-9909-43ee-bbf1-6ead0c600d34" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+  </TestEntries>
+  <TestLists>
+    <TestList name="Results Not in a List" id="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestList name="All Loaded Results" id="19431567-8539-422a-85d7-44ee4e166bda" />
+  </TestLists>
+  <ResultSummary outcome="Completed">
+    <Counters total="5" executed="5" passed="5" failed="0" error="0" timeout="0" aborted="0" inconclusive="0" passedButRunAborted="0" notRunnable="0" notExecuted="0" disconnected="0" warning="0" completed="0" inProgress="0" pending="0" />
+    <Output>
+      <StdOut>[xUnit.net 00:00:00.00] xUnit.net VSTest Adapter v2.5.3.1+6b60a9e56a (64-bit .NET 8.0.25)&#xD;
+[xUnit.net 00:00:00.28]   Discovering: POS.Tests&#xD;
+[xUnit.net 00:00:00.38]   Discovered:  POS.Tests&#xD;
+[xUnit.net 00:00:00.39]   Starting:    POS.Tests&#xD;
+warn: Microsoft.EntityFrameworkCore.Query[10103]&#xD;
+      The query uses the 'First'/'FirstOrDefault' operator without 'OrderBy' and filter operators. This may lead to unpredictable results.&#xD;
+warn: Microsoft.EntityFrameworkCore.Query[20504]&#xD;
+      Compiling a query which loads related collections for more than one collection navigation, either via 'Include' or through projection, but no 'QuerySplittingBehavior' has been configured. By default, Entity Framework will use 'QuerySplittingBehavior.SingleQuery', which can potentially result in slow query performance. See https://go.microsoft.com/fwlink/?linkid=2134277 for more information. To identify the query that's triggering this warning call 'ConfigureWarnings(w =&gt; w.Throw(RelationalEventId.MultipleCollectionIncludeWarning))'.&#xD;
+[xUnit.net 00:00:17.62]   Finished:    POS.Tests&#xD;
+</StdOut>
+    </Output>
+  </ResultSummary>
+</TestRun>

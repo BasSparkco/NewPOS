@@ -1,0 +1,15 @@
+@{
+    ViewData["Title"] = "Access Denied";
+}
+
+<section class="panel" style="max-width: 720px; margin: 0 auto;">
+    <span class="eyebrow">Authorization</span>
+    <h1 class="panel-title">Dashboard access denied</h1>
+    <p class="panel-copy">
+        This web slice is reserved for Admin and Manager roles. Sign in with an authorized account or return to the desktop client for cashier workflows.
+    </p>
+    <div class="mt-4 d-flex gap-2 flex-wrap">
+        <a class="shell-button" asp-controller="Account" asp-action="Login">Sign in again</a>
+        <a class="shell-button shell-button--ghost" asp-controller="Dashboard" asp-action="Index">Try dashboard</a>
+    </div>
+</section>

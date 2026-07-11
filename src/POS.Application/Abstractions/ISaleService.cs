@@ -22,6 +22,8 @@ public interface ISaleService
     /// <summary>Returns the full totals breakdown (subtotal, tax, total) for display.</summary>
     Task<InvoiceSummaryDto> GetInvoiceSummaryAsync(Guid invoiceId, CancellationToken cancellationToken = default);
     Task<SaleCompletionResult> CompleteCashSaleAsync(Guid invoiceId, decimal cashTendered, CancellationToken cancellationToken = default);
+    /// <summary>Adds a one-off, non-catalog line (e.g. an item the cashier priced manually) to the invoice.</summary>
+    Task AddCustomItemAsync(Guid invoiceId, string name, decimal quantity, decimal unitPrice, CancellationToken cancellationToken = default);
 }
 
 public sealed record SaleCompletionResult(bool Success, string? ErrorMessage, ReceiptDto? Receipt);

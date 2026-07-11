@@ -3,6 +3,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.DependencyInjection;
 using POS.Application.Abstractions;
+using POS.Wpf.Localization;
 
 namespace POS.Wpf.ViewModels;
 
@@ -16,10 +17,7 @@ public partial class LoginViewModel : ObservableObject
     }
 
     [ObservableProperty]
-    private string _username = "cashier";
-
-    [ObservableProperty]
-    private string _password = "";
+    private string _username = "";
 
     public Window? Owner { get; set; }
 
@@ -28,10 +26,10 @@ public partial class LoginViewModel : ObservableObject
     {
         await using var scope = _scopeFactory.CreateAsyncScope();
         var auth = scope.ServiceProvider.GetRequiredService<IAuthService>();
-        var result = await auth.LoginAsync(Username, Password);
+        var result = await auth.LoginAsync(Username);
         if (!result.Success)
         {
-            MessageBox.Show(result.ErrorMessage ?? "Login failed.", "POS", MessageBoxButton.OK, MessageBoxImage.Warning);
+            MessageBox.Show(result.ErrorMessage ?? Locale.Get("Login_Failed"), Locale.Get("Login_FailedTitle"), MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
 

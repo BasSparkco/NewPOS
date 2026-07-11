@@ -1,0 +1,154 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <resheader name="resmimetype"><value>text/microsoft-resx</value></resheader>
+  <resheader name="version"><value>2.0</value></resheader>
+  <resheader name="reader"><value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value></resheader>
+  <resheader name="writer"><value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value></resheader>
+  <data name="App_TitleShort" xml:space="preserve"><value>קופה</value></data>
+  <data name="Login_Title" xml:space="preserve"><value>קופה — כניסה</value></data>
+  <data name="Login_Username" xml:space="preserve"><value>שם משתמש</value></data>
+  <data name="Login_SignIn" xml:space="preserve"><value>התחבר</value></data>
+  <data name="Login_FailedTitle" xml:space="preserve"><value>קופה</value></data>
+  <data name="Login_Failed" xml:space="preserve"><value>שם משתמש לא תקין.</value></data>
+  <data name="CurrencySettings_Title" xml:space="preserve"><value>הגדרות חנות</value></data>
+  <data name="CurrencySettings_Header" xml:space="preserve"><value>הגדרות חנות</value></data>
+  <data name="CurrencySettings_Subtitle" xml:space="preserve"><value>ניהול כללי ההפעלה, טקסט תחתית הקבלה ומדיניות המטבע שבה המערכת משתמשת.</value></data>
+  <data name="CurrencySettings_OperationalHeader" xml:space="preserve"><value>הגדרות תפעול</value></data>
+  <data name="CurrencySettings_OperationalSubtitle" xml:space="preserve"><value>שלוט בכללי המלאי, בסף ההתראה למלאי נמוך, באחוז המס ברירת המחדל ובטקסט התחתית האופציונלי לקבלה.</value></data>
+  <data name="CurrencySettings_AllowNegativeStock" xml:space="preserve"><value>לאפשר מכירה מעבר למלאי הזמין</value></data>
+  <data name="CurrencySettings_LowStockThreshold" xml:space="preserve"><value>סף מלאי נמוך</value></data>
+  <data name="CurrencySettings_DefaultTaxPercent" xml:space="preserve"><value>אחוז מס ברירת מחדל</value></data>
+  <data name="CurrencySettings_ReceiptFooter" xml:space="preserve"><value>טקסט תחתית קבלה</value></data>
+  <data name="CurrencySettings_ExchangeRatesHeader" xml:space="preserve"><value>מטבע ושערי חליפין</value></data>
+  <data name="CurrencySettings_Store" xml:space="preserve"><value>חנות:</value></data>
+  <data name="CurrencySettings_BaseCurrency" xml:space="preserve"><value>מטבע בסיס:</value></data>
+  <data name="CurrencySettings_BaseHint" xml:space="preserve"><value>שינוי מטבע הבסיס מנרמל מחדש את כל השערים וממיר את מחירי הקטלוג והחשבוניות הפתוחות למטבע הבסיס החדש.</value></data>
+  <data name="CurrencySettings_Code" xml:space="preserve"><value>קוד</value></data>
+  <data name="CurrencySettings_Name" xml:space="preserve"><value>שם</value></data>
+  <data name="CurrencySettings_Symbol" xml:space="preserve"><value>סמל</value></data>
+  <data name="CurrencySettings_ExchangeRate" xml:space="preserve"><value>שער חליפין</value></data>
+  <data name="CurrencySettings_Cancel" xml:space="preserve"><value>ביטול</value></data>
+  <data name="CurrencySettings_Save" xml:space="preserve"><value>שמור הגדרות</value></data>
+  <data name="CurrencySettings_Loaded" xml:space="preserve"><value>הגדרות החנות נטענו.</value></data>
+  <data name="CurrencySettings_Rebased" xml:space="preserve"><value>השערים הותאמו למטבע הבסיס שנבחר.</value></data>
+  <data name="CurrencySettings_Saved" xml:space="preserve"><value>הגדרות החנות נשמרו.</value></data>
+  <data name="CurrencySettings_SelectBase" xml:space="preserve"><value>יש לבחור מטבע בסיס.</value></data>
+  <data name="CurrencySettings_ValidRate" xml:space="preserve"><value>כל שערי החליפין חייבים להיות גדולים מאפס.</value></data>
+  <data name="CurrencySettings_ValidLowStockThreshold" xml:space="preserve"><value>יש להזין סף מלאי נמוך תקין שהוא אפס או יותר.</value></data>
+  <data name="CurrencySettings_ValidDefaultTax" xml:space="preserve"><value>יש להזין אחוז מס ברירת מחדל תקין בין 0 ל־100.</value></data>
+  <data name="Payment_Title" xml:space="preserve"><value>תשלום</value></data>
+  <data name="Payment_Header" xml:space="preserve"><value>תשלום</value></data>
+  <data name="Payment_TotalDue" xml:space="preserve"><value>לתשלום</value></data>
+  <data name="Payment_CashReceived" xml:space="preserve"><value>מזומן שהתקבל</value></data>
+  <data name="Payment_Change" xml:space="preserve"><value>עודף</value></data>
+  <data name="Payment_Cancel" xml:space="preserve"><value>ביטול</value></data>
+  <data name="Payment_Complete" xml:space="preserve"><value>סיום</value></data>
+  <data name="Payment_CashMustCover" xml:space="preserve"><value>המזומן חייב להיות לפחות הסכום לתשלום.</value></data>
+  <data name="PriceCheck_Title" xml:space="preserve"><value>בדיקת מחיר</value></data>
+  <data name="PriceCheck_Header" xml:space="preserve"><value>בדיקת מחיר</value></data>
+  <data name="PriceCheck_Placeholder" xml:space="preserve"><value>הקלד שם מוצר או סרוק ברקוד</value></data>
+  <data name="PriceCheck_NoResults" xml:space="preserve"><value>לא נמצא מוצר</value></data>
+  <data name="PriceCheck_Close" xml:space="preserve"><value>סגור</value></data>
+  <data name="PriceCheck_AddToInvoice" xml:space="preserve"><value>＋ הוסף לחשבונית</value></data>
+  <data name="PriceCheck_StockFormat" xml:space="preserve"><value>במלאי: {0} יחידות</value></data>
+  <data name="Barcode_Format" xml:space="preserve"><value>ברקוד: {0}</value></data>
+  <data name="LowStock_Badge" xml:space="preserve"><value>מלאי נמוך</value></data>
+  <data name="Refund_Title" xml:space="preserve"><value>החזרת מכירה</value></data>
+  <data name="Refund_Header" xml:space="preserve"><value>החזרת מכירה</value></data>
+  <data name="Refund_Subtitle" xml:space="preserve"><value>בחר מכירה שהושלמה להחזר. המלאי ישוחזר.</value></data>
+  <data name="Refund_Warning" xml:space="preserve"><value>⚠  לא ניתן לבטל. החשבונית תסומן כמבוטלת והכמויות יוחזרו למלאי.</value></data>
+  <data name="Refund_NoInvoices" xml:space="preserve"><value>לא נמצאו חשבוניות משולמות אחרונות.</value></data>
+  <data name="Refund_Cancel" xml:space="preserve"><value>ביטול</value></data>
+  <data name="Refund_Process" xml:space="preserve"><value>↩  בצע החזר</value></data>
+  <data name="Refund_ConfirmTitle" xml:space="preserve"><value>אישור החזר</value></data>
+  <data name="Refund_ConfirmBody" xml:space="preserve"><value>להחזיר חשבונית {0}?
+
+סה״כ: {1}
+שולם: {2}
+
+המלאי ישוחזר.</value></data>
+  <data name="Reports_Title" xml:space="preserve"><value>דוח מכירות יומי</value></data>
+  <data name="Reports_Header" xml:space="preserve"><value>דוח מכירות יומי</value></data>
+  <data name="Reports_Date" xml:space="preserve"><value>תאריך:</value></data>
+  <data name="Reports_Refresh" xml:space="preserve"><value>🔄  רענון</value></data>
+  <data name="Reports_Revenue" xml:space="preserve"><value>הכנסות</value></data>
+  <data name="Reports_Invoices" xml:space="preserve"><value>חשבוניות</value></data>
+  <data name="Reports_ItemsSold" xml:space="preserve"><value>פריטים נמכרו</value></data>
+  <data name="Reports_AvgSale" xml:space="preserve"><value>ממוצע מכירה</value></data>
+  <data name="Reports_TopProducts" xml:space="preserve"><value>מוצרים מובילים</value></data>
+  <data name="Reports_InvoicesSection" xml:space="preserve"><value>חשבוניות</value></data>
+  <data name="Reports_Close" xml:space="preserve"><value>סגור</value></data>
+  <data name="Reports_FooterFormat" xml:space="preserve"><value>דוח ליום {0}  ·  נוצר {1}</value></data>
+  <data name="Audit_Title" xml:space="preserve"><value>יומן ביקורת</value></data>
+  <data name="Audit_Header" xml:space="preserve"><value>יומן ביקורת</value></data>
+  <data name="Audit_Subtitle" xml:space="preserve"><value>סקור פעולות עסקיות חשובות לפי טווח תאריכים, פעולה ויישות עבור החנות הנוכחית.</value></data>
+  <data name="Audit_FromDate" xml:space="preserve"><value>מתאריך:</value></data>
+  <data name="Audit_ToDate" xml:space="preserve"><value>עד תאריך:</value></data>
+  <data name="Audit_Action" xml:space="preserve"><value>פעולה:</value></data>
+  <data name="Audit_Entity" xml:space="preserve"><value>יישות:</value></data>
+  <data name="Audit_Refresh" xml:space="preserve"><value>רענון</value></data>
+  <data name="Audit_Close" xml:space="preserve"><value>סגור</value></data>
+  <data name="Audit_NoRows" xml:space="preserve"><value>לא נמצאו רשומות ביקורת התואמות למסננים הנוכחיים.</value></data>
+  <data name="Audit_AllActions" xml:space="preserve"><value>כל הפעולות</value></data>
+  <data name="Audit_AllEntities" xml:space="preserve"><value>כל הישויות</value></data>
+  <data name="Audit_ColWhen" xml:space="preserve"><value>מתי</value></data>
+  <data name="Audit_ColActor" xml:space="preserve"><value>מבצע</value></data>
+  <data name="Audit_ColAction" xml:space="preserve"><value>פעולה</value></data>
+  <data name="Audit_ColEntity" xml:space="preserve"><value>יישות</value></data>
+  <data name="Audit_ColDetails" xml:space="preserve"><value>פרטים</value></data>
+  <data name="Audit_CountFormat" xml:space="preserve"><value>מוצגות {0} רשומות ביקורת.</value></data>
+  <data name="Audit_InvalidDateRange" xml:space="preserve"><value>תאריך ההתחלה חייב להיות באותו יום של תאריך הסיום או לפניו.</value></data>
+  <data name="ProductMgmt_Title" xml:space="preserve"><value>מוצרים וקטגוריות</value></data>
+  <data name="ProductMgmt_NewCategory" xml:space="preserve"><value>קטגוריה חדשה:</value></data>
+  <data name="ProductMgmt_AddCategory" xml:space="preserve"><value>הוסף קטגוריה</value></data>
+  <data name="ProductMgmt_AddProduct" xml:space="preserve"><value>הוסף מוצר</value></data>
+  <data name="ProductMgmt_Edit" xml:space="preserve"><value>ערוך</value></data>
+  <data name="ProductMgmt_Delete" xml:space="preserve"><value>מחק</value></data>
+  <data name="ProductMgmt_InventorySnapshot" xml:space="preserve"><value>תמונת מצב מלאי</value></data>
+  <data name="ProductMgmt_StockLedger" xml:space="preserve"><value>יומן תנועות מלאי</value></data>
+  <data name="ProductMgmt_StockHistoryHint" xml:space="preserve"><value>בחר מוצר למעלה כדי למקד את ההיסטוריה, או השאר ללא בחירה כדי לראות את התנועות האחרונות בכל החנות.</value></data>
+  <data name="ProductMgmt_RefreshHistory" xml:space="preserve"><value>רענון</value></data>
+  <data name="ProductMgmt_StockHistoryAllFormat" xml:space="preserve"><value>מוצגות {0} תנועות המלאי האחרונות בכל החנות.</value></data>
+  <data name="ProductMgmt_StockHistoryFilteredFormat" xml:space="preserve"><value>מוצגות {1} תנועות עבור {0}.</value></data>
+  <data name="Col_Name" xml:space="preserve"><value>שם</value></data>
+  <data name="Col_Barcode" xml:space="preserve"><value>ברקוד</value></data>
+  <data name="Col_Price" xml:space="preserve"><value>מחיר</value></data>
+  <data name="Col_Qty" xml:space="preserve"><value>כמות</value></data>
+  <data name="Col_Product" xml:space="preserve"><value>מוצר</value></data>
+  <data name="Col_MovementType" xml:space="preserve"><value>סוג</value></data>
+  <data name="Col_Change" xml:space="preserve"><value>שינוי</value></data>
+  <data name="Col_After" xml:space="preserve"><value>יתרה</value></data>
+  <data name="Col_Reference" xml:space="preserve"><value>אסמכתה</value></data>
+  <data name="Col_When" xml:space="preserve"><value>מועד</value></data>
+  <data name="MovementType_OpeningStock" xml:space="preserve"><value>מלאי פתיחה</value></data>
+  <data name="MovementType_ManualSetAdjustment" xml:space="preserve"><value>התאמה ידנית</value></data>
+  <data name="MovementType_Sale" xml:space="preserve"><value>מכירה</value></data>
+  <data name="MovementType_Refund" xml:space="preserve"><value>החזר</value></data>
+  <data name="Product_AddTitle" xml:space="preserve"><value>הוסף מוצר</value></data>
+  <data name="Product_EditTitle" xml:space="preserve"><value>ערוך מוצר</value></data>
+  <data name="Product_NameRequired" xml:space="preserve"><value>שם המוצר נדרש.</value></data>
+  <data name="Product_SelectCategory" xml:space="preserve"><value>בחר קטגוריה.</value></data>
+  <data name="Product_ValidPrice" xml:space="preserve"><value>הזן מחיר תקין.</value></data>
+  <data name="Product_NameLabel" xml:space="preserve"><value>שם המוצר *</value></data>
+  <data name="Product_BarcodeLabel" xml:space="preserve"><value>ברקוד</value></data>
+  <data name="Product_CategoryLabel" xml:space="preserve"><value>קטגוריה</value></data>
+  <data name="Product_SellingPrice" xml:space="preserve"><value>מחיר מכירה *</value></data>
+  <data name="Product_CostPrice" xml:space="preserve"><value>מחיר עלות</value></data>
+  <data name="Product_InitialStock" xml:space="preserve"><value>מלאי התחלתי</value></data>
+  <data name="Product_ImageLabel" xml:space="preserve"><value>תמונת מוצר</value></data>
+  <data name="Product_NoImage" xml:space="preserve"><value>לא נבחרה תמונה</value></data>
+  <data name="Product_Browse" xml:space="preserve"><value>עיון…</value></data>
+  <data name="Product_Clear" xml:space="preserve"><value>נקה</value></data>
+  <data name="Product_ActiveLabel" xml:space="preserve"><value>המוצר פעיל (מוצג בקופה)</value></data>
+  <data name="Product_Cancel" xml:space="preserve"><value>ביטול</value></data>
+  <data name="Product_Save" xml:space="preserve"><value>שמור</value></data>
+  <data name="Product_ImageDialogTitle" xml:space="preserve"><value>בחר תמונת מוצר</value></data>
+  <data name="CustomerDisplay_Title" xml:space="preserve"><value>צג לקוח — SmartPOS</value></data>
+  <data name="CustomerDisplay_Welcome" xml:space="preserve"><value>ברוך הבא!</value></data>
+  <data name="CustomerDisplay_Subtitle" xml:space="preserve"><value>הפריטים שלך יופיעו כאן</value></data>
+  <data name="CustomerDisplay_Total" xml:space="preserve"><value>סה״כ</value></data>
+  <data name="Msg_CreateCategoryFirst" xml:space="preserve"><value>צור קטגוריה תחילה.</value></data>
+  <data name="Msg_ProductNotFound" xml:space="preserve"><value>המוצר לא נמצא.</value></data>
+  <data name="Msg_DeleteConfirmFormat" xml:space="preserve"><value>למחוק את '{0}'?</value></data>
+  <data name="Msg_ConfirmTitle" xml:space="preserve"><value>אישור</value></data>
+</root>

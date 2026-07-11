@@ -1,9 +1,11 @@
+using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using POS.Core.Enums;
 using POS.Infrastructure.Data;
+using POS.Wpf.Localization;
 
 namespace POS.Wpf.Windows;
 
@@ -17,7 +19,26 @@ public partial class RefundWindow : Window
     {
         InitializeComponent();
         _scopeFactory = scopeFactory;
-        Loaded += async (_, _) => await LoadRecentInvoicesAsync();
+        Loaded += OnLoaded;
+    }
+
+    private async void OnLoaded(object sender, RoutedEventArgs e)
+    {
+        Loaded -= OnLoaded;
+        ApplyLocalization();
+        await LoadRecentInvoicesAsync();
+    }
+
+    private void ApplyLocalization()
+    {
+        Locale.ApplyFlowDirection(this);
+        Title                    = Locale.Get("Refund_Title");
+        RefundTitleText.Text     = Locale.Get("Refund_Header");
+        RefundSubtitleText.Text  = Locale.Get("Refund_Subtitle");
+        RefundWarningText.Text   = Locale.Get("Refund_Warning");
+        RefundListEmptyText.Text = Locale.Get("Refund_NoInvoices");
+        RefundCancelBtn.Content  = Locale.Get("Refund_Cancel");
+        RefundButton.Content     = Locale.Get("Refund_Process");
     }
 
     private async Task LoadRecentInvoicesAsync()
@@ -40,6 +61,7 @@ public partial class RefundWindow : Window
             .ToListAsync();
 
         InvoiceList.ItemsSource = invoices;
+        RefundListEmptyText.Visibility = invoices.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
     }
 
     private void InvoiceList_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -51,9 +73,9 @@ public partial class RefundWindow : Window
     {
         if (InvoiceList.SelectedItem is not RefundInvoiceRow row) return;
 
-        var confirm = MessageBox.Show(
-            $"Refund invoice {row.InvoiceNumber}?\n\nTotal: {row.Total:N2}\nPaid: {row.PaidAt}\n\nStock will be restored.",
-            "Confirm Refund", MessageBoxButton.YesNo, MessageBoxImage.Question);
+        var body = string.Format(CultureInfo.CurrentUICulture, Locale.Get("Refund_ConfirmBody"),
+            row.InvoiceNumber, row.Total.ToString("N2", CultureInfo.CurrentUICulture), row.PaidAt);
+        var confirm = MessageBox.Show(body, Locale.Get("Refund_ConfirmTitle"), MessageBoxButton.YesNo, MessageBoxImage.Question);
 
         if (confirm != MessageBoxResult.Yes) return;
 

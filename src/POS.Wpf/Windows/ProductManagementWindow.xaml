@@ -2,23 +2,38 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="Products &amp; categories"
-        Height="520"
-        Width="900"
+        Height="760"
+        Width="1040"
         WindowStartupLocation="CenterOwner">
     <Grid Margin="12">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
         <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
-            <TextBlock Text="New category:" VerticalAlignment="Center" Margin="0,0,8,0" />
+            <TextBlock x:Name="PmNewCategoryLbl" VerticalAlignment="Center" Margin="0,0,8,0" />
             <TextBox Text="{Binding NewCategoryName, UpdateSourceTrigger=PropertyChanged}" Width="200" Margin="0,0,8,0" />
-            <Button Content="Add category" Command="{Binding AddCategoryCommand}" Margin="0,0,16,0" />
-            <Button Content="Add product" Command="{Binding AddProductCommand}" Margin="0,0,8,0" />
-            <Button Content="Edit" Command="{Binding EditProductCommand}" Margin="0,0,8,0" />
-            <Button Content="Delete" Command="{Binding DeleteProductCommand}" />
+            <Button x:Name="PmAddCategoryBtn" Command="{Binding AddCategoryCommand}" Margin="0,0,16,0" />
+            <Button x:Name="PmAddProductBtn" Command="{Binding AddProductCommand}" Margin="0,0,8,0" />
+            <Button x:Name="PmEditBtn" Command="{Binding EditProductCommand}" Margin="0,0,8,0" />
+            <Button x:Name="PmDeleteBtn" Command="{Binding DeleteProductCommand}" />
         </StackPanel>
-        <DataGrid Grid.Row="1"
+
+        <DockPanel Grid.Row="1" Margin="0,0,0,8" LastChildFill="False">
+            <TextBlock x:Name="PmSnapshotHeader"
+                       FontSize="14"
+                       FontWeight="SemiBold"
+                       VerticalAlignment="Center" />
+            <Button x:Name="PmRefreshInventoryBtn"
+                    DockPanel.Dock="Right"
+                    Command="{Binding RefreshInventoryCommand}"
+                    Padding="10,4" />
+        </DockPanel>
+
+        <DataGrid x:Name="ProductsGrid" Grid.Row="2"
                   ItemsSource="{Binding Products}"
                   SelectedItem="{Binding SelectedProduct}"
                   AutoGenerateColumns="False"
@@ -29,6 +44,38 @@
                 <DataGridTextColumn Header="Barcode" Binding="{Binding Barcode}" Width="120" />
                 <DataGridTextColumn Header="Price" Binding="{Binding Price, StringFormat=N2}" Width="80" />
                 <DataGridTextColumn Header="Qty" Binding="{Binding QuantityOnHand, StringFormat=N2}" Width="80" />
+            </DataGrid.Columns>
+        </DataGrid>
+
+        <DockPanel Grid.Row="3" Margin="0,12,0,8" LastChildFill="True">
+            <StackPanel>
+                <TextBlock x:Name="PmHistoryHeader"
+                           FontSize="14"
+                           FontWeight="SemiBold" />
+                <TextBlock x:Name="PmHistoryHint"
+                           FontSize="11"
+                           Foreground="Gray"
+                           Margin="0,2,0,0" />
+            </StackPanel>
+            <TextBlock Text="{Binding StockHistoryStatus}"
+                       DockPanel.Dock="Right"
+                       VerticalAlignment="Center"
+                       FontSize="11"
+                       Foreground="Gray" />
+        </DockPanel>
+
+        <DataGrid x:Name="StockMovementsGrid" Grid.Row="4"
+                  ItemsSource="{Binding StockMovements}"
+                  AutoGenerateColumns="False"
+                  IsReadOnly="True"
+                  SelectionMode="Single">
+            <DataGrid.Columns>
+                <DataGridTextColumn Header="Product" Binding="{Binding ProductName}" Width="*" />
+                <DataGridTextColumn Header="Type" Binding="{Binding TypeLabel}" Width="160" />
+                <DataGridTextColumn Header="Change" Binding="{Binding QuantityDelta, StringFormat=N2}" Width="90" />
+                <DataGridTextColumn Header="After" Binding="{Binding QuantityAfter, StringFormat=N2}" Width="90" />
+                <DataGridTextColumn Header="Reference" Binding="{Binding Reference}" Width="140" />
+                <DataGridTextColumn Header="When" Binding="{Binding CreatedAt, StringFormat=g}" Width="160" />
             </DataGrid.Columns>
         </DataGrid>
     </Grid>

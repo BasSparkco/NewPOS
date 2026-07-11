@@ -1,0 +1,64 @@
+@model POS.Web.Models.LoginViewModel
+@{
+    ViewData["Title"] = "Admin Sign In";
+}
+
+<section class="login-shell">
+    <div class="login-copy">
+        <div>
+            <span class="eyebrow">Read-only web dashboard</span>
+            <h1 class="login-title">Track store performance, stock pressure, and team activity from one screen.</h1>
+            <p class="hero-subtitle">
+                This first Stage 5.1 slice is a server-rendered control room over the shared POS data layer.
+                It uses the existing username-only login flow and is restricted to Admin or Manager roles.
+            </p>
+        </div>
+
+        <div class="insight-list">
+            <div class="insight-card">
+                <strong>Reports</strong>
+                <div class="muted">Revenue, paid invoices, units sold, average sale, and the day’s top products.</div>
+            </div>
+            <div class="insight-card">
+                <strong>Inventory</strong>
+                <div class="muted">Low-stock watchlist keyed off the same store settings already used by the desktop app.</div>
+            </div>
+            <div class="insight-card">
+                <strong>Users</strong>
+                <div class="muted">Store-scoped user roster with live role and activation state from the shared database.</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="login-card">
+        <div>
+            <span class="eyebrow">Sign in</span>
+            <h2 class="panel-title">Admin access</h2>
+            <p class="panel-copy mb-0">Demo admin login is <strong>admin</strong>. No password is required in the current auth flow.</p>
+        </div>
+
+        <form asp-action="Login" method="post" novalidate>
+            @Html.AntiForgeryToken()
+            <input asp-for="ReturnUrl" type="hidden" />
+
+            <div asp-validation-summary="ModelOnly" class="text-danger mb-3"></div>
+
+            <div class="mb-3">
+                <label asp-for="Username"></label>
+                <input asp-for="Username" class="form-control" autocomplete="username" />
+                <span asp-validation-for="Username" class="text-danger"></span>
+            </div>
+
+            <div class="form-check mb-4">
+                <input asp-for="RememberMe" class="form-check-input" />
+                <label asp-for="RememberMe" class="form-check-label"></label>
+            </div>
+
+            <button type="submit" class="shell-button w-100">Open dashboard</button>
+        </form>
+    </div>
+</section>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}

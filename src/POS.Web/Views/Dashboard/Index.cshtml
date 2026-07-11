@@ -1,0 +1,214 @@
+@model POS.Web.Models.DashboardViewModel
+@{
+    ViewData["Title"] = "Dashboard";
+    var currency = Model.CurrencyDisplay;
+}
+
+<section class="dashboard-hero">
+    <div class="hero-copy">
+        <div>
+            <span class="eyebrow">Control room</span>
+            <h1 class="hero-title">@Model.StoreName pulse for @Model.SelectedDate.ToString("dddd, dd MMMM yyyy")</h1>
+            <p class="hero-subtitle">
+                Reports, inventory pressure, and user status are rendered from the same application and infrastructure layer that backs the cashier and sync flows.
+            </p>
+        </div>
+
+        <div class="hero-meta">
+            <div class="hero-meta__item">
+                <span class="hero-meta__label">Signed in as</span>
+                <span class="hero-meta__value">@Model.Username</span>
+            </div>
+            <div class="hero-meta__item">
+                <span class="hero-meta__label">Role</span>
+                <span class="hero-meta__value">@Model.RoleName</span>
+            </div>
+            <div class="hero-meta__item">
+                <span class="hero-meta__label">Store contact</span>
+                <span class="hero-meta__value">@(string.IsNullOrWhiteSpace(Model.StorePhone) ? "Not set" : Model.StorePhone)</span>
+            </div>
+        </div>
+    </div>
+
+    <form method="get" class="filter-card">
+        <div>
+            <span class="eyebrow">Report date</span>
+            <h2 class="panel-title">Refine the day view</h2>
+            <p class="panel-copy mb-0">Daily metrics follow the same paid-invoice basis used by the desktop reports window.</p>
+        </div>
+
+        <div>
+            <label for="date">Selected day</label>
+            <input id="date" name="date" type="date" class="form-control" value="@Model.SelectedDate.ToString("yyyy-MM-dd")" />
+        </div>
+
+        <button type="submit" class="shell-button">Refresh dashboard</button>
+        <div class="muted">@(string.IsNullOrWhiteSpace(Model.StoreAddress) ? "Store address not configured yet." : Model.StoreAddress)</div>
+    </form>
+</section>
+
+<section class="summary-grid">
+    <article class="summary-card">
+        <span class="summary-card__label">Revenue</span>
+        <span class="summary-card__value">@Model.Summary.Revenue.ToString("N2") @currency</span>
+        <span class="summary-card__hint">Paid invoices only</span>
+    </article>
+    <article class="summary-card">
+        <span class="summary-card__label">Invoices</span>
+        <span class="summary-card__value">@Model.Summary.InvoiceCount</span>
+        <span class="summary-card__hint">Completed on the selected day</span>
+    </article>
+    <article class="summary-card">
+        <span class="summary-card__label">Items sold</span>
+        <span class="summary-card__value">@Model.Summary.ItemsSold.ToString("N0")</span>
+        <span class="summary-card__hint">Summed from invoice lines</span>
+    </article>
+    <article class="summary-card">
+        <span class="summary-card__label">Average sale</span>
+        <span class="summary-card__value">@Model.Summary.AverageSale.ToString("N2") @currency</span>
+        <span class="summary-card__hint">Revenue divided by paid invoices</span>
+    </article>
+    <article class="summary-card">
+        <span class="summary-card__label">Active products</span>
+        <span class="summary-card__value">@Model.Summary.ActiveProducts</span>
+        <span class="summary-card__hint">Store inventory assortment</span>
+    </article>
+    <article class="summary-card">
+        <span class="summary-card__label">Active users</span>
+        <span class="summary-card__value">@Model.Summary.ActiveUsers</span>
+        <span class="summary-card__hint">@Model.Summary.LowStockCount low-stock alerts</span>
+    </article>
+</section>
+
+<section class="dashboard-grid">
+    <article class="panel panel--span-7">
+        <div class="panel-header">
+            <div>
+                <span class="eyebrow">Reports</span>
+                <h2 class="panel-title">Top products</h2>
+            </div>
+            <div class="muted">Revenue-ranked from paid invoice lines</div>
+        </div>
+
+        @if (Model.TopProducts.Count == 0)
+        {
+            <div class="empty-state">No paid invoices were recorded for the selected date.</div>
+        }
+        else
+        {
+            <div class="metric-list">
+                @foreach (var product in Model.TopProducts)
+                {
+                    <div class="metric-row">
+                        <span class="metric-rank">@product.Rank</span>
+                        <div>
+                            <div class="metric-name">@product.ProductName</div>
+                            <div class="metric-copy">@product.QuantitySold.ToString("N0") units sold</div>
+                        </div>
+                        <div class="metric-value">@product.Revenue.ToString("N2") @currency</div>
+                    </div>
+                }
+            </div>
+        }
+    </article>
+
+    <article class="panel panel--span-5">
+        <div class="panel-header">
+            <div>
+                <span class="eyebrow">Reports</span>
+                <h2 class="panel-title">Recent paid invoices</h2>
+            </div>
+            <div class="muted">Newest first</div>
+        </div>
+
+        @if (Model.RecentInvoices.Count == 0)
+        {
+            <div class="empty-state">No paid invoices were captured for this day yet.</div>
+        }
+        else
+        {
+            <div class="table-list">
+                @foreach (var invoice in Model.RecentInvoices)
+                {
+                    <div class="table-row table-row--invoices">
+                        <div>
+                            <div class="table-main">Invoice @invoice.InvoiceNumber</div>
+                            <div class="table-sub">Updated @invoice.UpdatedAtLocal.ToString("HH:mm")</div>
+                        </div>
+                        <div class="muted">Paid</div>
+                        <div class="metric-value">@invoice.TotalAmount.ToString("N2") @currency</div>
+                    </div>
+                }
+            </div>
+        }
+    </article>
+
+    <article class="panel panel--span-6">
+        <div class="panel-header">
+            <div>
+                <span class="eyebrow">Inventory</span>
+                <h2 class="panel-title">Low-stock watchlist</h2>
+            </div>
+            <div class="muted">Threshold follows store settings</div>
+        </div>
+
+        @if (Model.LowStockItems.Count == 0)
+        {
+            <div class="empty-state">No items are currently below the configured low-stock threshold.</div>
+        }
+        else
+        {
+            <div class="table-list">
+                @foreach (var item in Model.LowStockItems)
+                {
+                    <div class="table-row table-row--inventory">
+                        <div>
+                            <div class="table-main">@item.ProductName</div>
+                            <div class="table-sub">Updated @item.UpdatedAtLocal.ToString("g")</div>
+                        </div>
+                        <div>
+                            <div class="table-main">@item.Quantity.ToString("N2") left</div>
+                            <div class="table-sub">Threshold @item.Threshold.ToString("N2")</div>
+                        </div>
+                        <div class="metric-value">@item.Price.ToString("N2") @currency</div>
+                    </div>
+                }
+            </div>
+        }
+    </article>
+
+    <article class="panel panel--span-6">
+        <div class="panel-header">
+            <div>
+                <span class="eyebrow">Users</span>
+                <h2 class="panel-title">Store roster</h2>
+            </div>
+            <div class="muted">Live store-scoped user view</div>
+        </div>
+
+        @if (Model.Users.Count == 0)
+        {
+            <div class="empty-state">No users are registered for this store.</div>
+        }
+        else
+        {
+            <div class="table-list">
+                @foreach (var user in Model.Users)
+                {
+                    <div class="table-row table-row--users">
+                        <div>
+                            <div class="table-main">@user.Username</div>
+                            <div class="table-sub">Updated @user.UpdatedAtLocal.ToString("g")</div>
+                        </div>
+                        <div class="muted">@user.RoleName</div>
+                        <div>
+                            <span class="status-pill @(user.IsActive ? "status-pill--good" : "status-pill--warn")">
+                                @(user.IsActive ? "Active" : "Inactive")
+                            </span>
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+    </article>
+</section>

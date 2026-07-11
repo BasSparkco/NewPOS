@@ -5,6 +5,7 @@ using System.Windows.Media.Imaging;
 using Microsoft.Win32;
 using POS.Application.Models;
 using POS.Wpf.Converters;
+using POS.Wpf.Localization;
 
 namespace POS.Wpf.Windows;
 
@@ -17,7 +18,8 @@ public partial class ProductEditWindow : Window
     {
         InitializeComponent();
         _model = model;
-        Title = model.Id == Guid.Empty ? "Add Product" : "Edit Product";
+        ApplyLocalization();
+        Title = model.Id == Guid.Empty ? Locale.Get("Product_AddTitle") : Locale.Get("Product_EditTitle");
 
         // Bind simple fields
         NameBox.Text    = model.Name;
@@ -37,23 +39,41 @@ public partial class ProductEditWindow : Window
                 (BitmapImage?)_imgConverter.Convert(model.ImagePath, typeof(BitmapImage), null, CultureInfo.CurrentCulture);
     }
 
+    private void ApplyLocalization()
+    {
+        Locale.ApplyFlowDirection(this);
+        PeNameLbl.Text     = Locale.Get("Product_NameLabel");
+        PeBarcodeLbl.Text  = Locale.Get("Product_BarcodeLabel");
+        PeCategoryLbl.Text = Locale.Get("Product_CategoryLabel");
+        PePriceLbl.Text    = Locale.Get("Product_SellingPrice");
+        PeCostLbl.Text     = Locale.Get("Product_CostPrice");
+        PeStockLbl.Text    = Locale.Get("Product_InitialStock");
+        PeImageLbl.Text    = Locale.Get("Product_ImageLabel");
+        PeNoImageTb.Text   = Locale.Get("Product_NoImage");
+        PeBrowseBtn.Content = Locale.Get("Product_Browse");
+        PeClearBtn.Content  = Locale.Get("Product_Clear");
+        PeActiveLbl.Text    = Locale.Get("Product_ActiveLabel");
+        PeCancelBtn.Content = Locale.Get("Product_Cancel");
+        PeSaveBtn.Content   = Locale.Get("Product_Save");
+    }
+
     public ProductEditDto? Result { get; private set; }
 
     private void Ok_Click(object sender, RoutedEventArgs e)
     {
         if (string.IsNullOrWhiteSpace(NameBox.Text))
         {
-            MessageBox.Show("Product name is required.", "POS", MessageBoxButton.OK, MessageBoxImage.Warning);
+            MessageBox.Show(Locale.Get("Product_NameRequired"), Locale.Get("App_TitleShort"), MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
         if (CategoryBox.SelectedValue is not Guid catId)
         {
-            MessageBox.Show("Select a category.", "POS", MessageBoxButton.OK, MessageBoxImage.Warning);
+            MessageBox.Show(Locale.Get("Product_SelectCategory"), Locale.Get("App_TitleShort"), MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
         if (!decimal.TryParse(PriceBox.Text, NumberStyles.Any, CultureInfo.InvariantCulture, out var price) || price < 0)
         {
-            MessageBox.Show("Enter a valid price.", "POS", MessageBoxButton.OK, MessageBoxImage.Warning);
+            MessageBox.Show(Locale.Get("Product_ValidPrice"), Locale.Get("App_TitleShort"), MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
         decimal.TryParse(CostBox.Text,  NumberStyles.Any, CultureInfo.InvariantCulture, out var cost);
@@ -81,7 +101,7 @@ public partial class ProductEditWindow : Window
     {
         var dlg = new OpenFileDialog
         {
-            Title  = "Select product image",
+            Title  = Locale.Get("Product_ImageDialogTitle"),
             Filter = "Image files|*.jpg;*.jpeg;*.png;*.bmp;*.gif;*.webp|All files|*.*"
         };
         if (dlg.ShowDialog() != true) return;

@@ -6,4 +6,5 @@ public sealed record ProductListItemDto(
     string? Barcode,
     decimal Price,
     decimal QuantityOnHand,
+    bool IsLowStock,
     string? ImagePath);

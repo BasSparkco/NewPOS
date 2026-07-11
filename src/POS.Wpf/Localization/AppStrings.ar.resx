@@ -1,0 +1,154 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <resheader name="resmimetype"><value>text/microsoft-resx</value></resheader>
+  <resheader name="version"><value>2.0</value></resheader>
+  <resheader name="reader"><value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value></resheader>
+  <resheader name="writer"><value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value></resheader>
+  <data name="App_TitleShort" xml:space="preserve"><value>نقطة البيع</value></data>
+  <data name="Login_Title" xml:space="preserve"><value>نقطة البيع — تسجيل الدخول</value></data>
+  <data name="Login_Username" xml:space="preserve"><value>اسم المستخدم</value></data>
+  <data name="Login_SignIn" xml:space="preserve"><value>دخول</value></data>
+  <data name="Login_FailedTitle" xml:space="preserve"><value>نقطة البيع</value></data>
+  <data name="Login_Failed" xml:space="preserve"><value>اسم المستخدم غير صالح.</value></data>
+  <data name="CurrencySettings_Title" xml:space="preserve"><value>إعدادات المتجر</value></data>
+  <data name="CurrencySettings_Header" xml:space="preserve"><value>إعدادات المتجر</value></data>
+  <data name="CurrencySettings_Subtitle" xml:space="preserve"><value>إدارة قواعد التشغيل ونص تذييل الإيصال وسياسة العملة المستخدمة في نقطة البيع.</value></data>
+  <data name="CurrencySettings_OperationalHeader" xml:space="preserve"><value>إعدادات التشغيل</value></data>
+  <data name="CurrencySettings_OperationalSubtitle" xml:space="preserve"><value>تحكم في قواعد المخزون وحد التنبيه للمخزون المنخفض ونسبة الضريبة الافتراضية وتذييل الإيصال الاختياري.</value></data>
+  <data name="CurrencySettings_AllowNegativeStock" xml:space="preserve"><value>السماح بالبيع بعد نفاد المخزون المتاح</value></data>
+  <data name="CurrencySettings_LowStockThreshold" xml:space="preserve"><value>حد المخزون المنخفض</value></data>
+  <data name="CurrencySettings_DefaultTaxPercent" xml:space="preserve"><value>نسبة الضريبة الافتراضية</value></data>
+  <data name="CurrencySettings_ReceiptFooter" xml:space="preserve"><value>نص تذييل الإيصال</value></data>
+  <data name="CurrencySettings_ExchangeRatesHeader" xml:space="preserve"><value>العملة وأسعار الصرف</value></data>
+  <data name="CurrencySettings_Store" xml:space="preserve"><value>المتجر:</value></data>
+  <data name="CurrencySettings_BaseCurrency" xml:space="preserve"><value>العملة الأساسية:</value></data>
+  <data name="CurrencySettings_BaseHint" xml:space="preserve"><value>تغيير العملة الأساسية يعيد ضبط جميع الأسعار النسبية ويحوّل أسعار المنتجات والفواتير المفتوحة إلى العملة الأساسية الجديدة.</value></data>
+  <data name="CurrencySettings_Code" xml:space="preserve"><value>الرمز</value></data>
+  <data name="CurrencySettings_Name" xml:space="preserve"><value>الاسم</value></data>
+  <data name="CurrencySettings_Symbol" xml:space="preserve"><value>الرمز المختصر</value></data>
+  <data name="CurrencySettings_ExchangeRate" xml:space="preserve"><value>سعر الصرف</value></data>
+  <data name="CurrencySettings_Cancel" xml:space="preserve"><value>إلغاء</value></data>
+  <data name="CurrencySettings_Save" xml:space="preserve"><value>حفظ الإعدادات</value></data>
+  <data name="CurrencySettings_Loaded" xml:space="preserve"><value>تم تحميل إعدادات المتجر.</value></data>
+  <data name="CurrencySettings_Rebased" xml:space="preserve"><value>تمت إعادة ضبط الأسعار وفق العملة الأساسية المحددة.</value></data>
+  <data name="CurrencySettings_Saved" xml:space="preserve"><value>تم حفظ إعدادات المتجر.</value></data>
+  <data name="CurrencySettings_SelectBase" xml:space="preserve"><value>اختر العملة الأساسية.</value></data>
+  <data name="CurrencySettings_ValidRate" xml:space="preserve"><value>يجب أن تكون جميع أسعار الصرف أكبر من صفر.</value></data>
+  <data name="CurrencySettings_ValidLowStockThreshold" xml:space="preserve"><value>أدخل حدًا صالحًا للمخزون المنخفض يساوي صفرًا أو أكثر.</value></data>
+  <data name="CurrencySettings_ValidDefaultTax" xml:space="preserve"><value>أدخل نسبة ضريبة افتراضية صالحة بين 0 و100.</value></data>
+  <data name="Payment_Title" xml:space="preserve"><value>معالجة الدفع</value></data>
+  <data name="Payment_Header" xml:space="preserve"><value>معالجة الدفع</value></data>
+  <data name="Payment_TotalDue" xml:space="preserve"><value>المبلغ المستحق</value></data>
+  <data name="Payment_CashReceived" xml:space="preserve"><value>النقد المستلم</value></data>
+  <data name="Payment_Change" xml:space="preserve"><value>الباقي</value></data>
+  <data name="Payment_Cancel" xml:space="preserve"><value>إلغاء</value></data>
+  <data name="Payment_Complete" xml:space="preserve"><value>إتمام</value></data>
+  <data name="Payment_CashMustCover" xml:space="preserve"><value>يجب أن يكون النقد المستلم أكبر من أو يساوي المبلغ المستحق.</value></data>
+  <data name="PriceCheck_Title" xml:space="preserve"><value>فحص السعر</value></data>
+  <data name="PriceCheck_Header" xml:space="preserve"><value>فحص السعر</value></data>
+  <data name="PriceCheck_Placeholder" xml:space="preserve"><value>اكتب اسم المنتج أو امسح الباركود</value></data>
+  <data name="PriceCheck_NoResults" xml:space="preserve"><value>لم يُعثر على منتج</value></data>
+  <data name="PriceCheck_Close" xml:space="preserve"><value>إغلاق</value></data>
+  <data name="PriceCheck_AddToInvoice" xml:space="preserve"><value>＋ إضافة للفاتورة</value></data>
+  <data name="PriceCheck_StockFormat" xml:space="preserve"><value>المتوفر: {0} وحدة</value></data>
+  <data name="Barcode_Format" xml:space="preserve"><value>باركود: {0}</value></data>
+  <data name="LowStock_Badge" xml:space="preserve"><value>مخزون منخفض</value></data>
+  <data name="Refund_Title" xml:space="preserve"><value>استرجاع البيع</value></data>
+  <data name="Refund_Header" xml:space="preserve"><value>استرجاع البيع</value></data>
+  <data name="Refund_Subtitle" xml:space="preserve"><value>اختر عملية بيع مكتملة للاسترجاع. سيتم استعادة المخزون.</value></data>
+  <data name="Refund_Warning" xml:space="preserve"><value>⚠  لا يمكن التراجع. ستُعلَّم الفاتورة ملغاة وتُعاد الكميات للمخزون.</value></data>
+  <data name="Refund_NoInvoices" xml:space="preserve"><value>لا توجد فواتير مدفوعة حديثة.</value></data>
+  <data name="Refund_Cancel" xml:space="preserve"><value>إلغاء</value></data>
+  <data name="Refund_Process" xml:space="preserve"><value>↩  تنفيذ الاسترجاع</value></data>
+  <data name="Refund_ConfirmTitle" xml:space="preserve"><value>تأكيد الاسترجاع</value></data>
+  <data name="Refund_ConfirmBody" xml:space="preserve"><value>استرجاع الفاتورة {0}؟
+
+الإجمالي: {1}
+الدفع: {2}
+
+سيتم استعادة المخزون.</value></data>
+  <data name="Reports_Title" xml:space="preserve"><value>تقرير المبيعات اليومي</value></data>
+  <data name="Reports_Header" xml:space="preserve"><value>تقرير المبيعات اليومي</value></data>
+  <data name="Reports_Date" xml:space="preserve"><value>التاريخ:</value></data>
+  <data name="Reports_Refresh" xml:space="preserve"><value>🔄  تحديث</value></data>
+  <data name="Reports_Revenue" xml:space="preserve"><value>الإيرادات</value></data>
+  <data name="Reports_Invoices" xml:space="preserve"><value>الفواتير</value></data>
+  <data name="Reports_ItemsSold" xml:space="preserve"><value>الأصناف المباعة</value></data>
+  <data name="Reports_AvgSale" xml:space="preserve"><value>متوسط البيع</value></data>
+  <data name="Reports_TopProducts" xml:space="preserve"><value>أفضل المنتجات</value></data>
+  <data name="Reports_InvoicesSection" xml:space="preserve"><value>الفواتير</value></data>
+  <data name="Reports_Close" xml:space="preserve"><value>إغلاق</value></data>
+  <data name="Reports_FooterFormat" xml:space="preserve"><value>تقرير ليوم {0}  ·  أُنشئ {1}</value></data>
+  <data name="Audit_Title" xml:space="preserve"><value>سجل التدقيق</value></data>
+  <data name="Audit_Header" xml:space="preserve"><value>سجل التدقيق</value></data>
+  <data name="Audit_Subtitle" xml:space="preserve"><value>راجع الإجراءات التجارية المهمة حسب نطاق التاريخ والإجراء والكيان للمتجر الحالي.</value></data>
+  <data name="Audit_FromDate" xml:space="preserve"><value>من:</value></data>
+  <data name="Audit_ToDate" xml:space="preserve"><value>إلى:</value></data>
+  <data name="Audit_Action" xml:space="preserve"><value>الإجراء:</value></data>
+  <data name="Audit_Entity" xml:space="preserve"><value>الكيان:</value></data>
+  <data name="Audit_Refresh" xml:space="preserve"><value>تحديث</value></data>
+  <data name="Audit_Close" xml:space="preserve"><value>إغلاق</value></data>
+  <data name="Audit_NoRows" xml:space="preserve"><value>لا توجد سجلات تدقيق تطابق عوامل التصفية الحالية.</value></data>
+  <data name="Audit_AllActions" xml:space="preserve"><value>كل الإجراءات</value></data>
+  <data name="Audit_AllEntities" xml:space="preserve"><value>كل الكيانات</value></data>
+  <data name="Audit_ColWhen" xml:space="preserve"><value>الوقت</value></data>
+  <data name="Audit_ColActor" xml:space="preserve"><value>المنفذ</value></data>
+  <data name="Audit_ColAction" xml:space="preserve"><value>الإجراء</value></data>
+  <data name="Audit_ColEntity" xml:space="preserve"><value>الكيان</value></data>
+  <data name="Audit_ColDetails" xml:space="preserve"><value>التفاصيل</value></data>
+  <data name="Audit_CountFormat" xml:space="preserve"><value>يتم عرض {0} سجل تدقيق.</value></data>
+  <data name="Audit_InvalidDateRange" xml:space="preserve"><value>يجب أن يكون تاريخ البداية في نفس يوم تاريخ النهاية أو قبله.</value></data>
+  <data name="ProductMgmt_Title" xml:space="preserve"><value>المنتجات والفئات</value></data>
+  <data name="ProductMgmt_NewCategory" xml:space="preserve"><value>فئة جديدة:</value></data>
+  <data name="ProductMgmt_AddCategory" xml:space="preserve"><value>إضافة فئة</value></data>
+  <data name="ProductMgmt_AddProduct" xml:space="preserve"><value>إضافة منتج</value></data>
+  <data name="ProductMgmt_Edit" xml:space="preserve"><value>تعديل</value></data>
+  <data name="ProductMgmt_Delete" xml:space="preserve"><value>حذف</value></data>
+  <data name="ProductMgmt_InventorySnapshot" xml:space="preserve"><value>لقطة المخزون الحالية</value></data>
+  <data name="ProductMgmt_StockLedger" xml:space="preserve"><value>سجل حركات المخزون</value></data>
+  <data name="ProductMgmt_StockHistoryHint" xml:space="preserve"><value>اختر منتجًا من الأعلى لتصفية السجل، أو اترك التحديد فارغًا لمراجعة أحدث الحركات على مستوى المتجر.</value></data>
+  <data name="ProductMgmt_RefreshHistory" xml:space="preserve"><value>تحديث</value></data>
+  <data name="ProductMgmt_StockHistoryAllFormat" xml:space="preserve"><value>يتم عرض {0} من أحدث حركات المخزون على مستوى المتجر.</value></data>
+  <data name="ProductMgmt_StockHistoryFilteredFormat" xml:space="preserve"><value>يتم عرض {1} حركة للمنتج {0}.</value></data>
+  <data name="Col_Name" xml:space="preserve"><value>الاسم</value></data>
+  <data name="Col_Barcode" xml:space="preserve"><value>الباركود</value></data>
+  <data name="Col_Price" xml:space="preserve"><value>السعر</value></data>
+  <data name="Col_Qty" xml:space="preserve"><value>الكمية</value></data>
+  <data name="Col_Product" xml:space="preserve"><value>المنتج</value></data>
+  <data name="Col_MovementType" xml:space="preserve"><value>النوع</value></data>
+  <data name="Col_Change" xml:space="preserve"><value>التغير</value></data>
+  <data name="Col_After" xml:space="preserve"><value>بعد الحركة</value></data>
+  <data name="Col_Reference" xml:space="preserve"><value>المرجع</value></data>
+  <data name="Col_When" xml:space="preserve"><value>الوقت</value></data>
+  <data name="MovementType_OpeningStock" xml:space="preserve"><value>مخزون افتتاحي</value></data>
+  <data name="MovementType_ManualSetAdjustment" xml:space="preserve"><value>تعديل يدوي</value></data>
+  <data name="MovementType_Sale" xml:space="preserve"><value>بيع</value></data>
+  <data name="MovementType_Refund" xml:space="preserve"><value>استرجاع</value></data>
+  <data name="Product_AddTitle" xml:space="preserve"><value>إضافة منتج</value></data>
+  <data name="Product_EditTitle" xml:space="preserve"><value>تعديل منتج</value></data>
+  <data name="Product_NameRequired" xml:space="preserve"><value>اسم المنتج مطلوب.</value></data>
+  <data name="Product_SelectCategory" xml:space="preserve"><value>اختر فئة.</value></data>
+  <data name="Product_ValidPrice" xml:space="preserve"><value>أدخل سعرًا صالحًا.</value></data>
+  <data name="Product_NameLabel" xml:space="preserve"><value>اسم المنتج *</value></data>
+  <data name="Product_BarcodeLabel" xml:space="preserve"><value>الباركود</value></data>
+  <data name="Product_CategoryLabel" xml:space="preserve"><value>الفئة</value></data>
+  <data name="Product_SellingPrice" xml:space="preserve"><value>سعر البيع *</value></data>
+  <data name="Product_CostPrice" xml:space="preserve"><value>سعر التكلفة</value></data>
+  <data name="Product_InitialStock" xml:space="preserve"><value>المخزون الابتدائي</value></data>
+  <data name="Product_ImageLabel" xml:space="preserve"><value>صورة المنتج</value></data>
+  <data name="Product_NoImage" xml:space="preserve"><value>لم تُحدد صورة</value></data>
+  <data name="Product_Browse" xml:space="preserve"><value>استعراض…</value></data>
+  <data name="Product_Clear" xml:space="preserve"><value>مسح</value></data>
+  <data name="Product_ActiveLabel" xml:space="preserve"><value>المنتج نشط (يظهر في نقطة البيع)</value></data>
+  <data name="Product_Cancel" xml:space="preserve"><value>إلغاء</value></data>
+  <data name="Product_Save" xml:space="preserve"><value>حفظ</value></data>
+  <data name="Product_ImageDialogTitle" xml:space="preserve"><value>اختر صورة المنتج</value></data>
+  <data name="CustomerDisplay_Title" xml:space="preserve"><value>شاشة العميل — SmartPOS</value></data>
+  <data name="CustomerDisplay_Welcome" xml:space="preserve"><value>مرحبًا!</value></data>
+  <data name="CustomerDisplay_Subtitle" xml:space="preserve"><value>ستظهر مشترياتك هنا</value></data>
+  <data name="CustomerDisplay_Total" xml:space="preserve"><value>الإجمالي</value></data>
+  <data name="Msg_CreateCategoryFirst" xml:space="preserve"><value>أنشئ فئة أولاً.</value></data>
+  <data name="Msg_ProductNotFound" xml:space="preserve"><value>المنتج غير موجود.</value></data>
+  <data name="Msg_DeleteConfirmFormat" xml:space="preserve"><value>حذف '{0}'؟</value></data>
+  <data name="Msg_ConfirmTitle" xml:space="preserve"><value>تأكيد</value></data>
+</root>

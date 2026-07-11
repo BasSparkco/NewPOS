@@ -20,8 +20,8 @@
             </Grid.RowDefinitions>
 
             <!-- Title -->
-            <TextBlock Grid.Row="0"
-                       Text="Process Payment"
+            <TextBlock x:Name="PaymentHeaderTb"
+                       Grid.Row="0"
                        FontSize="16" FontWeight="SemiBold"
                        Foreground="{StaticResource TextPrimaryBrush}"
                        Margin="0,0,0,16"/>
@@ -32,8 +32,8 @@
                     CornerRadius="8" Padding="14,10"
                     Margin="0,0,0,16">
                 <DockPanel LastChildFill="False">
-                    <TextBlock DockPanel.Dock="Left"
-                               Text="Total due"
+                    <TextBlock x:Name="PaymentTotalDueTb"
+                               DockPanel.Dock="Left"
                                FontSize="12"
                                Foreground="{StaticResource AccentBrush}"
                                VerticalAlignment="Center"/>
@@ -45,8 +45,8 @@
             </Border>
 
             <!-- Cash received label -->
-            <TextBlock Grid.Row="2"
-                       Text="Cash received"
+            <TextBlock x:Name="PaymentCashRecvTb"
+                       Grid.Row="2"
                        FontSize="11"
                        Foreground="{StaticResource TextSecondaryBrush}"
                        Margin="0,0,0,4"/>
@@ -63,8 +63,8 @@
             <!-- Change row -->
             <Border Grid.Row="4" VerticalAlignment="Top">
                 <DockPanel LastChildFill="False">
-                    <TextBlock DockPanel.Dock="Left"
-                               Text="Change"
+                    <TextBlock x:Name="PaymentChangeCaptionTb"
+                               DockPanel.Dock="Left"
                                FontSize="12"
                                Foreground="{StaticResource TextSecondaryBrush}"
                                VerticalAlignment="Center"/>
@@ -82,13 +82,13 @@
                     Margin="-20,0,-20,0"
                     Padding="20,12,20,0">
                 <DockPanel LastChildFill="False">
-                    <Button DockPanel.Dock="Left"
-                            Content="Cancel"
+                    <Button x:Name="PaymentCancelBtn"
+                            DockPanel.Dock="Left"
                             Click="Cancel_Click"
                             Style="{StaticResource GhostButton}"
                             Width="80"/>
-                    <Button DockPanel.Dock="Right"
-                            Content="Complete"
+                    <Button x:Name="PaymentOkBtn"
+                            DockPanel.Dock="Right"
                             Click="Ok_Click"
                             Style="{StaticResource AccentButton}"
                             Width="100"/>

@@ -65,6 +65,10 @@ This file is the **single path from project start to the long-term vision**, sta
 5. **Settings** table UI ([database.md](database.md) §4.2).
 6. **AuditLogs** (minimal): who changed what ([database.md](database.md) §4.3).
 
+**Stage 3 implementation note:** Items 1, 2, 4, 5, and 6 are now implemented in the desktop app. Admins can manage currency policy plus persisted operational settings, and they can review audit entries for critical actions from a dedicated audit viewer. Item 3 remains optional and deferred.
+
+**Planning note:** Item 3 is still optional and should only be promoted into the current implementation pass if the next release needs advanced pricing, barcode variants, or units/weighted-product support.
+
 **Exit criteria:** Tax/discount receipts; movement history; configurable stock rules; audit trail for critical actions.
 
 ---
@@ -79,6 +83,8 @@ This file is the **single path from project start to the long-term vision**, sta
 4. **Sync engine:** background worker; REST payloads; conflict strategy (version / last-write) decided and documented.
 5. **Operational concerns:** API deployment, HTTPS, connection strings, migration strategy local ↔ server.
 
+**Stage 4 implementation note:** Items 1 through 5 are implemented. The sync engine now covers outbound and inbound slices for invoices, audit logs, categories, products, devices, users, store settings, and the store currency-policy aggregate: a WPF background worker pushes the currency-policy aggregate first, then unsynced settings, user, category, product, device, invoice, and audit-log snapshots to the API, before pulling newer currency policy, settings, users, categories, products, devices, invoices, and audit logs back down. The server applies a version-based conflict rule for invoices plus an `UpdatedAt`-based rule for categories, products, settings, users, devices, and currency policy, while audit logs sync in both directions as append-only rows keyed by `AuditLog.Id` and ordered by `CreatedAt` plus `AuditLog.Id`. User sync reconciles by `User.Id` or username, creates missing roles by role name when needed, and keeps username-driven identity flows aligned across clients and server. Synced paid/refunded invoice snapshots reconcile `Inventory` plus `StockMovements` on both server and client when a higher-version invoice snapshot is applied. Device snapshots use `UpdatedAt` plus `DeviceId` cursors in both directions, and invoice sync reuses the same freshness guard so older invoice metadata cannot regress a newer device row. Currency policy is synced as one aggregate because base-currency changes also convert catalog pricing and open invoices. Operationally, the API now has explicit provider/migration startup controls, production JWT-secret enforcement, and documented HTTPS plus reverse-proxy conventions. The broader aggregate-coverage pass is complete for the current mutable admin data in the desktop app; standalone `Role` or `Store` sync should wait until those concepts gain real management write paths beyond user-role reconciliation and the existing currency/settings flows. Full `POS.Tests` validation currently passes, so Stage 4 meets its documented exit criteria within the chosen sync rules. See [docs/SYNC_STRATEGY.md](docs/SYNC_STRATEGY.md) for the current contract and limitations.
+
 **Exit criteria:** Two clients can sync sales/inventory to a shared server without corrupting data (within chosen conflict rules).
 
 ---
@@ -88,11 +94,63 @@ This file is the **single path from project start to the long-term vision**, sta
 **Goal:** Browser-based admin and future channels.
 
 1. **Web dashboard:** reports, user/store management, inventory ([pos_system_master_plan.md](pos_system_master_plan.md) §6).
+	Current baseline: `POS.Web` now exists as an ASP.NET Core MVC host with cookie auth, a control-room dashboard over the shared data layer for reports and low-stock inventory, and an editable management surface for store profile/settings/currency policy, store-scoped users, categories, and product/inventory administration with product-, movement-type-, and date-range-filtered stock-movement visibility plus quick date presets for today, yesterday, the last 7 days, the last 30 days, and this month. Focused web integration tests cover login, dashboard access, management postbacks, inline category create/update/delete behavior around downstream product use, product create/update/delete flows, and stock-ledger filtering by product, movement type, date range, and quick presets.
 2. **Multi-branch** reporting and policies (central vs store-level).
 3. **Mobile / PWA / MAUI** — pick one pilot ([stack.md](stack.md) §13).
 4. **Plugin / integration** hooks (payment gateways, accounting) — as needed ([pos_system_master_plan.md](pos_system_master_plan.md) §11).
 
 **Exit criteria:** Stakeholders can run the business from web + POS; roadmap for integrations is clear.
+
+---
+
+## Promoted Extensions — after core roadmap
+
+**Goal:** Keep one canonical roadmap while capturing the highest-value ideas discovered during the `pos_q/` reference review.
+
+These are not separate stages yet. They are prioritized backlog candidates to promote into implementation when the matching core stage is stable.
+
+### Operational Extensions
+
+1. **Cash register management:** opening/closing register, denomination counting, expected-vs-actual reconciliation, cashier session history.
+2. **Customer groups and selling price groups:** retail/wholesale/VIP pricing, customer-tier price rules, location-aware price policy.
+3. **Invoice layouts and invoice schemes:** multiple receipt/invoice templates, configurable numbering prefixes/sequences, optional QR/compliance fields.
+4. **Stock transfers between stores:** request/dispatch/receive flow, in-transit status, reconciliation.
+5. **Expense management:** expense entry, categories, expense reports, optional employee-paid expense attribution.
+
+### Commercial Extensions
+
+1. **Advanced catalog depth:** product variants matrix, per-variant barcodes, per-location variant stock, rack/bin assignment.
+2. **Service billing:** non-stock service items with location/staff-specific pricing.
+3. **Warranty management:** warranty definitions, product defaults, sale-line warranty assignment, warranty lookup.
+4. **Sales orders / purchase orders / price offers:** pre-sale and pre-purchase documents with conversion into invoices or purchases.
+
+### Platform Extensions
+
+1. **Notification template system:** email/SMS/WhatsApp templates, trigger-based sending, delivery log and retry behavior.
+2. **Payment gateway abstraction:** adapter model for multiple providers, callback handling, payment references, per-store configuration.
+3. **Connector framework:** outbound webhooks, inbound order sync, retry/failure log, adapters for commerce/accounting systems.
+4. **Tax compliance / e-invoice integration:** tax authority configuration, submission logs, filing/export support for regulated markets.
+5. **Accounting engine:** chart of accounts, journal entries, debit/credit posting, profit/loss and balance-sheet grade reporting.
+6. **Document and notes service:** notes, attachments, and media linked to invoices, products, customers, and future service workflows.
+
+### Optional Future Verticals
+
+Only promote these if product scope expands beyond core retail POS:
+
+1. **CRM:** campaigns, call logs, proposals, schedules, follow-ups.
+2. **HR / payroll:** attendance, leave, shifts, payroll groups, employee targets.
+3. **Repair workflow:** jobsheets, device models, repair statuses, parts/service tracking.
+4. **Restaurant mode:** tables, bookings, kitchen workflow, modifiers.
+
+### Promotion Priority
+
+Best candidates to promote soon after the current Stage 3/4 work:
+
+1. cash register management
+2. customer groups and selling price groups
+3. invoice layouts and invoice schemes
+4. stock transfers between stores
+5. notification template system
 
 ---
 
@@ -104,4 +162,4 @@ This file is the **single path from project start to the long-term vision**, sta
 
 ---
 
-*Last updated: project kickoff — no stages completed yet.*
+*Last updated: Stage 4 is complete. The implementation covers outbound and inbound sync for invoices, audit logs, categories, products, devices, users, store settings, and currency policy, aggregate-level invoice conflict handling, username-aware user reconciliation, device freshness guards, inventory reconciliation for synced paid/refunded invoices, a dedicated global change-sequence model for aggregate pull cursors and outbound aggregate push cursors, and the deployment/runtime hardening needed for PostgreSQL-backed API rollout. The current broader aggregate-coverage pass is complete for the mutable admin data that actually has write paths today; optional Stage 3 item 3 remains deferred.*

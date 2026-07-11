@@ -15,24 +15,48 @@ internal sealed class AuthService : IAuthService
         _session = session;
     }
 
-    public async Task<AuthResult> LoginAsync(string username, string password, CancellationToken cancellationToken = default)
+    public async Task<AuthResult> LoginAsync(string username, CancellationToken cancellationToken = default)
     {
-        if (string.IsNullOrWhiteSpace(username) || string.IsNullOrWhiteSpace(password))
-            return new AuthResult(false, "Username and password are required.");
+        var name = username.Trim();
+        if (string.IsNullOrEmpty(name))
+            return new AuthResult(false, "Username is required.");
 
         await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken);
+        // SQLite default collation is case-sensitive; match case-insensitively.
+        var nameLower = name.ToLowerInvariant();
         var user = await db.Users
             .AsNoTracking()
-            .Include(u => u.Role)
-            .FirstOrDefaultAsync(u => u.Username == username.Trim() && !u.IsDeleted, cancellationToken);
+            .FirstOrDefaultAsync(
+                u => u.Username.ToLower() == nameLower && !u.IsDeleted,
+                cancellationToken);
 
         if (user is null || !user.IsActive)
-            return new AuthResult(false, "Invalid username or password.");
+            return new AuthResult(false, "Invalid username.");
 
-        if (!BCrypt.Net.BCrypt.Verify(password, user.PasswordHash))
-            return new AuthResult(false, "Invalid username or password.");
+        var roleName = await db.Roles
+            .AsNoTracking()
+            .Where(r => r.Id == user.RoleId)
+            .Select(r => r.Name)
+            .FirstOrDefaultAsync(cancellationToken)
+            ?? string.Empty;
 
-        _session.Set(user.Id, user.StoreId, user.Username, user.Role?.Name ?? "");
+        var storeCurrencyId = await db.Stores
+            .AsNoTracking()
+            .Where(s => s.Id == user.StoreId && !s.IsDeleted)
+            .Select(s => (Guid?)s.BaseCurrencyId)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        var currency = storeCurrencyId is null
+            ? null
+            : await db.Currencies
+                .AsNoTracking()
+                .Where(c => c.Id == storeCurrencyId && !c.IsDeleted)
+                .Select(c => new { c.Code, c.Symbol })
+                .FirstOrDefaultAsync(cancellationToken);
+
+        var baseCode = currency?.Code ?? "ILS";
+        var symbol   = currency?.Symbol;
+        _session.Set(user.Id, user.StoreId, user.Username, roleName, baseCode, symbol);
 
         return new AuthResult(true, null);
     }

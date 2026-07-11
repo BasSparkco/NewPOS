@@ -1,0 +1,42 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TestRun id="03438827-d9e5-46f9-a816-daff2aaa899d" name="User@ASUS 2026-05-21 13:57:20" runUser="Asus\User" xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010">
+  <Times creation="2026-05-21T13:57:20.4444612+03:00" queuing="2026-05-21T13:57:20.4444614+03:00" start="2026-05-21T13:57:13.1040187+03:00" finish="2026-05-21T13:57:21.4908420+03:00" />
+  <TestSettings name="default" id="7bfa5dff-1580-4c71-863b-1c8753d52ffb">
+    <Deployment runDeploymentRoot="User_ASUS_2026-05-21_13_57_20" />
+  </TestSettings>
+  <Results>
+    <UnitTestResult executionId="25d8c797-5895-4f0a-97ae-a9ebe0d385c9" testId="74383383-f939-07d1-39da-0d7a2c60cf16" testName="POS.Tests.WebIntegrationTests.Login_flow_redirects_unauthenticated_dashboard_requests_and_then_renders_dashboard" computerName="ASUS" duration="00:00:00.8925563" startTime="2026-05-21T13:57:21.2874905+03:00" endTime="2026-05-21T13:57:21.2874911+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="25d8c797-5895-4f0a-97ae-a9ebe0d385c9" />
+    <UnitTestResult executionId="8c7eaf70-83bf-4930-807a-db4ed9c9037f" testId="426fc058-a14c-0d44-caba-3b3cceddcea2" testName="POS.Tests.WebIntegrationTests.Management_postbacks_create_user_and_persist_operational_settings" computerName="ASUS" duration="00:00:05.2940417" startTime="2026-05-21T13:57:20.3937583+03:00" endTime="2026-05-21T13:57:20.3937822+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="8c7eaf70-83bf-4930-807a-db4ed9c9037f" />
+  </Results>
+  <TestDefinitions>
+    <UnitTest name="POS.Tests.WebIntegrationTests.Management_postbacks_create_user_and_persist_operational_settings" storage="c:\projects\pos\tests\pos.tests\bin\debug\net8.0\pos.tests.dll" id="426fc058-a14c-0d44-caba-3b3cceddcea2">
+      <Execution id="8c7eaf70-83bf-4930-807a-db4ed9c9037f" />
+      <TestMethod codeBase="C:\projects\POS\tests\POS.Tests\bin\Debug\net8.0\POS.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="POS.Tests.WebIntegrationTests" name="Management_postbacks_create_user_and_persist_operational_settings" />
+    </UnitTest>
+    <UnitTest name="POS.Tests.WebIntegrationTests.Login_flow_redirects_unauthenticated_dashboard_requests_and_then_renders_dashboard" storage="c:\projects\pos\tests\pos.tests\bin\debug\net8.0\pos.tests.dll" id="74383383-f939-07d1-39da-0d7a2c60cf16">
+      <Execution id="25d8c797-5895-4f0a-97ae-a9ebe0d385c9" />
+      <TestMethod codeBase="C:\projects\POS\tests\POS.Tests\bin\Debug\net8.0\POS.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="POS.Tests.WebIntegrationTests" name="Login_flow_redirects_unauthenticated_dashboard_requests_and_then_renders_dashboard" />
+    </UnitTest>
+  </TestDefinitions>
+  <TestEntries>
+    <TestEntry testId="74383383-f939-07d1-39da-0d7a2c60cf16" executionId="25d8c797-5895-4f0a-97ae-a9ebe0d385c9" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="426fc058-a14c-0d44-caba-3b3cceddcea2" executionId="8c7eaf70-83bf-4930-807a-db4ed9c9037f" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+  </TestEntries>
+  <TestLists>
+    <TestList name="Results Not in a List" id="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestList name="All Loaded Results" id="19431567-8539-422a-85d7-44ee4e166bda" />
+  </TestLists>
+  <ResultSummary outcome="Completed">
+    <Counters total="2" executed="2" passed="2" failed="0" error="0" timeout="0" aborted="0" inconclusive="0" passedButRunAborted="0" notRunnable="0" notExecuted="0" disconnected="0" warning="0" completed="0" inProgress="0" pending="0" />
+    <Output>
+      <StdOut>[xUnit.net 00:00:00.01] xUnit.net VSTest Adapter v2.5.3.1+6b60a9e56a (64-bit .NET 8.0.25)&#xD;
+[xUnit.net 00:00:00.28]   Discovering: POS.Tests&#xD;
+[xUnit.net 00:00:00.35]   Discovered:  POS.Tests&#xD;
+[xUnit.net 00:00:00.36]   Starting:    POS.Tests&#xD;
+warn: Microsoft.EntityFrameworkCore.Query[10103]&#xD;
+      The query uses the 'First'/'FirstOrDefault' operator without 'OrderBy' and filter operators. This may lead to unpredictable results.&#xD;
+[xUnit.net 00:00:06.67]   Finished:    POS.Tests&#xD;
+</StdOut>
+    </Output>
+  </ResultSummary>
+</TestRun>

@@ -1,0 +1,38 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TestRun id="e57675e6-1ae4-437d-b155-e1b5036dbae0" name="User@ASUS 2026-05-21 15:39:43" runUser="Asus\User" xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010">
+  <Times creation="2026-05-21T15:39:44.1101883+03:00" queuing="2026-05-21T15:39:44.1101889+03:00" start="2026-05-21T15:39:24.1518495+03:00" finish="2026-05-21T15:39:44.1405581+03:00" />
+  <TestSettings name="default" id="1222e60a-a65a-4a87-b36e-9c7c94306362">
+    <Deployment runDeploymentRoot="User_ASUS_2026-05-21_15_39_43" />
+  </TestSettings>
+  <Results>
+    <UnitTestResult executionId="5eb905ee-f103-479b-be58-1385cd832558" testId="32de2e2b-a1b6-eb22-ade6-bee4ce60e212" testName="POS.Tests.WebIntegrationTests.Management_get_stock_ledger_filter_supports_today_preset" computerName="ASUS" duration="00:00:16.6875228" startTime="2026-05-21T15:39:43.4722602+03:00" endTime="2026-05-21T15:39:43.4723186+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="5eb905ee-f103-479b-be58-1385cd832558" />
+  </Results>
+  <TestDefinitions>
+    <UnitTest name="POS.Tests.WebIntegrationTests.Management_get_stock_ledger_filter_supports_today_preset" storage="c:\projects\pos\tests\pos.tests\bin\debug\net8.0\pos.tests.dll" id="32de2e2b-a1b6-eb22-ade6-bee4ce60e212">
+      <Execution id="5eb905ee-f103-479b-be58-1385cd832558" />
+      <TestMethod codeBase="C:\projects\POS\tests\POS.Tests\bin\Debug\net8.0\POS.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="POS.Tests.WebIntegrationTests" name="Management_get_stock_ledger_filter_supports_today_preset" />
+    </UnitTest>
+  </TestDefinitions>
+  <TestEntries>
+    <TestEntry testId="32de2e2b-a1b6-eb22-ade6-bee4ce60e212" executionId="5eb905ee-f103-479b-be58-1385cd832558" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+  </TestEntries>
+  <TestLists>
+    <TestList name="Results Not in a List" id="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestList name="All Loaded Results" id="19431567-8539-422a-85d7-44ee4e166bda" />
+  </TestLists>
+  <ResultSummary outcome="Completed">
+    <Counters total="1" executed="1" passed="1" failed="0" error="0" timeout="0" aborted="0" inconclusive="0" passedButRunAborted="0" notRunnable="0" notExecuted="0" disconnected="0" warning="0" completed="0" inProgress="0" pending="0" />
+    <Output>
+      <StdOut>[xUnit.net 00:00:00.00] xUnit.net VSTest Adapter v2.5.3.1+6b60a9e56a (64-bit .NET 8.0.25)&#xD;
+[xUnit.net 00:00:00.45]   Discovering: POS.Tests&#xD;
+[xUnit.net 00:00:00.65]   Discovered:  POS.Tests&#xD;
+[xUnit.net 00:00:00.68]   Starting:    POS.Tests&#xD;
+warn: Microsoft.EntityFrameworkCore.Query[10103]&#xD;
+      The query uses the 'First'/'FirstOrDefault' operator without 'OrderBy' and filter operators. This may lead to unpredictable results.&#xD;
+warn: Microsoft.EntityFrameworkCore.Query[10103]&#xD;
+      The query uses the 'First'/'FirstOrDefault' operator without 'OrderBy' and filter operators. This may lead to unpredictable results.&#xD;
+[xUnit.net 00:00:17.61]   Finished:    POS.Tests&#xD;
+</StdOut>
+    </Output>
+  </ResultSummary>
+</TestRun>

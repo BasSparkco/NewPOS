@@ -1,19 +1,26 @@
+using System.Globalization;
 using Microsoft.EntityFrameworkCore;
 using POS.Application.Abstractions;
 using POS.Application.Models;
 using POS.Core.Entities;
+using POS.Core.Enums;
 using POS.Infrastructure.Data;
 
 namespace POS.Infrastructure.Services;
 
 internal sealed class ProductCatalogService : IProductCatalogService
 {
+    private const string LowStockThresholdKey = "LowStockThreshold";
+    private const decimal DefaultLowStockThreshold = 5m;
+
     private readonly IDbContextFactory<PosDbContext> _dbFactory;
+    private readonly IAuditLogService _auditLogService;
     private readonly ICurrentSession _session;
 
-    public ProductCatalogService(IDbContextFactory<PosDbContext> dbFactory, ICurrentSession session)
+    public ProductCatalogService(IDbContextFactory<PosDbContext> dbFactory, ICurrentSession session, IAuditLogService auditLogService)
     {
         _dbFactory = dbFactory;
+        _auditLogService = auditLogService;
         _session = session;
     }
 
@@ -48,6 +55,67 @@ internal sealed class ProductCatalogService : IProductCatalogService
         return new CategoryDto(entity.Id, entity.Name);
     }
 
+    public async Task<CategoryDto> UpdateCategoryAsync(Guid id, string name, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+            throw new ArgumentException("Name is required.", nameof(name));
+
+        await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken);
+        var category = await db.Categories.FirstOrDefaultAsync(c => c.Id == id && !c.IsDeleted, cancellationToken)
+            ?? throw new InvalidOperationException("Category not found.");
+
+        var normalizedName = name.Trim();
+        var duplicateExists = await db.Categories.AnyAsync(
+            candidate => candidate.Id != id
+                && !candidate.IsDeleted
+                && candidate.Name.ToLower() == normalizedName.ToLower(),
+            cancellationToken);
+
+        if (duplicateExists)
+            throw new InvalidOperationException($"Category '{normalizedName}' already exists.");
+
+        var oldName = category.Name;
+        if (string.Equals(oldName, normalizedName, StringComparison.Ordinal))
+            return new CategoryDto(category.Id, category.Name);
+
+        category.Name = normalizedName;
+        category.UpdatedAt = DateTime.UtcNow;
+
+        await db.SaveChangesAsync(cancellationToken);
+
+        await TryWriteAuditAsync(
+            "CategoryUpdated",
+            "Category",
+            category.Id,
+            $"Renamed category '{oldName}' -> '{category.Name}'.",
+            cancellationToken);
+
+        return new CategoryDto(category.Id, category.Name);
+    }
+
+    public async Task DeleteCategoryAsync(Guid id, CancellationToken cancellationToken = default)
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken);
+        var category = await db.Categories.FirstOrDefaultAsync(c => c.Id == id && !c.IsDeleted, cancellationToken)
+            ?? throw new InvalidOperationException("Category not found.");
+
+        var inUse = await db.Products.AnyAsync(product => product.CategoryId == id && !product.IsDeleted, cancellationToken);
+        if (inUse)
+            throw new InvalidOperationException("Category cannot be deleted while products still reference it.");
+
+        category.IsDeleted = true;
+        category.UpdatedAt = DateTime.UtcNow;
+
+        await db.SaveChangesAsync(cancellationToken);
+
+        await TryWriteAuditAsync(
+            "CategoryDeleted",
+            "Category",
+            category.Id,
+            $"Soft-deleted category '{category.Name}'.",
+            cancellationToken);
+    }
+
     public async Task<IReadOnlyList<ProductListItemDto>> SearchProductsAsync(string? query, Guid? categoryId = null, CancellationToken cancellationToken = default)
     {
         var storeId = _session.StoreId;
@@ -79,6 +147,8 @@ internal sealed class ProductCatalogService : IProductCatalogService
             .Where(i => ids.Contains(i.ProductId) && i.StoreId == storeId && !i.IsDeleted)
             .ToDictionaryAsync(i => i.ProductId, i => i.Quantity, cancellationToken);
 
+        var lowStockThreshold = await GetLowStockThresholdAsync(db, storeId, cancellationToken);
+
         return products
             .Select(p => new ProductListItemDto(
                 p.Id,
@@ -86,6 +156,7 @@ internal sealed class ProductCatalogService : IProductCatalogService
                 p.Barcode,
                 p.Price,
                 qtyByProduct.GetValueOrDefault(p.Id),
+                qtyByProduct.GetValueOrDefault(p.Id) <= lowStockThreshold,
                 p.ImagePath))
             .ToList();
     }
@@ -116,6 +187,37 @@ internal sealed class ProductCatalogService : IProductCatalogService
             ImagePath = p.ImagePath,
             IsActive = p.IsActive
         };
+    }
+
+    public async Task<IReadOnlyList<StockMovementDto>> GetStockMovementsAsync(Guid? productId = null, CancellationToken cancellationToken = default)
+    {
+        var storeId = _session.StoreId;
+        await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken);
+
+        var query = db.StockMovements
+            .AsNoTracking()
+            .Where(m => m.StoreId == storeId && !m.IsDeleted);
+
+        if (productId is not null)
+            query = query.Where(m => m.ProductId == productId.Value);
+
+        return await query
+            .Join(db.Products.AsNoTracking(),
+                m => m.ProductId,
+                p => p.Id,
+                (m, p) => new { Movement = m, ProductName = p.Name })
+            .OrderByDescending(entry => entry.Movement.CreatedAt)
+            .Select(entry => new StockMovementDto(
+                entry.Movement.Id,
+                entry.Movement.ProductId,
+                entry.ProductName,
+                entry.Movement.Type,
+                entry.Movement.QuantityDelta,
+                entry.Movement.QuantityAfter,
+                entry.Movement.Reference,
+                entry.Movement.Notes,
+                entry.Movement.CreatedAt))
+            .ToListAsync(cancellationToken);
     }
 
     public async Task<ProductEditDto> CreateProductAsync(ProductEditDto input, CancellationToken cancellationToken = default)
@@ -154,7 +256,33 @@ internal sealed class ProductCatalogService : IProductCatalogService
         };
         db.Inventories.Add(inv);
 
+        if (inv.Quantity != 0)
+        {
+            db.StockMovements.Add(new StockMovement
+            {
+                Id = Guid.NewGuid(),
+                ProductId = product.Id,
+                StoreId = storeId,
+                InventoryId = inv.Id,
+                UserId = _session.UserId == Guid.Empty ? null : _session.UserId,
+                Type = StockMovementType.OpeningStock,
+                QuantityDelta = inv.Quantity,
+                QuantityAfter = inv.Quantity,
+                Reference = "PRODUCT_CREATE",
+                Notes = "Initial stock on product creation.",
+                CreatedAt = now,
+                UpdatedAt = now
+            });
+        }
+
         await db.SaveChangesAsync(cancellationToken);
+
+        await TryWriteAuditAsync(
+            "ProductCreated",
+            "Product",
+            product.Id,
+            $"Created product '{product.Name}' at price {product.Price:0.##} with opening stock {inv.Quantity:0.####}.",
+            cancellationToken);
 
         input.Id = product.Id;
         return input;
@@ -166,6 +294,12 @@ internal sealed class ProductCatalogService : IProductCatalogService
         await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken);
         var product = await db.Products.FirstOrDefaultAsync(p => p.Id == input.Id && !p.IsDeleted, cancellationToken)
             ?? throw new InvalidOperationException("Product not found.");
+
+        var oldName = product.Name;
+        var oldPrice = product.Price;
+        var oldBarcode = product.Barcode;
+        var oldCategoryId = product.CategoryId;
+        var oldIsActive = product.IsActive;
 
         product.Name = input.Name.Trim();
         product.Barcode = string.IsNullOrWhiteSpace(input.Barcode) ? null : input.Barcode.Trim();
@@ -181,6 +315,9 @@ internal sealed class ProductCatalogService : IProductCatalogService
             cancellationToken);
 
         var now = DateTime.UtcNow;
+        decimal previousQuantity;
+        decimal currentQuantity;
+        Guid inventoryId;
         if (inv is null)
         {
             inv = new Inventory
@@ -193,14 +330,77 @@ internal sealed class ProductCatalogService : IProductCatalogService
                 UpdatedAt = now
             };
             db.Inventories.Add(inv);
+            previousQuantity = 0m;
+            currentQuantity = inv.Quantity;
+            inventoryId = inv.Id;
+
+            if (inv.Quantity != 0)
+            {
+                db.StockMovements.Add(new StockMovement
+                {
+                    Id = Guid.NewGuid(),
+                    ProductId = product.Id,
+                    StoreId = storeId,
+                    InventoryId = inv.Id,
+                    UserId = _session.UserId == Guid.Empty ? null : _session.UserId,
+                    Type = StockMovementType.OpeningStock,
+                    QuantityDelta = inv.Quantity,
+                    QuantityAfter = inv.Quantity,
+                    Reference = "PRODUCT_EDIT_CREATE_INVENTORY",
+                    Notes = "Initial stock created while editing product.",
+                    CreatedAt = now,
+                    UpdatedAt = now
+                });
+            }
         }
         else
         {
+            previousQuantity = inv.Quantity;
             inv.Quantity = input.InitialStock < 0 ? 0 : input.InitialStock;
             inv.UpdatedAt = now;
+            currentQuantity = inv.Quantity;
+            inventoryId = inv.Id;
+
+            var delta = inv.Quantity - previousQuantity;
+            if (delta != 0)
+            {
+                db.StockMovements.Add(new StockMovement
+                {
+                    Id = Guid.NewGuid(),
+                    ProductId = product.Id,
+                    StoreId = storeId,
+                    InventoryId = inv.Id,
+                    UserId = _session.UserId == Guid.Empty ? null : _session.UserId,
+                    Type = StockMovementType.ManualSetAdjustment,
+                    QuantityDelta = delta,
+                    QuantityAfter = inv.Quantity,
+                    Reference = "PRODUCT_EDIT",
+                    Notes = "Inventory manually set from product editor.",
+                    CreatedAt = now,
+                    UpdatedAt = now
+                });
+            }
         }
 
         await db.SaveChangesAsync(cancellationToken);
+
+        await TryWriteAuditAsync(
+            "ProductUpdated",
+            "Product",
+            product.Id,
+            $"Updated product '{oldName}' -> '{product.Name}', price {oldPrice:0.##} -> {product.Price:0.##}, barcode '{oldBarcode ?? "-"}' -> '{product.Barcode ?? "-"}', category {oldCategoryId} -> {product.CategoryId}, active {oldIsActive} -> {product.IsActive}.",
+            cancellationToken);
+
+        if (previousQuantity != currentQuantity)
+        {
+            await TryWriteAuditAsync(
+                "ManualStockAdjusted",
+                "Inventory",
+                inventoryId,
+                $"Product '{product.Name}' stock manually set {previousQuantity:0.####} -> {currentQuantity:0.####}.",
+                cancellationToken);
+        }
+
         return input;
     }
 
@@ -214,5 +414,37 @@ internal sealed class ProductCatalogService : IProductCatalogService
         product.IsActive = false;
         product.UpdatedAt = DateTime.UtcNow;
         await db.SaveChangesAsync(cancellationToken);
+
+        await TryWriteAuditAsync(
+            "ProductDeleted",
+            "Product",
+            product.Id,
+            $"Soft-deleted product '{product.Name}'.",
+            cancellationToken);
+    }
+
+    private static async Task<decimal> GetLowStockThresholdAsync(PosDbContext db, Guid storeId, CancellationToken cancellationToken)
+    {
+        var raw = await db.Settings
+            .AsNoTracking()
+            .Where(s => s.StoreId == storeId && s.Key == LowStockThresholdKey && !s.IsDeleted)
+            .Select(s => s.Value)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        return decimal.TryParse(raw, NumberStyles.Number, CultureInfo.InvariantCulture, out var threshold)
+            ? threshold
+            : DefaultLowStockThreshold;
+    }
+
+    private async Task TryWriteAuditAsync(string action, string entityName, Guid? entityId, string? details, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await _auditLogService.WriteAsync(action, entityName, entityId, details, cancellationToken);
+        }
+        catch
+        {
+            // Audit logging is best-effort and must not block the business write.
+        }
     }
 }

@@ -23,14 +23,14 @@
                 BorderThickness="0,0,0,1"
                 Padding="16,10">
             <DockPanel LastChildFill="False">
-                <TextBlock DockPanel.Dock="Left"
-                           Text="Daily Sales Report"
+                <TextBlock x:Name="ReportsHeaderTb"
+                           DockPanel.Dock="Left"
                            FontSize="15" FontWeight="SemiBold"
                            Foreground="{StaticResource TextPrimaryBrush}"
                            VerticalAlignment="Center"/>
                 <!-- Date picker -->
                 <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
-                    <TextBlock Text="Date:"
+                    <TextBlock x:Name="ReportsDateLabelTb"
                                FontSize="12"
                                Foreground="{StaticResource TextSecondaryBrush}"
                                VerticalAlignment="Center" Margin="0,0,8,0"/>
@@ -39,7 +39,7 @@
                                 Width="140"
                                 VerticalAlignment="Center"
                                 SelectedDateChanged="ReportDate_Changed"/>
-                    <Button Content="🔄  Refresh"
+                    <Button x:Name="ReportsRefreshBtn"
                             Click="Refresh_Click"
                             Style="{StaticResource GhostButton}"
                             Margin="8,0,0,0"
@@ -59,7 +59,7 @@
                 <Border Margin="4" Background="{StaticResource AccentLightBrush}"
                         CornerRadius="8" Padding="12,10">
                     <StackPanel>
-                        <TextBlock Text="Revenue" FontSize="10" FontWeight="SemiBold"
+                        <TextBlock x:Name="ReportsLblRevenue" FontSize="10" FontWeight="SemiBold"
                                    Foreground="{StaticResource AccentBrush}" Margin="0,0,0,4"/>
                         <TextBlock x:Name="CardRevenue" Text="0.00"
                                    FontSize="20" FontWeight="Bold"
@@ -70,7 +70,7 @@
                 <Border Margin="4" Background="{StaticResource InfoBgBrush}"
                         CornerRadius="8" Padding="12,10">
                     <StackPanel>
-                        <TextBlock Text="Invoices" FontSize="10" FontWeight="SemiBold"
+                        <TextBlock x:Name="ReportsLblInvoicesCard" FontSize="10" FontWeight="SemiBold"
                                    Foreground="{StaticResource InfoBrush}" Margin="0,0,0,4"/>
                         <TextBlock x:Name="CardInvoices" Text="0"
                                    FontSize="20" FontWeight="Bold"
@@ -83,7 +83,7 @@
                         BorderThickness="0.5"
                         CornerRadius="8" Padding="12,10">
                     <StackPanel>
-                        <TextBlock Text="Items Sold" FontSize="10" FontWeight="SemiBold"
+                        <TextBlock x:Name="ReportsLblItemsSold" FontSize="10" FontWeight="SemiBold"
                                    Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,0,4"/>
                         <TextBlock x:Name="CardItems" Text="0"
                                    FontSize="20" FontWeight="Bold"
@@ -96,7 +96,7 @@
                         BorderThickness="0.5"
                         CornerRadius="8" Padding="12,10">
                     <StackPanel>
-                        <TextBlock Text="Avg. Sale" FontSize="10" FontWeight="SemiBold"
+                        <TextBlock x:Name="ReportsLblAvgSale" FontSize="10" FontWeight="SemiBold"
                                    Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,0,4"/>
                         <TextBlock x:Name="CardAvg" Text="0.00"
                                    FontSize="20" FontWeight="Bold"
@@ -132,7 +132,7 @@
                             BorderBrush="{StaticResource PanelBorderBrush}"
                             BorderThickness="0,0,0,1"
                             Padding="12,8">
-                        <TextBlock Text="Top Products"
+                        <TextBlock x:Name="ReportsLblTopProducts"
                                    FontSize="11" FontWeight="SemiBold"
                                    Foreground="{StaticResource TextSecondaryBrush}"/>
                     </Border>
@@ -213,7 +213,7 @@
                             BorderBrush="{StaticResource PanelBorderBrush}"
                             BorderThickness="0,0,0,1"
                             Padding="12,8">
-                        <TextBlock Text="Invoices"
+                        <TextBlock x:Name="ReportsLblInvoicesSection"
                                    FontSize="11" FontWeight="SemiBold"
                                    Foreground="{StaticResource TextSecondaryBrush}"/>
                     </Border>
@@ -280,8 +280,8 @@
                            FontSize="11"
                            Foreground="{StaticResource TextTertiaryBrush}"
                            VerticalAlignment="Center"/>
-                <Button DockPanel.Dock="Right"
-                        Content="Close"
+                <Button x:Name="ReportsCloseBtn"
+                        DockPanel.Dock="Right"
                         Click="Close_Click"
                         Style="{StaticResource GhostButton}"
                         Width="80"/>

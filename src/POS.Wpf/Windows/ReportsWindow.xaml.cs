@@ -1,9 +1,11 @@
+using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using POS.Core.Enums;
 using POS.Infrastructure.Data;
+using POS.Wpf.Localization;
 
 namespace POS.Wpf.Windows;
 
@@ -15,11 +17,31 @@ public partial class ReportsWindow : Window
     {
         InitializeComponent();
         _scopeFactory = scopeFactory;
-        Loaded += async (_, _) =>
-        {
-            ReportDate.SelectedDate = DateTime.Today;
-            await LoadReportAsync(DateTime.Today);
-        };
+        Loaded += OnLoaded;
+    }
+
+    private async void OnLoaded(object sender, RoutedEventArgs e)
+    {
+        Loaded -= OnLoaded;
+        ApplyLocalization();
+        ReportDate.SelectedDate = DateTime.Today;
+        await LoadReportAsync(DateTime.Today);
+    }
+
+    private void ApplyLocalization()
+    {
+        Locale.ApplyFlowDirection(this);
+        Title                         = Locale.Get("Reports_Title");
+        ReportsHeaderTb.Text          = Locale.Get("Reports_Header");
+        ReportsDateLabelTb.Text       = Locale.Get("Reports_Date");
+        ReportsRefreshBtn.Content     = Locale.Get("Reports_Refresh");
+        ReportsLblRevenue.Text        = Locale.Get("Reports_Revenue");
+        ReportsLblInvoicesCard.Text   = Locale.Get("Reports_Invoices");
+        ReportsLblItemsSold.Text      = Locale.Get("Reports_ItemsSold");
+        ReportsLblAvgSale.Text        = Locale.Get("Reports_AvgSale");
+        ReportsLblTopProducts.Text    = Locale.Get("Reports_TopProducts");
+        ReportsLblInvoicesSection.Text = Locale.Get("Reports_InvoicesSection");
+        ReportsCloseBtn.Content       = Locale.Get("Reports_Close");
     }
 
     private async void ReportDate_Changed(object? sender, SelectionChangedEventArgs e)
@@ -100,7 +122,9 @@ public partial class ReportsWindow : Window
             Total         = i.TotalAmount
         }).ToList();
 
-        FooterText.Text = $"Report for {date:dddd, MMMM d, yyyy}  ·  Generated {DateTime.Now:HH:mm}";
+        var dStr = date.ToString("D", CultureInfo.CurrentUICulture);
+        var tStr = DateTime.Now.ToString("t", CultureInfo.CurrentUICulture);
+        FooterText.Text = string.Format(CultureInfo.CurrentUICulture, Locale.Get("Reports_FooterFormat"), dStr, tStr);
     }
 
     private void Close_Click(object sender, RoutedEventArgs e) =>

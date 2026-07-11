@@ -19,20 +19,41 @@ public static class DependencyInjection
         IConfiguration configuration,
         string? applicationBasePath = null)
     {
+        services.AddHttpClient();
+
+        var provider = configuration["Database:Provider"]?.Trim();
         var connectionString = configuration.GetConnectionString("Default")
             ?? throw new InvalidOperationException("Connection string 'Default' is not configured.");
 
-        var basePath = applicationBasePath ?? AppContext.BaseDirectory;
-        connectionString = ResolveSqliteDataSource(connectionString, basePath);
-
         services.AddDbContextFactory<PosDbContext>(options =>
-            options.UseSqlite(connectionString));
+            ConfigurePosDbContext(options, provider, connectionString, applicationBasePath ?? AppContext.BaseDirectory));
 
         services.AddScoped<IAuthService, AuthService>();
         services.AddScoped<IProductCatalogService, ProductCatalogService>();
         services.AddScoped<ISaleService, SaleService>();
+        services.AddScoped<ICurrencyService, CurrencyService>();
+        services.AddScoped<ISettingsService, SettingsService>();
+        services.AddScoped<IAuditLogService, AuditLogService>();
+        services.AddScoped<IInvoiceSyncService, InvoiceSyncService>();
 
         return services;
+    }
+
+    public static void ConfigurePosDbContext(
+        DbContextOptionsBuilder options,
+        string? configuredProvider,
+        string connectionString,
+        string? applicationBasePath = null)
+    {
+        if (IsPostgres(configuredProvider, connectionString))
+        {
+            options.UseNpgsql(connectionString);
+            return;
+        }
+
+        var basePath = applicationBasePath ?? AppContext.BaseDirectory;
+        var sqliteConnectionString = ResolveSqliteDataSource(connectionString, basePath);
+        options.UseSqlite(sqliteConnectionString);
     }
 
     private static string ResolveSqliteDataSource(string connectionString, string basePath)
@@ -53,5 +74,17 @@ public static class DependencyInjection
 
         var fullPath = Path.GetFullPath(Path.Combine(basePath, pathPart));
         return $"{prefix}{fullPath}";
+    }
+
+    private static bool IsPostgres(string? configuredProvider, string connectionString)
+    {
+        if (!string.IsNullOrWhiteSpace(configuredProvider))
+            return configuredProvider.Equals("Postgres", StringComparison.OrdinalIgnoreCase)
+                || configuredProvider.Equals("PostgreSQL", StringComparison.OrdinalIgnoreCase)
+                || configuredProvider.Equals("Npgsql", StringComparison.OrdinalIgnoreCase);
+
+        return connectionString.Contains("Host=", StringComparison.OrdinalIgnoreCase)
+            || connectionString.Contains("Username=", StringComparison.OrdinalIgnoreCase)
+            || connectionString.Contains("Port=", StringComparison.OrdinalIgnoreCase);
     }
 }

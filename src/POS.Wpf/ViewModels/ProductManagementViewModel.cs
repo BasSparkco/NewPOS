@@ -1,10 +1,13 @@
 using System.Collections.ObjectModel;
+using System.Globalization;
 using System.Windows;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.DependencyInjection;
 using POS.Application.Abstractions;
 using POS.Application.Models;
+using POS.Core.Enums;
+using POS.Wpf.Localization;
 using POS.Wpf.Windows;
 
 namespace POS.Wpf.ViewModels;
@@ -25,10 +28,16 @@ public partial class ProductManagementViewModel : ObservableObject
     private ObservableCollection<ProductListItemDto> _products = new();
 
     [ObservableProperty]
+    private ObservableCollection<StockMovementRow> _stockMovements = new();
+
+    [ObservableProperty]
     private ProductListItemDto? _selectedProduct;
 
     [ObservableProperty]
     private string _newCategoryName = "";
+
+    [ObservableProperty]
+    private string _stockHistoryStatus = "";
 
     public async Task LoadAsync()
     {
@@ -38,7 +47,11 @@ public partial class ProductManagementViewModel : ObservableObject
         Categories = new ObservableCollection<CategoryDto>(cats);
         var list = await catalog.SearchProductsAsync(null);
         Products = new ObservableCollection<ProductListItemDto>(list);
+        await LoadStockMovementsSafeAsync(scope.ServiceProvider);
     }
+
+    partial void OnSelectedProductChanged(ProductListItemDto? value) =>
+        _ = LoadStockMovementsSafeAsync();
 
     [RelayCommand]
     private async Task AddCategoryAsync()
@@ -56,7 +69,7 @@ public partial class ProductManagementViewModel : ObservableObject
         }
         catch (Exception ex)
         {
-            MessageBox.Show(ex.Message, "POS", MessageBoxButton.OK, MessageBoxImage.Warning);
+            MessageBox.Show(ex.Message, Locale.Get("App_TitleShort"), MessageBoxButton.OK, MessageBoxImage.Warning);
         }
     }
 
@@ -65,7 +78,7 @@ public partial class ProductManagementViewModel : ObservableObject
     {
         if (Categories.Count == 0)
         {
-            MessageBox.Show("Create a category first.", "POS", MessageBoxButton.OK, MessageBoxImage.Information);
+            MessageBox.Show(Locale.Get("Msg_CreateCategoryFirst"), Locale.Get("App_TitleShort"), MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
 
@@ -89,7 +102,7 @@ public partial class ProductManagementViewModel : ObservableObject
         }
         catch (Exception ex)
         {
-            MessageBox.Show(ex.Message, "POS", MessageBoxButton.OK, MessageBoxImage.Warning);
+            MessageBox.Show(ex.Message, Locale.Get("App_TitleShort"), MessageBoxButton.OK, MessageBoxImage.Warning);
         }
     }
 
@@ -104,7 +117,7 @@ public partial class ProductManagementViewModel : ObservableObject
         var existing = await catalog.GetProductForEditAsync(SelectedProduct.Id);
         if (existing is null)
         {
-            MessageBox.Show("Product not found.", "POS", MessageBoxButton.OK, MessageBoxImage.Warning);
+            MessageBox.Show(Locale.Get("Msg_ProductNotFound"), Locale.Get("App_TitleShort"), MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
 
@@ -119,7 +132,7 @@ public partial class ProductManagementViewModel : ObservableObject
         }
         catch (Exception ex)
         {
-            MessageBox.Show(ex.Message, "POS", MessageBoxButton.OK, MessageBoxImage.Warning);
+            MessageBox.Show(ex.Message, Locale.Get("App_TitleShort"), MessageBoxButton.OK, MessageBoxImage.Warning);
         }
     }
 
@@ -129,7 +142,8 @@ public partial class ProductManagementViewModel : ObservableObject
         if (SelectedProduct is null)
             return;
 
-        if (MessageBox.Show($"Delete '{SelectedProduct.Name}'?", "Confirm", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes)
+        var confirmMsg = string.Format(CultureInfo.CurrentUICulture, Locale.Get("Msg_DeleteConfirmFormat"), SelectedProduct.Name);
+        if (MessageBox.Show(confirmMsg, Locale.Get("Msg_ConfirmTitle"), MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes)
             return;
 
         await using var scope = _scopeFactory.CreateAsyncScope();
@@ -141,7 +155,65 @@ public partial class ProductManagementViewModel : ObservableObject
         }
         catch (Exception ex)
         {
-            MessageBox.Show(ex.Message, "POS", MessageBoxButton.OK, MessageBoxImage.Warning);
+            MessageBox.Show(ex.Message, Locale.Get("App_TitleShort"), MessageBoxButton.OK, MessageBoxImage.Warning);
         }
     }
+
+    [RelayCommand]
+    private Task RefreshInventoryAsync() => LoadStockMovementsSafeAsync();
+
+    private async Task LoadStockMovementsSafeAsync(IServiceProvider? serviceProvider = null)
+    {
+        try
+        {
+            await LoadStockMovementsAsync(serviceProvider);
+        }
+        catch (Exception ex)
+        {
+            StockMovements = new ObservableCollection<StockMovementRow>();
+            StockHistoryStatus = $"{Locale.Get("ProductMgmt_StockLedger")}: {ex.Message}";
+        }
+    }
+
+    private async Task LoadStockMovementsAsync(IServiceProvider? serviceProvider = null)
+    {
+        if (serviceProvider is null)
+        {
+            await using var scope = _scopeFactory.CreateAsyncScope();
+            await LoadStockMovementsAsync(scope.ServiceProvider);
+            return;
+        }
+
+        var catalog = serviceProvider.GetRequiredService<IProductCatalogService>();
+        var movements = await catalog.GetStockMovementsAsync(SelectedProduct?.Id);
+
+        StockMovements = new ObservableCollection<StockMovementRow>(movements.Select(m => new StockMovementRow(
+            m.ProductName,
+            TranslateMovementType(m.Type),
+            m.QuantityDelta,
+            m.QuantityAfter,
+            m.Reference,
+            m.CreatedAt)));
+
+        StockHistoryStatus = SelectedProduct is null
+            ? string.Format(CultureInfo.CurrentUICulture, Locale.Get("ProductMgmt_StockHistoryAllFormat"), StockMovements.Count)
+            : string.Format(CultureInfo.CurrentUICulture, Locale.Get("ProductMgmt_StockHistoryFilteredFormat"), SelectedProduct.Name, StockMovements.Count);
+    }
+
+    private static string TranslateMovementType(StockMovementType type) => Locale.Get(type switch
+    {
+        StockMovementType.OpeningStock => "MovementType_OpeningStock",
+        StockMovementType.ManualSetAdjustment => "MovementType_ManualSetAdjustment",
+        StockMovementType.Sale => "MovementType_Sale",
+        StockMovementType.Refund => "MovementType_Refund",
+        _ => "MovementType_ManualSetAdjustment"
+    });
 }
+
+public sealed record StockMovementRow(
+    string ProductName,
+    string TypeLabel,
+    decimal QuantityDelta,
+    decimal QuantityAfter,
+    string? Reference,
+    DateTime CreatedAt);

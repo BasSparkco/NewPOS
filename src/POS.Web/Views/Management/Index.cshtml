@@ -1,0 +1,587 @@
+@model POS.Web.Models.ManagementViewModel
+@{
+    ViewData["Title"] = "Management";
+}
+
+<section class="management-hero">
+    <div class="hero-copy">
+        <div>
+            <span class="eyebrow">Store administration</span>
+            <h1 class="hero-title">Manage team access and store policy without leaving the web shell.</h1>
+            <p class="hero-subtitle">
+                This Stage 5.1 control surface now edits store profile, operational settings, base-currency policy, and store-scoped users directly against the shared POS data layer.
+            </p>
+        </div>
+
+        <div class="hero-meta">
+            <div class="hero-meta__item">
+                <span class="hero-meta__label">Store</span>
+                <span class="hero-meta__value">@Model.StoreName</span>
+            </div>
+            <div class="hero-meta__item">
+                <span class="hero-meta__label">Current operator</span>
+                <span class="hero-meta__value">@Model.CurrentUsername</span>
+            </div>
+            <div class="hero-meta__item">
+                <span class="hero-meta__label">Base currency</span>
+                <span class="hero-meta__value">@Model.CurrentBaseCurrencyCode</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="filter-card">
+        <div>
+            <span class="eyebrow">Scope</span>
+            <h2 class="panel-title">What this page controls</h2>
+        </div>
+        <div class="insight-list">
+            <div class="insight-card">
+                <strong>Users</strong>
+                <div class="muted">Create users, change roles, and activate or deactivate store accounts.</div>
+            </div>
+            <div class="insight-card">
+                <strong>Store policy</strong>
+                <div class="muted">Edit operational settings and the same base-currency workflow already used by the desktop app.</div>
+            </div>
+            <div class="insight-card">
+                <strong>Current auth model</strong>
+                <div class="muted">Sign-in remains username-only. New users are available immediately after creation.</div>
+            </div>
+            <div class="insight-card">
+                <strong>Catalog</strong>
+                <div class="muted">Create, rename, or retire categories, manage products, adjust stock from the same form, and inspect the latest stock ledger entries.</div>
+            </div>
+        </div>
+    </div>
+</section>
+
+@if (TempData["ManagementSuccess"] is string successMessage)
+{
+    <div class="flash-message flash-message--success">@successMessage</div>
+}
+
+@if (TempData["ManagementError"] is string errorMessage)
+{
+    <div class="flash-message flash-message--error">@errorMessage</div>
+}
+
+<section class="management-grid">
+    <article class="panel panel--span-8 panel-stack">
+        <div class="panel-header">
+            <div>
+                <span class="eyebrow">Store</span>
+                <h2 class="panel-title">Store profile and policies</h2>
+            </div>
+            <div class="muted">Profile fields, operational settings, and currency policy.</div>
+        </div>
+
+        <div class="form-grid">
+            <section class="form-block">
+                <div>
+                    <span class="eyebrow">Profile</span>
+                    <h3 class="panel-title">Store profile</h3>
+                </div>
+                <form asp-action="UpdateStoreProfile" method="post" class="panel-stack">
+                    @Html.AntiForgeryToken()
+                    <div>
+                        <label for="store-name">Store name</label>
+                        <input id="store-name" name="Name" class="form-control" value="@Model.StoreProfile.Name" />
+                    </div>
+                    <div>
+                        <label for="store-address">Address</label>
+                        <input id="store-address" name="Address" class="form-control" value="@Model.StoreProfile.Address" />
+                    </div>
+                    <div>
+                        <label for="store-phone">Phone</label>
+                        <input id="store-phone" name="Phone" class="form-control" value="@Model.StoreProfile.Phone" />
+                    </div>
+                    <button type="submit" class="shell-button">Save store profile</button>
+                </form>
+            </section>
+
+            <section class="form-block">
+                <div>
+                    <span class="eyebrow">Operations</span>
+                    <h3 class="panel-title">Operational settings</h3>
+                </div>
+                <form asp-action="UpdateOperationalSettings" method="post" class="panel-stack">
+                    @Html.AntiForgeryToken()
+                    <label class="inline-check">
+                        <input type="checkbox" name="AllowNegativeStock" value="true" @(Model.OperationalSettings.AllowNegativeStock ? "checked" : null) />
+                        <span>Allow negative stock</span>
+                    </label>
+                    <input type="hidden" name="AllowNegativeStock" value="false" />
+                    <div>
+                        <label for="low-stock-threshold">Low-stock threshold</label>
+                        <input id="low-stock-threshold" name="LowStockThreshold" type="number" step="0.01" class="form-control" value="@Model.OperationalSettings.LowStockThreshold" />
+                    </div>
+                    <div>
+                        <label for="default-tax">Default tax percent</label>
+                        <input id="default-tax" name="DefaultTaxPercent" type="number" step="0.01" class="form-control" value="@Model.OperationalSettings.DefaultTaxPercent" />
+                    </div>
+                    <div>
+                        <label for="receipt-footer">Receipt footer</label>
+                        <textarea id="receipt-footer" name="ReceiptFooterText" class="form-control">@Model.OperationalSettings.ReceiptFooterText</textarea>
+                    </div>
+                    <button type="submit" class="shell-button">Save operational settings</button>
+                </form>
+            </section>
+        </div>
+
+        <div class="section-divider"></div>
+
+        <section class="form-block">
+            <div>
+                <span class="eyebrow">Currency</span>
+                <h3 class="panel-title">Base currency and exchange rates</h3>
+                <p class="panel-copy mb-0">Changing the base currency reuses the existing conversion workflow for product pricing and open invoices.</p>
+            </div>
+            <form asp-action="UpdateCurrencyPolicy" method="post" class="panel-stack">
+                @Html.AntiForgeryToken()
+                <div>
+                    <label for="base-currency">Base currency</label>
+                    <select id="base-currency" name="BaseCurrencyId" class="form-select">
+                        @foreach (var rate in Model.CurrencyPolicy.Rates)
+                        {
+                            <option value="@rate.CurrencyId" selected="@(rate.CurrencyId == Model.CurrencyPolicy.BaseCurrencyId ? "selected" : null)">@rate.Code - @rate.Name</option>
+                        }
+                    </select>
+                </div>
+
+                <div class="table-list">
+                    @for (var index = 0; index < Model.CurrencyPolicy.Rates.Count; index++)
+                    {
+                        var rate = Model.CurrencyPolicy.Rates[index];
+                        <div class="table-row table-row--inventory">
+                            <div>
+                                <div class="table-main">@rate.Code - @rate.Name</div>
+                                <div class="table-sub">@(string.IsNullOrWhiteSpace(rate.Symbol) ? "No display symbol" : rate.Symbol)</div>
+                            </div>
+                            <input type="hidden" name="Rates[@index].CurrencyId" value="@rate.CurrencyId" />
+                            <input type="hidden" name="Rates[@index].Code" value="@rate.Code" />
+                            <input type="hidden" name="Rates[@index].Name" value="@rate.Name" />
+                            <input type="hidden" name="Rates[@index].Symbol" value="@rate.Symbol" />
+                            <div>
+                                <label for="rate-@index">Exchange rate</label>
+                                <input id="rate-@index" name="Rates[@index].ExchangeRate" type="number" step="0.000001" class="form-control" value="@rate.ExchangeRate" />
+                            </div>
+                            <div class="muted">Base currency is normalized to 1.000000 when saved.</div>
+                        </div>
+                    }
+                </div>
+
+                <button type="submit" class="shell-button">Save currency policy</button>
+            </form>
+        </section>
+    </article>
+
+    <article class="panel panel--span-4 panel-stack">
+        <div class="panel-header">
+            <div>
+                <span class="eyebrow">Users</span>
+                <h2 class="panel-title">Create store user</h2>
+            </div>
+            <div class="muted">Accounts are scoped to the current store.</div>
+        </div>
+
+        <form asp-action="CreateUser" method="post" class="panel-stack">
+            @Html.AntiForgeryToken()
+            <div>
+                <label for="new-username">Username</label>
+                <input id="new-username" name="Username" class="form-control" value="@Model.CreateUser.Username" autocomplete="off" />
+            </div>
+            <div>
+                <label for="new-role">Role</label>
+                <select id="new-role" name="RoleId" class="form-select">
+                    @foreach (var role in Model.Roles)
+                    {
+                        <option value="@role.Id" selected="@(role.Id == Model.CreateUser.RoleId ? "selected" : null)">@role.Name</option>
+                    }
+                </select>
+            </div>
+            <label class="inline-check">
+                <input type="checkbox" name="IsActive" value="true" @(Model.CreateUser.IsActive ? "checked" : null) />
+                <span>Active immediately</span>
+            </label>
+            <input type="hidden" name="IsActive" value="false" />
+            <button type="submit" class="shell-button">Create user</button>
+        </form>
+    </article>
+
+    <article class="panel panel--span-4 panel-stack">
+        <div class="panel-header">
+            <div>
+                <span class="eyebrow">Categories</span>
+                <h2 class="panel-title">Create category</h2>
+            </div>
+            <div class="muted">New categories are available to product forms immediately.</div>
+        </div>
+
+        <form asp-action="CreateCategory" method="post" class="panel-stack">
+            @Html.AntiForgeryToken()
+            <div>
+                <label for="new-category-name">Category name</label>
+                <input id="new-category-name" name="Name" class="form-control" value="@Model.CreateCategory.Name" />
+            </div>
+            <button type="submit" class="shell-button">Create category</button>
+        </form>
+
+        <div class="section-divider"></div>
+
+        <div class="panel-stack">
+            <div>
+                <span class="eyebrow">Current set</span>
+                <h3 class="panel-title">Category roster</h3>
+            </div>
+
+            @if (Model.CategoryRows.Count == 0)
+            {
+                <div class="empty-state">No categories exist yet.</div>
+            }
+            else
+            {
+                <div class="table-list">
+                    @foreach (var category in Model.CategoryRows)
+                    {
+                        <form asp-action="UpdateCategory" method="post" class="inline-category-form">
+                            @Html.AntiForgeryToken()
+                            <input type="hidden" name="CategoryId" value="@category.CategoryId" />
+                            <div>
+                                <label for="category-name-@category.CategoryId">Category name</label>
+                                <input id="category-name-@category.CategoryId" name="Name" class="form-control" value="@category.Name" />
+                            </div>
+                            <div class="inline-form-actions">
+                                <button type="submit" class="shell-button shell-button--ghost">Save</button>
+                            </div>
+                            @if (category.CanDelete)
+                            {
+                                <div class="inline-form-actions">
+                                    <button type="submit"
+                                            class="shell-button shell-button--ghost"
+                                            formaction="/Management/DeleteCategory"
+                                            formmethod="post"
+                                            name="categoryId"
+                                            value="@category.CategoryId"
+                                            title="Delete category">
+                                        Delete
+                                    </button>
+                                </div>
+                            }
+                            <div class="inline-category-form__meta">
+                                <span class="metric-copy">@(category.CanDelete ? "Available in product forms and catalog filters." : "Delete unavailable until linked products are removed.")</span>
+                                <span class="status-pill @(category.ProductCount == 0 ? "status-pill--good" : "status-pill--warn")">@(category.ProductCount == 0 ? "No linked products" : $"{category.ProductCount} linked product{(category.ProductCount == 1 ? string.Empty : "s")}")</span>
+                            </div>
+                        </form>
+                    }
+                </div>
+            }
+        </div>
+    </article>
+
+    <article class="panel panel--span-4 panel-stack">
+        <div class="panel-header">
+            <div>
+                <span class="eyebrow">Products</span>
+                <h2 class="panel-title">Create product</h2>
+            </div>
+            <div class="muted">Opening stock writes the same stock ledger used by desktop admin flows.</div>
+        </div>
+
+        <form asp-action="CreateProduct" method="post" class="panel-stack">
+            @Html.AntiForgeryToken()
+            <div>
+                <label for="product-name">Name</label>
+                <input id="product-name" name="Name" class="form-control" value="@Model.CreateProduct.Name" />
+            </div>
+            <div>
+                <label for="product-barcode">Barcode</label>
+                <input id="product-barcode" name="Barcode" class="form-control" value="@Model.CreateProduct.Barcode" />
+            </div>
+            <div>
+                <label for="product-category">Category</label>
+                <select id="product-category" name="CategoryId" class="form-select">
+                    @foreach (var category in Model.Categories)
+                    {
+                        <option value="@category.Id" selected="@(category.Id == Model.CreateProduct.CategoryId ? "selected" : null)">@category.Name</option>
+                    }
+                </select>
+            </div>
+            <div class="form-grid">
+                <div>
+                    <label for="product-price">Price</label>
+                    <input id="product-price" name="Price" type="number" step="0.01" class="form-control" value="@Model.CreateProduct.Price" />
+                </div>
+                <div>
+                    <label for="product-cost">Cost</label>
+                    <input id="product-cost" name="Cost" type="number" step="0.01" class="form-control" value="@Model.CreateProduct.Cost" />
+                </div>
+            </div>
+            <div class="form-grid">
+                <div>
+                    <label for="product-stock">Opening stock</label>
+                    <input id="product-stock" name="InitialStock" type="number" step="0.01" class="form-control" value="@Model.CreateProduct.InitialStock" />
+                </div>
+                <div>
+                    <label for="product-image">Image path</label>
+                    <input id="product-image" name="ImagePath" class="form-control" value="@Model.CreateProduct.ImagePath" />
+                </div>
+            </div>
+            <label class="inline-check">
+                <input type="checkbox" name="IsActive" value="true" @(Model.CreateProduct.IsActive ? "checked" : null) />
+                <span>Visible in cashier catalog</span>
+            </label>
+            <input type="hidden" name="IsActive" value="false" />
+            <button type="submit" class="shell-button">Create product</button>
+        </form>
+    </article>
+
+    <article class="panel panel--span-12 panel-stack">
+        <div class="panel-header">
+            <div>
+                <span class="eyebrow">Users</span>
+                <h2 class="panel-title">Current store roster</h2>
+            </div>
+            <div class="muted">Inline edits persist immediately and are audit-logged when possible.</div>
+        </div>
+
+        @if (Model.Users.Count == 0)
+        {
+            <div class="empty-state">No users exist for this store yet.</div>
+        }
+        else
+        {
+            <div class="table-list">
+                @foreach (var user in Model.Users)
+                {
+                    <form asp-action="UpdateUser" method="post" class="inline-user-form">
+                        @Html.AntiForgeryToken()
+                        <input type="hidden" name="UserId" value="@user.UserId" />
+                        <div>
+                            <label for="user-name-@user.UserId">Username</label>
+                            <input id="user-name-@user.UserId" name="Username" class="form-control" value="@user.Username" />
+                        </div>
+                        <div>
+                            <label for="user-role-@user.UserId">Role</label>
+                            <select id="user-role-@user.UserId" name="RoleId" class="form-select">
+                                @foreach (var role in Model.Roles)
+                                {
+                                    <option value="@role.Id" selected="@(role.Id == user.RoleId ? "selected" : null)">@role.Name</option>
+                                }
+                            </select>
+                        </div>
+                        <label class="inline-check">
+                            <input type="checkbox" name="IsActive" value="true" @(user.IsActive ? "checked" : null) />
+                            <span>Active</span>
+                        </label>
+                        <input type="hidden" name="IsActive" value="false" />
+                        <button type="submit" class="shell-button shell-button--ghost">Save</button>
+                        <div class="inline-user-form__meta">
+                            <span class="metric-copy">Last updated @user.UpdatedAtLocal.ToString("g")</span>
+                            @if (user.IsCurrentUser)
+                            {
+                                <span class="status-pill status-pill--good">Current session</span>
+                            }
+                            else
+                            {
+                                <span class="status-pill @(user.IsActive ? "status-pill--good" : "status-pill--warn")">@(user.IsActive ? user.RoleName : $"{user.RoleName} · inactive")</span>
+                            }
+                        </div>
+                    </form>
+                }
+            </div>
+        }
+    </article>
+
+    <article class="panel panel--span-12 panel-stack">
+        <div class="panel-header">
+            <div>
+                <span class="eyebrow">Products</span>
+                <h2 class="panel-title">Product and inventory roster</h2>
+            </div>
+            <div class="muted">Updating stock here reuses the product editor’s manual-set inventory flow.</div>
+        </div>
+
+        @if (Model.Products.Count == 0)
+        {
+            <div class="empty-state">No products exist yet.</div>
+        }
+        else
+        {
+            <div class="table-list">
+                @foreach (var product in Model.Products)
+                {
+                    <form asp-action="UpdateProduct" method="post" class="inline-product-form">
+                        @Html.AntiForgeryToken()
+                        <input type="hidden" name="ProductId" value="@product.ProductId" />
+                        <div>
+                            <label for="product-name-@product.ProductId">Name</label>
+                            <input id="product-name-@product.ProductId" name="Name" class="form-control" value="@product.Name" />
+                        </div>
+                        <div>
+                            <label for="product-barcode-@product.ProductId">Barcode</label>
+                            <input id="product-barcode-@product.ProductId" name="Barcode" class="form-control" value="@product.Barcode" />
+                        </div>
+                        <div>
+                            <label for="product-category-@product.ProductId">Category</label>
+                            <select id="product-category-@product.ProductId" name="CategoryId" class="form-select">
+                                @foreach (var category in Model.Categories)
+                                {
+                                    <option value="@category.Id" selected="@(category.Id == product.CategoryId ? "selected" : null)">@category.Name</option>
+                                }
+                            </select>
+                        </div>
+                        <div>
+                            <label for="product-price-@product.ProductId">Price</label>
+                            <input id="product-price-@product.ProductId" name="Price" type="number" step="0.01" class="form-control" value="@product.Price" />
+                        </div>
+                        <div>
+                            <label for="product-cost-@product.ProductId">Cost</label>
+                            <input id="product-cost-@product.ProductId" name="Cost" type="number" step="0.01" class="form-control" value="@product.Cost" />
+                        </div>
+                        <div>
+                            <label for="product-stock-@product.ProductId">Stock</label>
+                            <input id="product-stock-@product.ProductId" name="InitialStock" type="number" step="0.01" class="form-control" value="@product.QuantityOnHand" />
+                        </div>
+                        <div>
+                            <label for="product-image-@product.ProductId">Image path</label>
+                            <input id="product-image-@product.ProductId" name="ImagePath" class="form-control" value="@product.ImagePath" />
+                        </div>
+                        <label class="inline-check inline-check--product">
+                            <input type="checkbox" name="IsActive" value="true" @(product.IsActive ? "checked" : null) />
+                            <span>Active</span>
+                        </label>
+                        <input type="hidden" name="IsActive" value="false" />
+                        <div class="inline-form-actions">
+                            <button type="submit" class="shell-button shell-button--ghost">Save</button>
+                        </div>
+                        <div class="inline-form-actions">
+                            <button type="submit" class="shell-button shell-button--ghost" formaction="/Management/DeleteProduct" formmethod="post" name="productId" value="@product.ProductId">Delete</button>
+                        </div>
+                        <div class="inline-product-form__meta">
+                            <span class="metric-copy">@product.CategoryName · Last updated @product.UpdatedAtLocal.ToString("g")</span>
+                            <span class="status-pill @(product.IsActive ? "status-pill--good" : "status-pill--warn")">@(product.IsActive ? $"{product.QuantityOnHand:N2} on hand" : "Inactive")</span>
+                        </div>
+                    </form>
+                }
+            </div>
+        }
+    </article>
+
+    <article class="panel panel--span-12 panel-stack">
+        <div class="panel-header">
+            <div>
+                <span class="eyebrow">Inventory</span>
+                <h2 class="panel-title">Recent stock ledger</h2>
+            </div>
+            <div class="muted">Latest opening-stock, manual-set, sale, and refund movements.</div>
+        </div>
+
+        <form method="get" class="inline-ledger-filter">
+            <div>
+                <label for="stock-ledger-product">Product</label>
+                <select id="stock-ledger-product" name="stockProductId" class="form-select">
+                    <option value="">All products</option>
+                    @foreach (var product in Model.Products)
+                    {
+                        <option value="@product.ProductId" selected="@(product.ProductId == Model.StockProductFilterId ? "selected" : null)">@product.Name</option>
+                    }
+                </select>
+            </div>
+            <div>
+                <label for="stock-ledger-type">Movement type</label>
+                <select id="stock-ledger-type" name="stockMovementType" class="form-select">
+                    <option value="">All movement types</option>
+                    @foreach (var movementType in Model.StockMovementTypes)
+                    {
+                        <option value="@movementType.Type" selected="@(movementType.Type == Model.StockMovementTypeFilter ? "selected" : null)">@movementType.Label</option>
+                    }
+                </select>
+            </div>
+            <div>
+                <label for="stock-ledger-from">From date</label>
+                <input id="stock-ledger-from" name="stockFromDate" type="date" class="form-control" value="@(Model.StockFromDate?.ToString("yyyy-MM-dd"))" />
+            </div>
+            <div>
+                <label for="stock-ledger-to">To date</label>
+                <input id="stock-ledger-to" name="stockToDate" type="date" class="form-control" value="@(Model.StockToDate?.ToString("yyyy-MM-dd"))" />
+            </div>
+            <div class="inline-form-actions">
+                <button type="submit" class="shell-button shell-button--ghost">Filter ledger</button>
+            </div>
+            @if (Model.StockProductFilterId.HasValue || Model.StockMovementTypeFilter.HasValue || Model.StockFromDate.HasValue || Model.StockToDate.HasValue)
+            {
+                <div class="inline-form-actions">
+                    <a asp-action="Index" class="shell-button shell-button--ghost">Clear</a>
+                </div>
+            }
+        </form>
+
+        <div class="ledger-preset-links">
+            <a asp-action="Index"
+               asp-route-stockProductId="@Model.StockProductFilterId"
+               asp-route-stockMovementType="@Model.StockMovementTypeFilter"
+               asp-route-stockDatePreset="Today"
+               class="shell-link ledger-preset-link @(Model.StockDatePreset == "Today" ? "ledger-preset-link--active" : null)">
+                Today
+            </a>
+            <a asp-action="Index"
+               asp-route-stockProductId="@Model.StockProductFilterId"
+               asp-route-stockMovementType="@Model.StockMovementTypeFilter"
+               asp-route-stockDatePreset="Yesterday"
+               class="shell-link ledger-preset-link @(Model.StockDatePreset == "Yesterday" ? "ledger-preset-link--active" : null)">
+                Yesterday
+            </a>
+            <a asp-action="Index"
+               asp-route-stockProductId="@Model.StockProductFilterId"
+               asp-route-stockMovementType="@Model.StockMovementTypeFilter"
+               asp-route-stockDatePreset="Last7Days"
+               class="shell-link ledger-preset-link @(Model.StockDatePreset == "Last7Days" ? "ledger-preset-link--active" : null)">
+                Last 7 days
+            </a>
+            <a asp-action="Index"
+               asp-route-stockProductId="@Model.StockProductFilterId"
+               asp-route-stockMovementType="@Model.StockMovementTypeFilter"
+               asp-route-stockDatePreset="Last30Days"
+               class="shell-link ledger-preset-link @(Model.StockDatePreset == "Last30Days" ? "ledger-preset-link--active" : null)">
+                Last 30 days
+            </a>
+            <a asp-action="Index"
+               asp-route-stockProductId="@Model.StockProductFilterId"
+               asp-route-stockMovementType="@Model.StockMovementTypeFilter"
+               asp-route-stockDatePreset="ThisMonth"
+               class="shell-link ledger-preset-link @(Model.StockDatePreset == "ThisMonth" ? "ledger-preset-link--active" : null)">
+                This month
+            </a>
+        </div>
+
+        <div class="metric-copy">@Model.StockLedgerSummary</div>
+
+        @if (Model.StockMovements.Count == 0)
+        {
+            <div class="empty-state">No stock movements have been recorded yet.</div>
+        }
+        else
+        {
+            <div class="table-list">
+                @foreach (var movement in Model.StockMovements)
+                {
+                    <div class="table-row table-row--stock">
+                        <div>
+                            <div class="table-main">@movement.ProductName</div>
+                            <div class="table-sub">@movement.CreatedAtLocal.ToString("g")</div>
+                        </div>
+                        <div>
+                            <div class="table-main">@movement.MovementType</div>
+                            <div class="table-sub">@(string.IsNullOrWhiteSpace(movement.Reference) ? "No reference" : movement.Reference)</div>
+                        </div>
+                        <div>
+                            <div class="table-main">@movement.QuantityDelta.ToString("+0.####;-0.####;0")</div>
+                            <div class="table-sub">After @movement.QuantityAfter.ToString("N2")</div>
+                        </div>
+                        <div class="table-sub">@(string.IsNullOrWhiteSpace(movement.Notes) ? "No notes" : movement.Notes)</div>
+                    </div>
+                }
+            </div>
+        }
+    </article>
+</section>

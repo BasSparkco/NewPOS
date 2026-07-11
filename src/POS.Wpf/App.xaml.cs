@@ -79,15 +79,19 @@ public partial class App : System.Windows.Application
             })
             .ConfigureServices((context, services) =>
             {
+                services.AddSingleton<ICurrentDevice, CurrentDevice>();
                 services.AddSingleton<ICurrentSession, CurrentSession>();
                 services.AddSingleton<IReceiptPrinter, EscPosReceiptPrinter>();
                 services.AddInfrastructure(context.Configuration, context.HostingEnvironment.ContentRootPath);
+                services.AddHostedService<InvoiceSyncBackgroundService>();
                 services.AddTransient<LoginViewModel>();
                 services.AddTransient<LoginWindow>();
                 services.AddTransient<MainViewModel>();
                 services.AddTransient<MainWindow>();
                 services.AddTransient<ProductManagementViewModel>();
                 services.AddTransient<ProductManagementWindow>();
+                services.AddTransient<CurrencySettingsViewModel>();
+                services.AddTransient<CurrencySettingsWindow>();
             })
             .Build();
 

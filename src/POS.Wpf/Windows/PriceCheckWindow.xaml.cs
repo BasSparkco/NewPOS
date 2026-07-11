@@ -1,8 +1,10 @@
+using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
 using Microsoft.Extensions.DependencyInjection;
 using POS.Application.Abstractions;
 using POS.Application.Models;
+using POS.Wpf.Localization;
 
 namespace POS.Wpf.Windows;
 
@@ -20,7 +22,21 @@ public partial class PriceCheckWindow : Window
     {
         InitializeComponent();
         _scopeFactory = scopeFactory;
-        Loaded += (_, _) => SearchBox.Focus();
+        Loaded += OnLoaded;
+    }
+
+    private void OnLoaded(object sender, RoutedEventArgs e)
+    {
+        Loaded -= OnLoaded;
+        Locale.ApplyFlowDirection(this);
+        Title                      = Locale.Get("PriceCheck_Title");
+        PriceCheckHeaderTb.Text    = Locale.Get("PriceCheck_Header");
+        PriceCheckPlaceholderTb.Text = Locale.Get("PriceCheck_Placeholder");
+        PriceCheckNoResultsTb.Text  = Locale.Get("PriceCheck_NoResults");
+        PriceCheckCloseBtn.Content   = Locale.Get("PriceCheck_Close");
+        AddButton.Content            = Locale.Get("PriceCheck_AddToInvoice");
+        LowStockBadgeText.Text       = Locale.Get("LowStock_Badge");
+        SearchBox.Focus();
     }
 
     // ── Search ───────────────────────────────────────────────────────────────
@@ -93,9 +109,12 @@ public partial class PriceCheckWindow : Window
         SelectedProduct          = p;
         DetailName.Text          = p.Name;
         DetailPrice.Text         = p.Price.ToString("N2");
-        DetailStock.Text         = $"In stock: {p.QuantityOnHand:N0} units";
-        LowStockBadge.Visibility = p.QuantityOnHand <= 5m ? Visibility.Visible : Visibility.Collapsed;
-        DetailBarcode.Text       = string.IsNullOrEmpty(p.Barcode) ? "" : $"Barcode: {p.Barcode}";
+        DetailStock.Text = string.Format(CultureInfo.CurrentUICulture, Locale.Get("PriceCheck_StockFormat"),
+            p.QuantityOnHand.ToString("N0", CultureInfo.CurrentUICulture));
+        LowStockBadge.Visibility = p.IsLowStock ? Visibility.Visible : Visibility.Collapsed;
+        DetailBarcode.Text = string.IsNullOrEmpty(p.Barcode)
+            ? ""
+            : string.Format(CultureInfo.CurrentUICulture, Locale.Get("Barcode_Format"), p.Barcode);
         DetailBarcode.Visibility = string.IsNullOrEmpty(p.Barcode) ? Visibility.Collapsed : Visibility.Visible;
         DetailCard.Visibility    = Visibility.Visible;
         AddButton.IsEnabled      = true;

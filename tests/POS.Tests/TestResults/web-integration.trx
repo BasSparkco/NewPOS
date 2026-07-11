@@ -1,0 +1,65 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TestRun id="469aba34-4c63-4b52-8579-5ac9a6bba5e7" name="User@ASUS 2026-05-21 13:52:02" runUser="Asus\User" xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010">
+  <Times creation="2026-05-21T13:52:02.8688339+03:00" queuing="2026-05-21T13:52:02.8688345+03:00" start="2026-05-21T13:51:52.9314132+03:00" finish="2026-05-21T13:52:04.4734438+03:00" />
+  <TestSettings name="default" id="6ddf7b1b-b348-462c-b273-ce4d1c3c8b26">
+    <Deployment runDeploymentRoot="User_ASUS_2026-05-21_13_52_02" />
+  </TestSettings>
+  <Results>
+    <UnitTestResult executionId="ac34b3f7-2024-4991-8e1f-eb97e78e46cc" testId="74383383-f939-07d1-39da-0d7a2c60cf16" testName="POS.Tests.WebIntegrationTests.Login_flow_redirects_unauthenticated_dashboard_requests_and_then_renders_dashboard" computerName="ASUS" duration="00:00:01.3523603" startTime="2026-05-21T13:52:04.2005141+03:00" endTime="2026-05-21T13:52:04.2005155+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="ac34b3f7-2024-4991-8e1f-eb97e78e46cc">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Equal() Failure: Strings differ&#xD;
+            ↓ (pos 1)&#xD;
+Expected: "/Dashboard"&#xD;
+Actual:   "/"</Message>
+          <StackTrace>   at POS.Tests.WebIntegrationTests.Login_flow_redirects_unauthenticated_dashboard_requests_and_then_renders_dashboard() in C:\projects\POS\tests\POS.Tests\WebIntegrationTests.cs:line 29&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="86e11d72-b4dd-4fd2-8f47-b12ec77effb2" testId="426fc058-a14c-0d44-caba-3b3cceddcea2" testName="POS.Tests.WebIntegrationTests.Management_postbacks_create_user_and_persist_operational_settings" computerName="ASUS" duration="00:00:08.3887471" startTime="2026-05-21T13:52:02.8048164+03:00" endTime="2026-05-21T13:52:02.8048380+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="86e11d72-b4dd-4fd2-8f47-b12ec77effb2" />
+  </Results>
+  <TestDefinitions>
+    <UnitTest name="POS.Tests.WebIntegrationTests.Management_postbacks_create_user_and_persist_operational_settings" storage="c:\projects\pos\tests\pos.tests\bin\debug\net8.0\pos.tests.dll" id="426fc058-a14c-0d44-caba-3b3cceddcea2">
+      <Execution id="86e11d72-b4dd-4fd2-8f47-b12ec77effb2" />
+      <TestMethod codeBase="C:\projects\POS\tests\POS.Tests\bin\Debug\net8.0\POS.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="POS.Tests.WebIntegrationTests" name="Management_postbacks_create_user_and_persist_operational_settings" />
+    </UnitTest>
+    <UnitTest name="POS.Tests.WebIntegrationTests.Login_flow_redirects_unauthenticated_dashboard_requests_and_then_renders_dashboard" storage="c:\projects\pos\tests\pos.tests\bin\debug\net8.0\pos.tests.dll" id="74383383-f939-07d1-39da-0d7a2c60cf16">
+      <Execution id="ac34b3f7-2024-4991-8e1f-eb97e78e46cc" />
+      <TestMethod codeBase="C:\projects\POS\tests\POS.Tests\bin\Debug\net8.0\POS.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="POS.Tests.WebIntegrationTests" name="Login_flow_redirects_unauthenticated_dashboard_requests_and_then_renders_dashboard" />
+    </UnitTest>
+  </TestDefinitions>
+  <TestEntries>
+    <TestEntry testId="74383383-f939-07d1-39da-0d7a2c60cf16" executionId="ac34b3f7-2024-4991-8e1f-eb97e78e46cc" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="426fc058-a14c-0d44-caba-3b3cceddcea2" executionId="86e11d72-b4dd-4fd2-8f47-b12ec77effb2" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+  </TestEntries>
+  <TestLists>
+    <TestList name="Results Not in a List" id="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestList name="All Loaded Results" id="19431567-8539-422a-85d7-44ee4e166bda" />
+  </TestLists>
+  <ResultSummary outcome="Failed">
+    <Counters total="2" executed="2" passed="1" failed="1" error="0" timeout="0" aborted="0" inconclusive="0" passedButRunAborted="0" notRunnable="0" notExecuted="0" disconnected="0" warning="0" completed="0" inProgress="0" pending="0" />
+    <Output>
+      <StdOut>[xUnit.net 00:00:00.00] xUnit.net VSTest Adapter v2.5.3.1+6b60a9e56a (64-bit .NET 8.0.25)&#xD;
+[xUnit.net 00:00:00.31]   Discovering: POS.Tests&#xD;
+[xUnit.net 00:00:00.42]   Discovered:  POS.Tests&#xD;
+[xUnit.net 00:00:00.43]   Starting:    POS.Tests&#xD;
+warn: Microsoft.EntityFrameworkCore.Query[10103]&#xD;
+      The query uses the 'First'/'FirstOrDefault' operator without 'OrderBy' and filter operators. This may lead to unpredictable results.&#xD;
+[xUnit.net 00:00:10.34]       Assert.Equal() Failure: Strings differ&#xD;
+[xUnit.net 00:00:10.34]                   ↓ (pos 1)&#xD;
+[xUnit.net 00:00:10.34]       Expected: "/Dashboard"&#xD;
+[xUnit.net 00:00:10.34]       Actual:   "/"&#xD;
+[xUnit.net 00:00:10.34]       Stack Trace:&#xD;
+[xUnit.net 00:00:10.34]         C:\projects\POS\tests\POS.Tests\WebIntegrationTests.cs(29,0): at POS.Tests.WebIntegrationTests.Login_flow_redirects_unauthenticated_dashboard_requests_and_then_renders_dashboard()&#xD;
+[xUnit.net 00:00:10.35]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:10.35]   Finished:    POS.Tests&#xD;
+</StdOut>
+    </Output>
+    <RunInfos>
+      <RunInfo computerName="ASUS" outcome="Error" timestamp="2026-05-21T13:52:04.1943396+03:00">
+        <Text>[xUnit.net 00:00:10.34]     POS.Tests.WebIntegrationTests.Login_flow_redirects_unauthenticated_dashboard_requests_and_then_renders_dashboard [FAIL]</Text>
+      </RunInfo>
+    </RunInfos>
+  </ResultSummary>
+</TestRun>

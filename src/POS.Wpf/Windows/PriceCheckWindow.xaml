@@ -15,6 +15,7 @@
         <conv:ImagePathToVisibilityConverter   x:Key="HasImageVis"/>
         <conv:ImagePathToVisibilityConverter   x:Key="NoImageVis" Inverted="True"/>
         <conv:LowStockToVisibilityConverter    x:Key="LowStockVis"/>
+        <conv:BarcodeFormatConverter           x:Key="BarcodeFmt"/>
         <BooleanToVisibilityConverter          x:Key="BoolToVis"/>
     </Window.Resources>
 
@@ -29,8 +30,8 @@
             </Grid.RowDefinitions>
 
             <!-- Title -->
-            <TextBlock Grid.Row="0"
-                       Text="Price Check"
+            <TextBlock x:Name="PriceCheckHeaderTb"
+                       Grid.Row="0"
                        FontSize="16" FontWeight="SemiBold"
                        Foreground="{StaticResource TextPrimaryBrush}"
                        Margin="0,0,0,12"/>
@@ -54,7 +55,7 @@
                             VerticalAlignment="Center" HorizontalAlignment="Center">
                     <TextBlock Text="🔍" FontSize="32"
                                HorizontalAlignment="Center" Margin="0,0,0,8"/>
-                    <TextBlock Text="Type a product name or scan a barcode"
+                    <TextBlock x:Name="PriceCheckPlaceholderTb"
                                FontSize="12" TextAlignment="Center"
                                Foreground="{StaticResource TextTertiaryBrush}"/>
                 </StackPanel>
@@ -63,7 +64,7 @@
                 <StackPanel x:Name="NoResultsPanel"
                             Visibility="Collapsed"
                             VerticalAlignment="Center" HorizontalAlignment="Center">
-                    <TextBlock Text="No product found"
+                    <TextBlock x:Name="PriceCheckNoResultsTb"
                                FontSize="13"
                                Foreground="{StaticResource TextSecondaryBrush}"
                                HorizontalAlignment="Center"/>
@@ -153,7 +154,7 @@
                                                        FontSize="12" FontWeight="Medium"
                                                        Foreground="{StaticResource TextPrimaryBrush}"/>
                                             <TextBlock x:Name="BarcodeRow"
-                                                       Text="{Binding Barcode, StringFormat='Barcode: {0}'}"
+                                                       Text="{Binding Barcode, Converter={StaticResource BarcodeFmt}}"
                                                        FontSize="10"
                                                        Foreground="{StaticResource TextTertiaryBrush}">
                                                 <TextBlock.Style>
@@ -210,7 +211,7 @@
                                             Visibility="Collapsed"
                                             Background="{StaticResource DangerBrush}"
                                             CornerRadius="4" Padding="5,1" Margin="6,0,0,0">
-                                        <TextBlock Text="LOW STOCK"
+                                        <TextBlock x:Name="LowStockBadgeText"
                                                    FontSize="8" FontWeight="Bold"
                                                    Foreground="White"/>
                                     </Border>
@@ -239,14 +240,13 @@
 
             <!-- Footer buttons -->
             <DockPanel Grid.Row="4" LastChildFill="False">
-                <Button DockPanel.Dock="Left"
-                        Content="Close"
+                <Button x:Name="PriceCheckCloseBtn"
+                        DockPanel.Dock="Left"
                         Click="Close_Click"
                         Style="{StaticResource GhostButton}"
                         Width="80"/>
-                <Button DockPanel.Dock="Right"
-                        x:Name="AddButton"
-                        Content="＋ Add to Invoice"
+                <Button x:Name="AddButton"
+                        DockPanel.Dock="Right"
                         Click="AddToInvoice_Click"
                         Style="{StaticResource AccentButton}"
                         IsEnabled="False"/>

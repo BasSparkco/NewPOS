@@ -57,17 +57,19 @@ public partial class MainViewModel : ObservableObject
     [ObservableProperty] ObservableCollection<CategoryFilterItem> _categoryFilters = new();
 
     // ── Cart ────────────────────────────────────────────────────────────────
-    [ObservableProperty] ObservableCollection<CartLineDto> _cartLines = new();
+    [ObservableProperty] ObservableCollection<CartLineItem> _cartLines = new();
     [ObservableProperty] decimal _subtotal;
     [ObservableProperty] decimal _taxPercent;
     [ObservableProperty] decimal _taxAmount;
     [ObservableProperty] decimal _total;
-    [ObservableProperty] CartLineDto? _selectedCartLine;
-    [ObservableProperty] string _discountInput = "0";
+    /// <summary>The cart line the bottom calculator currently types into; null means the calculator's own QTY/PRICE fields.</summary>
+    [ObservableProperty] CartLineItem? _activeCalcLine;
 
     // ── Misc UI state ───────────────────────────────────────────────────────
     [ObservableProperty] string _statusText         = "";
     [ObservableProperty] string _qtyInput           = "1";
+    [ObservableProperty] string _priceInput         = "0";
+    [ObservableProperty] string _activeCalcField    = "Qty";  // "Qty" or "Price" — which display the numpad types into
     [ObservableProperty] bool   _showProductImages  = true;   // default ON in new design
     [ObservableProperty] bool   _customerDisplayOpen;
     [ObservableProperty] bool   _isDarkMode;
@@ -77,6 +79,33 @@ public partial class MainViewModel : ObservableObject
     [ObservableProperty] string _uiLanguage         = "en";
 
     private CustomerDisplayWindow? _customerDisplay;
+
+    partial void OnActiveCalcFieldChanged(string value)
+    {
+        OnPropertyChanged(nameof(IsQtyFieldActive));
+        OnPropertyChanged(nameof(IsPriceFieldActive));
+        SyncLineCalcHighlight();
+    }
+
+    partial void OnActiveCalcLineChanged(CartLineItem? value)
+    {
+        OnPropertyChanged(nameof(IsQtyFieldActive));
+        OnPropertyChanged(nameof(IsPriceFieldActive));
+        SyncLineCalcHighlight();
+    }
+
+    /// <summary>Pushes the current calculator target down onto each cart line so its Qty/Disc box can highlight itself.</summary>
+    private void SyncLineCalcHighlight()
+    {
+        foreach (var line in CartLines)
+        {
+            line.IsQtyCalcActive  = ReferenceEquals(line, ActiveCalcLine) && ActiveCalcField == "Qty";
+            line.IsDiscCalcActive = ReferenceEquals(line, ActiveCalcLine) && ActiveCalcField == "Disc";
+        }
+    }
+
+    public bool IsQtyFieldActive   => ActiveCalcLine is null && ActiveCalcField != "Price";
+    public bool IsPriceFieldActive => ActiveCalcLine is null && ActiveCalcField == "Price";
 
     public int    HeldTabCount    => InvoiceTabs.Count(t => t.IsHeld);
     public string DarkModeIcon    => IsDarkMode ? "☀" : "🌙";
@@ -92,6 +121,7 @@ public partial class MainViewModel : ObservableObject
     public string NavOrdersLabel => T("Orders", "الطلبات", "הזמנות");
     public string NavProductsLabel => T("Products", "المنتجات", "מוצרים");
     public string NavReportsLabel => T("Reports", "التقارير", "דוחות");
+    public string NavAuditLabel => T("Audit", "التدقيق", "ביקורת");
     public string NavSettingsLabel => T("Settings", "الإعدادات", "הגדרות");
     public string NavLogoutLabel => T("Logout", "تسجيل الخروج", "התנתקות");
     public string OnlineLabel => T("Online", "متصل", "מחובר");
@@ -103,11 +133,14 @@ public partial class MainViewModel : ObservableObject
     public string EmptyCartLabel => T("Cart is empty", "السلة فارغة", "העגלה ריקה");
     public string QtyLabel => T("QTY", "الكمية", "כמות");
     public string EachLabel => T("each", "للوحدة", "ליחידה");
-    public string DiscountLabel => T("DISC %", "خصم %", "הנחה %");
-    public string DiscountAppliedSuffix => T("% applied)", "% مطبق)", "% הוחל)");
     public string AddNoteLabel => T("Add note to invoice", "إضافة ملاحظة للفاتورة", "הוסף הערה לחשבונית");
     public string RefundLabel => T("Refund", "استرجاع", "החזר");
     public string QtyWeightLabel => T("QTY / WEIGHT", "الكمية / الوزن", "כמות / משקל");
+    public string PriceFieldLabel => T("PRICE", "السعر", "מחיר");
+    public string AddToCartLabel => T("Add", "إضافة", "הוסף");
+    public string AddCustomItemToolTip => T("Add custom-priced item to cart", "إضافة صنف بسعر مخصص إلى السلة", "הוסף פריט במחיר מותאם לעגלה");
+    public string ClearCalcLabel => T("C", "C", "C");
+    public string CustomItemDefaultName => T("Custom Item", "صنف مخصص", "פריט מותאם");
     public string SubtotalLabel => T("Subtotal", "المجموع الفرعي", "סכום ביניים");
     public string TaxLabelPrefix => T("VAT (", "ضريبة (", "מע\"מ (");
     public string TotalLabel => T("Total", "الإجمالي", "סה\"כ");
@@ -124,6 +157,25 @@ public partial class MainViewModel : ObservableObject
     public string ToggleDarkModeToolTip => T("Toggle Dark Mode", "تبديل الوضع الداكن", "החלף מצב כהה");
     public string HoldOrdersToolTip => T("Hold / Resume current invoice (F3)", "تعليق / استئناف الفاتورة الحالية (F3)", "השהה / המשך חשבונית נוכחית (F3)");
     public string AppTitle => T("POS", "نقطة البيع", "קופה");
+
+    /// <summary>Store base currency for display (symbol when available, else ISO code).</summary>
+    public string CurrencySuffix =>
+        string.IsNullOrWhiteSpace(_session.CurrencySymbol)
+            ? _session.BaseCurrencyCode
+            : _session.CurrencySymbol!;
+
+    public string FormattedSubtotal => $"{Subtotal:N2} {CurrencySuffix}";
+    public string FormattedTaxAmount => $"{TaxAmount:N2} {CurrencySuffix}";
+    public string FormattedTotal => $"{Total:N2} {CurrencySuffix}";
+
+    partial void OnSubtotalChanged(decimal value) =>
+        OnPropertyChanged(nameof(FormattedSubtotal));
+
+    partial void OnTaxAmountChanged(decimal value) =>
+        OnPropertyChanged(nameof(FormattedTaxAmount));
+
+    partial void OnTotalChanged(decimal value) =>
+        OnPropertyChanged(nameof(FormattedTotal));
 
     // ── Computed props ──────────────────────────────────────────────────────
     public bool IsCartEmpty    => CartLines.Count == 0;
@@ -151,7 +203,7 @@ public partial class MainViewModel : ObservableObject
             ? "?"
             : _session.Username.Trim()[0].ToString().ToUpperInvariant();
 
-    partial void OnCartLinesChanged(ObservableCollection<CartLineDto> value)
+    partial void OnCartLinesChanged(ObservableCollection<CartLineItem> value)
     {
         OnPropertyChanged(nameof(IsCartEmpty));
         OnPropertyChanged(nameof(IsCartNotEmpty));
@@ -159,12 +211,6 @@ public partial class MainViewModel : ObservableObject
         if (ActiveTab is not null)
             ActiveTab.ItemCount = value.Count;
         OnPropertyChanged(nameof(HoldResumeActionLabel));
-    }
-
-    partial void OnSelectedCartLineChanged(CartLineDto? value)
-    {
-        // Sync discount input to the selected line's current discount
-        DiscountInput = value?.DiscountPercent.ToString("N0") ?? "0";
     }
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -399,13 +445,33 @@ public partial class MainViewModel : ObservableObject
         SelectedPage = "Cashier";
     }
 
-    /// <summary>Sidebar: Settings (placeholder).</summary>
+    /// <summary>Sidebar: Audit → opens audit log window (Admin only).</summary>
     [RelayCommand]
-    private void GoSettings()
+    private void GoAudit()
     {
+        if (!IsAdmin) { StatusText = T("Admin access required.", "صلاحية المدير مطلوبة.", "נדרשת הרשאת מנהל."); return; }
+        SelectedPage = "Audit";
+        OpenAudit();
+        SelectedPage = "Cashier";
+    }
+
+    /// <summary>Sidebar: Settings → opens store settings (Admin only).</summary>
+    [RelayCommand]
+    private async Task GoSettingsAsync()
+    {
+        if (!IsAdmin) { StatusText = T("Admin access required.", "صلاحية المدير مطلوبة.", "נדרשת הרשאת מנהל."); return; }
         SelectedPage = "Settings";
-        MessageBox.Show(T("Settings panel is coming soon.", "لوحة الإعدادات قادمة قريبًا.", "מסך ההגדרות יתווסף בקרוב."), AppTitle,
-            MessageBoxButton.OK, MessageBoxImage.Information);
+
+        var window = _services.GetRequiredService<CurrencySettingsWindow>();
+        window.Owner = System.Windows.Application.Current.MainWindow;
+        if (window.ShowDialog() == true)
+        {
+            RefreshCurrencyPresentation();
+            await SearchAsync();
+            await RefreshCartAsync();
+            StatusText = T("Store settings updated.", "تم تحديث إعدادات المتجر.", "הגדרות החנות עודכנו.");
+        }
+
         SelectedPage = "Cashier";
     }
 
@@ -436,7 +502,7 @@ public partial class MainViewModel : ObservableObject
             return;
         }
 
-        var pay = new PaymentWindow(total) { Owner = System.Windows.Application.Current.MainWindow };
+        var pay = new PaymentWindow(total, CurrencySuffix) { Owner = System.Windows.Application.Current.MainWindow };
         if (pay.ShowDialog() != true) return;
 
         var result = await sales.CompleteCashSaleAsync(CurrentInvoiceId.Value, pay.CashTendered);
@@ -450,8 +516,8 @@ public partial class MainViewModel : ObservableObject
         _printer.Print(result.Receipt);
         MessageBox.Show(
             $"{T("Sale complete!", "تمت عملية البيع!", "המכירה הושלמה!")}\n" +
-            $"{TotalLabel}:   {result.Receipt.Total:N2}\n" +
-            $"{T("Change", "الباقي", "עודף")}: {result.Receipt.Change:N2}",
+            $"{TotalLabel}:   {result.Receipt.Total:N2} {CurrencySuffix}\n" +
+            $"{T("Change", "الباقي", "עודף")}: {result.Receipt.Change:N2} {CurrencySuffix}",
             AppTitle, MessageBoxButton.OK, MessageBoxImage.Information);
 
         // Close this tab and open a fresh one
@@ -544,9 +610,11 @@ public partial class MainViewModel : ObservableObject
     }
 
     [RelayCommand]
-    private async Task RemoveLineAsync(CartLineDto? line)
+    private async Task RemoveLineAsync(CartLineItem? line)
     {
         if (line is null || CurrentInvoiceId is null) return;
+        line.CancelPendingCommits();
+        if (ReferenceEquals(ActiveCalcLine, line)) ActiveCalcLine = null;
         await using var scope = _scopeFactory.CreateAsyncScope();
         var sales = scope.ServiceProvider.GetRequiredService<ISaleService>();
         await sales.RemoveLineAsync(CurrentInvoiceId.Value, line.LineId);
@@ -554,7 +622,7 @@ public partial class MainViewModel : ObservableObject
     }
 
     [RelayCommand]
-    private async Task IncreaseLineQtyAsync(CartLineDto? line)
+    private async Task IncreaseLineQtyAsync(CartLineItem? line)
     {
         if (line is null || CurrentInvoiceId is null) return;
         await using var scope = _scopeFactory.CreateAsyncScope();
@@ -562,7 +630,7 @@ public partial class MainViewModel : ObservableObject
         try
         {
             await sales.SetLineQuantityAsync(CurrentInvoiceId.Value, line.LineId, line.Quantity + 1m);
-            await RefreshCartAsync(scope);
+            await RefreshCartAsync(scope, line.LineId);
         }
         catch (Exception ex)
         {
@@ -571,7 +639,7 @@ public partial class MainViewModel : ObservableObject
     }
 
     [RelayCommand]
-    private async Task DecreaseLineQtyAsync(CartLineDto? line)
+    private async Task DecreaseLineQtyAsync(CartLineItem? line)
     {
         if (line is null || CurrentInvoiceId is null) return;
         if (line.Quantity <= 1m) { await RemoveLineAsync(line); return; }
@@ -581,7 +649,7 @@ public partial class MainViewModel : ObservableObject
         try
         {
             await sales.SetLineQuantityAsync(CurrentInvoiceId.Value, line.LineId, line.Quantity - 1m);
-            await RefreshCartAsync(scope);
+            await RefreshCartAsync(scope, line.LineId);
         }
         catch (Exception ex)
         {
@@ -589,29 +657,46 @@ public partial class MainViewModel : ObservableObject
         }
     }
 
-    /// <summary>Applies the DiscountInput % to the currently selected cart line.</summary>
-    [RelayCommand]
-    private async Task SetLineDiscountAsync(CartLineDto? line)
-    {
-        line ??= SelectedCartLine;
-        if (line is null || CurrentInvoiceId is null) return;
-        if (!decimal.TryParse(DiscountInput, System.Globalization.NumberStyles.Any,
-                System.Globalization.CultureInfo.InvariantCulture, out var pct))
-            pct = 0m;
+    /// <summary>
+    /// Fired by a <see cref="CartLineItem"/> a moment after the cashier stops typing in its QTY box —
+    /// this is what replaced the old checkmark "apply" button.
+    /// </summary>
+    private void OnLineQuantityEdited(CartLineItem line) => _ = CommitLineQuantityAsync(line);
 
+    /// <summary>Same as <see cref="OnLineQuantityEdited"/> but for the discount % box.</summary>
+    private void OnLineDiscountEdited(CartLineItem line) => _ = CommitLineDiscountAsync(line);
+
+    private async Task CommitLineQuantityAsync(CartLineItem line)
+    {
+        if (CurrentInvoiceId is null) return;
         await using var scope = _scopeFactory.CreateAsyncScope();
         var sales = scope.ServiceProvider.GetRequiredService<ISaleService>();
         try
         {
-            await sales.SetLineDiscountAsync(CurrentInvoiceId.Value, line.LineId, pct);
-            await RefreshCartAsync(scope);
-            StatusText = pct > 0
-                ? $"{pct:N0}% {T("discount applied.", "تم تطبيق الخصم.", "ההנחה הוחלה.")}"
-                : T("Discount removed.", "تمت إزالة الخصم.", "ההנחה הוסרה.");
+            await sales.SetLineQuantityAsync(CurrentInvoiceId.Value, line.LineId, Math.Max(0m, line.Quantity));
+            await RefreshCartAsync(scope, line.Quantity > 0m ? line.LineId : null);
         }
         catch (Exception ex)
         {
             MessageBox.Show(ex.Message, AppTitle, MessageBoxButton.OK, MessageBoxImage.Warning);
+            await RefreshCartAsync(scope, line.LineId); // revert the box to the last-known-good server value
+        }
+    }
+
+    private async Task CommitLineDiscountAsync(CartLineItem line)
+    {
+        if (CurrentInvoiceId is null) return;
+        await using var scope = _scopeFactory.CreateAsyncScope();
+        var sales = scope.ServiceProvider.GetRequiredService<ISaleService>();
+        try
+        {
+            await sales.SetLineDiscountAsync(CurrentInvoiceId.Value, line.LineId, line.DiscountPercent);
+            await RefreshCartAsync(scope, line.LineId);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(ex.Message, AppTitle, MessageBoxButton.OK, MessageBoxImage.Warning);
+            await RefreshCartAsync(scope, line.LineId);
         }
     }
 
@@ -640,21 +725,137 @@ public partial class MainViewModel : ObservableObject
     }
 
     // ═══════════════════════════════════════════════════════════════════════
-    // Numpad
+    // Numpad — routes into whichever field is "active": the bottom calculator's
+    // own QTY/PRICE display, or (when set) a specific cart line's Qty/Disc box.
     // ═══════════════════════════════════════════════════════════════════════
+
+    /// <summary>True right after a field becomes active — the next digit replaces its contents instead of appending.</summary>
+    private bool _calcFieldFreshlySelected = true;
+
+    [RelayCommand]
+    private void SelectCalcField(string field)
+    {
+        ActiveCalcLine  = null;
+        ActiveCalcField = field;
+        _calcFieldFreshlySelected = true;
+    }
+
+    /// <summary>Routes the calculator to a cart line's QTY box.</summary>
+    [RelayCommand]
+    private void SelectLineQtyField(CartLineItem? line)
+    {
+        ActiveCalcLine  = line;
+        ActiveCalcField = "Qty";
+        _calcFieldFreshlySelected = true;
+    }
+
+    /// <summary>Routes the calculator to a cart line's discount box.</summary>
+    [RelayCommand]
+    private void SelectLineDiscField(CartLineItem? line)
+    {
+        ActiveCalcLine  = line;
+        ActiveCalcField = "Disc";
+        _calcFieldFreshlySelected = true;
+    }
+
+    private string GetActiveFieldText() =>
+        ActiveCalcLine is not null
+            ? (ActiveCalcField == "Disc" ? ActiveCalcLine.DiscText : ActiveCalcLine.QtyText)
+            : (ActiveCalcField == "Price" ? PriceInput : QtyInput);
+
+    private void SetActiveFieldText(string value)
+    {
+        if (ActiveCalcLine is not null)
+        {
+            if (ActiveCalcField == "Disc") ActiveCalcLine.DiscText = value;
+            else ActiveCalcLine.QtyText = value;
+        }
+        else
+        {
+            if (ActiveCalcField == "Price") PriceInput = value;
+            else QtyInput = value;
+        }
+    }
+
+    /// <summary>Qty fields default to "1" (a sane multiplier); price/discount fields default to "0".</summary>
+    private string GetDefaultForActiveField() => ActiveCalcField == "Qty" ? "1" : "0";
 
     [RelayCommand]
     private void NumpadPress(string key)
     {
-        if (key == "." && QtyInput.Contains('.')) return;
-        if (QtyInput == "1" && key != ".") { QtyInput = key; return; }
-        if (QtyInput.Length >= 8) return;
-        QtyInput += key;
+        if (_calcFieldFreshlySelected)
+        {
+            SetActiveFieldText(key == "." ? "0." : key);
+            _calcFieldFreshlySelected = false;
+            return;
+        }
+
+        var current = GetActiveFieldText();
+        if (key == "." && current.Contains('.')) return;
+        if (current.Length >= 8) return;
+        SetActiveFieldText(current + key);
     }
 
     [RelayCommand]
-    private void NumpadBackspace() =>
-        QtyInput = QtyInput.Length > 1 ? QtyInput[..^1] : "1";
+    private void NumpadBackspace()
+    {
+        var current = GetActiveFieldText();
+        SetActiveFieldText(current.Length > 1 ? current[..^1] : GetDefaultForActiveField());
+        _calcFieldFreshlySelected = false;
+    }
+
+    [RelayCommand]
+    private void NumpadClear()
+    {
+        SetActiveFieldText(GetDefaultForActiveField());
+        _calcFieldFreshlySelected = true;
+    }
+
+    /// <summary>Quick "+1" bump on the active field — faster than tapping digits for small adjustments.</summary>
+    [RelayCommand]
+    private void NumpadIncrement()
+    {
+        if (decimal.TryParse(GetActiveFieldText(), NumberStyles.Any, CultureInfo.InvariantCulture, out var value))
+            SetActiveFieldText((value + 1m).ToString(CultureInfo.InvariantCulture));
+        _calcFieldFreshlySelected = false;
+    }
+
+    /// <summary>Adds a manually-priced item (not in the catalog) to the cart using QtyInput / PriceInput.</summary>
+    [RelayCommand]
+    private async Task AddCustomItemAsync()
+    {
+        if (CurrentInvoiceId is null) return;
+
+        if (!decimal.TryParse(QtyInput, NumberStyles.Any, CultureInfo.InvariantCulture, out var qty) || qty <= 0)
+        {
+            MessageBox.Show(
+                T("Enter a valid quantity.", "أدخل كمية صالحة.", "הזן כמות תקינה."),
+                AppTitle, MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+        if (!decimal.TryParse(PriceInput, NumberStyles.Any, CultureInfo.InvariantCulture, out var price) || price < 0)
+        {
+            MessageBox.Show(
+                T("Enter a valid price.", "أدخل سعرًا صالحًا.", "הזן מחיר תקין."),
+                AppTitle, MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        await using var scope = _scopeFactory.CreateAsyncScope();
+        var sales = scope.ServiceProvider.GetRequiredService<ISaleService>();
+        try
+        {
+            await sales.AddCustomItemAsync(CurrentInvoiceId.Value, CustomItemDefaultName, qty, price);
+            await RefreshCartAsync(scope);
+            QtyInput   = "1";
+            PriceInput = "0";
+            StatusText = $"{T("Added", "تمت إضافة", "נוסף")} {CustomItemDefaultName}";
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(ex.Message, AppTitle, MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+    }
 
     // ═══════════════════════════════════════════════════════════════════════
     // Catalog window
@@ -725,13 +926,22 @@ public partial class MainViewModel : ObservableObject
         _customerDisplay.Show();
         CustomerDisplayOpen = true;
         StatusText          = T("Customer display opened.", "تم فتح شاشة العميل.", "צג הלקוח נפתח.");
-        _customerDisplay.Update(CartLines.ToList(), Total);
+        _customerDisplay.Update(CartLines.Select(l => l.ToDto()).ToList(), Total, CurrencySuffix);
     }
 
     [RelayCommand]
     private void OpenReports()
     {
         var w = new ReportsWindow(_scopeFactory)
+        {
+            Owner = System.Windows.Application.Current.MainWindow
+        };
+        w.ShowDialog();
+    }
+
+    private void OpenAudit()
+    {
+        var w = new AuditLogWindow(_scopeFactory)
         {
             Owner = System.Windows.Application.Current.MainWindow
         };
@@ -748,30 +958,51 @@ public partial class MainViewModel : ObservableObject
         await SearchAsync();
     }
 
+    private void RefreshCurrencyPresentation()
+    {
+        OnPropertyChanged(nameof(CurrencySuffix));
+        OnPropertyChanged(nameof(FormattedSubtotal));
+        OnPropertyChanged(nameof(FormattedTaxAmount));
+        OnPropertyChanged(nameof(FormattedTotal));
+        _customerDisplay?.Update(CartLines.Select(l => l.ToDto()).ToList(), Total, CurrencySuffix);
+    }
+
     // ═══════════════════════════════════════════════════════════════════════
     // Cart refresh helper
     // ═══════════════════════════════════════════════════════════════════════
 
-    private async Task RefreshCartAsync(IServiceScope? existingScope = null)
+    private async Task RefreshCartAsync(IServiceScope? existingScope = null, Guid? preferredLineId = null)
     {
+        var targetLineId = preferredLineId ?? ActiveCalcLine?.LineId;
+
+        // New CartLineItem instances are about to replace these — stop their debounce timers so a
+        // stale one can't fire a commit for a line that's no longer part of the visible collection.
+        foreach (var old in CartLines) old.CancelPendingCommits();
+
         if (CurrentInvoiceId is null)
         {
-            CartLines  = new ObservableCollection<CartLineDto>();
+            CartLines     = new ObservableCollection<CartLineItem>();
+            ActiveCalcLine = null;
             Subtotal   = 0; TaxPercent = 0; TaxAmount = 0; Total = 0;
-            _customerDisplay?.Update([], 0);
+            _customerDisplay?.Update([], 0, CurrencySuffix);
             return;
         }
 
         async Task FetchFrom(ISaleService sales)
         {
-            CartLines = new ObservableCollection<CartLineDto>(
-                await sales.GetCartLinesAsync(CurrentInvoiceId.Value));
+            var dtos = await sales.GetCartLinesAsync(CurrentInvoiceId.Value);
+            CartLines = new ObservableCollection<CartLineItem>(
+                dtos.Select(d => new CartLineItem(d, OnLineQuantityEdited, OnLineDiscountEdited)));
+            ActiveCalcLine = targetLineId.HasValue
+                ? CartLines.FirstOrDefault(x => x.LineId == targetLineId.Value)
+                : null;
+            SyncLineCalcHighlight();
             var summary = await sales.GetInvoiceSummaryAsync(CurrentInvoiceId.Value);
             Subtotal   = summary.Subtotal;
             TaxPercent = summary.TaxPercent;
             TaxAmount  = summary.TaxAmount;
             Total      = summary.Total;
-            _customerDisplay?.Update(CartLines.ToList(), Total);
+            _customerDisplay?.Update(CartLines.Select(l => l.ToDto()).ToList(), Total, CurrencySuffix);
         }
 
         if (existingScope is not null)
@@ -813,6 +1044,7 @@ public partial class MainViewModel : ObservableObject
         OnPropertyChanged(nameof(NavOrdersLabel));
         OnPropertyChanged(nameof(NavProductsLabel));
         OnPropertyChanged(nameof(NavReportsLabel));
+        OnPropertyChanged(nameof(NavAuditLabel));
         OnPropertyChanged(nameof(NavSettingsLabel));
         OnPropertyChanged(nameof(NavLogoutLabel));
         OnPropertyChanged(nameof(OnlineLabel));
@@ -824,11 +1056,14 @@ public partial class MainViewModel : ObservableObject
         OnPropertyChanged(nameof(EmptyCartLabel));
         OnPropertyChanged(nameof(QtyLabel));
         OnPropertyChanged(nameof(EachLabel));
-        OnPropertyChanged(nameof(DiscountLabel));
-        OnPropertyChanged(nameof(DiscountAppliedSuffix));
         OnPropertyChanged(nameof(AddNoteLabel));
         OnPropertyChanged(nameof(RefundLabel));
         OnPropertyChanged(nameof(QtyWeightLabel));
+        OnPropertyChanged(nameof(PriceFieldLabel));
+        OnPropertyChanged(nameof(AddToCartLabel));
+        OnPropertyChanged(nameof(AddCustomItemToolTip));
+        OnPropertyChanged(nameof(ClearCalcLabel));
+        OnPropertyChanged(nameof(CustomItemDefaultName));
         OnPropertyChanged(nameof(SubtotalLabel));
         OnPropertyChanged(nameof(TaxLabelPrefix));
         OnPropertyChanged(nameof(TotalLabel));

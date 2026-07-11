@@ -1,0 +1,154 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <resheader name="resmimetype"><value>text/microsoft-resx</value></resheader>
+  <resheader name="version"><value>2.0</value></resheader>
+  <resheader name="reader"><value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value></resheader>
+  <resheader name="writer"><value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value></resheader>
+  <data name="App_TitleShort" xml:space="preserve"><value>POS</value></data>
+  <data name="Login_Title" xml:space="preserve"><value>POS — Sign in</value></data>
+  <data name="Login_Username" xml:space="preserve"><value>Username</value></data>
+  <data name="Login_SignIn" xml:space="preserve"><value>Sign in</value></data>
+  <data name="Login_FailedTitle" xml:space="preserve"><value>POS</value></data>
+  <data name="Login_Failed" xml:space="preserve"><value>Invalid username.</value></data>
+  <data name="CurrencySettings_Title" xml:space="preserve"><value>Store Settings</value></data>
+  <data name="CurrencySettings_Header" xml:space="preserve"><value>Store Settings</value></data>
+  <data name="CurrencySettings_Subtitle" xml:space="preserve"><value>Manage operational rules, receipt footer text, and the currency policy used throughout the POS.</value></data>
+  <data name="CurrencySettings_OperationalHeader" xml:space="preserve"><value>Operational Settings</value></data>
+  <data name="CurrencySettings_OperationalSubtitle" xml:space="preserve"><value>Control stock rules, the low-stock warning threshold, the default tax rate, and the optional receipt footer.</value></data>
+  <data name="CurrencySettings_AllowNegativeStock" xml:space="preserve"><value>Allow selling past available stock</value></data>
+  <data name="CurrencySettings_LowStockThreshold" xml:space="preserve"><value>Low-stock threshold</value></data>
+  <data name="CurrencySettings_DefaultTaxPercent" xml:space="preserve"><value>Default tax percent</value></data>
+  <data name="CurrencySettings_ReceiptFooter" xml:space="preserve"><value>Receipt footer text</value></data>
+  <data name="CurrencySettings_ExchangeRatesHeader" xml:space="preserve"><value>Currency &amp; Exchange Rates</value></data>
+  <data name="CurrencySettings_Store" xml:space="preserve"><value>Store:</value></data>
+  <data name="CurrencySettings_BaseCurrency" xml:space="preserve"><value>Base currency:</value></data>
+  <data name="CurrencySettings_BaseHint" xml:space="preserve"><value>Changing the base currency re-normalizes all rates and converts catalog prices plus open invoices into the newly selected base currency.</value></data>
+  <data name="CurrencySettings_Code" xml:space="preserve"><value>Code</value></data>
+  <data name="CurrencySettings_Name" xml:space="preserve"><value>Name</value></data>
+  <data name="CurrencySettings_Symbol" xml:space="preserve"><value>Symbol</value></data>
+  <data name="CurrencySettings_ExchangeRate" xml:space="preserve"><value>Exchange Rate</value></data>
+  <data name="CurrencySettings_Cancel" xml:space="preserve"><value>Cancel</value></data>
+  <data name="CurrencySettings_Save" xml:space="preserve"><value>Save Settings</value></data>
+  <data name="CurrencySettings_Loaded" xml:space="preserve"><value>Store settings loaded.</value></data>
+  <data name="CurrencySettings_Rebased" xml:space="preserve"><value>Rates re-based to the selected base currency.</value></data>
+  <data name="CurrencySettings_Saved" xml:space="preserve"><value>Store settings saved.</value></data>
+  <data name="CurrencySettings_SelectBase" xml:space="preserve"><value>Select a base currency.</value></data>
+  <data name="CurrencySettings_ValidRate" xml:space="preserve"><value>All exchange rates must be greater than zero.</value></data>
+  <data name="CurrencySettings_ValidLowStockThreshold" xml:space="preserve"><value>Enter a valid low-stock threshold that is zero or greater.</value></data>
+  <data name="CurrencySettings_ValidDefaultTax" xml:space="preserve"><value>Enter a valid default tax percent between 0 and 100.</value></data>
+  <data name="Payment_Title" xml:space="preserve"><value>Process Payment</value></data>
+  <data name="Payment_Header" xml:space="preserve"><value>Process Payment</value></data>
+  <data name="Payment_TotalDue" xml:space="preserve"><value>Total due</value></data>
+  <data name="Payment_CashReceived" xml:space="preserve"><value>Cash received</value></data>
+  <data name="Payment_Change" xml:space="preserve"><value>Change</value></data>
+  <data name="Payment_Cancel" xml:space="preserve"><value>Cancel</value></data>
+  <data name="Payment_Complete" xml:space="preserve"><value>Complete</value></data>
+  <data name="Payment_CashMustCover" xml:space="preserve"><value>Cash received must be ≥ total due.</value></data>
+  <data name="PriceCheck_Title" xml:space="preserve"><value>Price Check</value></data>
+  <data name="PriceCheck_Header" xml:space="preserve"><value>Price Check</value></data>
+  <data name="PriceCheck_Placeholder" xml:space="preserve"><value>Type a product name or scan a barcode</value></data>
+  <data name="PriceCheck_NoResults" xml:space="preserve"><value>No product found</value></data>
+  <data name="PriceCheck_Close" xml:space="preserve"><value>Close</value></data>
+  <data name="PriceCheck_AddToInvoice" xml:space="preserve"><value>＋ Add to Invoice</value></data>
+  <data name="PriceCheck_StockFormat" xml:space="preserve"><value>In stock: {0} units</value></data>
+  <data name="Barcode_Format" xml:space="preserve"><value>Barcode: {0}</value></data>
+  <data name="LowStock_Badge" xml:space="preserve"><value>LOW STOCK</value></data>
+  <data name="Refund_Title" xml:space="preserve"><value>Refund Sale</value></data>
+  <data name="Refund_Header" xml:space="preserve"><value>Refund Sale</value></data>
+  <data name="Refund_Subtitle" xml:space="preserve"><value>Select a completed sale to refund. Stock will be restored.</value></data>
+  <data name="Refund_Warning" xml:space="preserve"><value>⚠  This action cannot be undone. The invoice will be marked Cancelled and all item quantities returned to stock.</value></data>
+  <data name="Refund_NoInvoices" xml:space="preserve"><value>No recent paid invoices found.</value></data>
+  <data name="Refund_Cancel" xml:space="preserve"><value>Cancel</value></data>
+  <data name="Refund_Process" xml:space="preserve"><value>↩  Process Refund</value></data>
+  <data name="Refund_ConfirmTitle" xml:space="preserve"><value>Confirm Refund</value></data>
+  <data name="Refund_ConfirmBody" xml:space="preserve"><value>Refund invoice {0}?
+
+Total: {1}
+Paid: {2}
+
+Stock will be restored.</value></data>
+  <data name="Reports_Title" xml:space="preserve"><value>Daily Sales Report</value></data>
+  <data name="Reports_Header" xml:space="preserve"><value>Daily Sales Report</value></data>
+  <data name="Reports_Date" xml:space="preserve"><value>Date:</value></data>
+  <data name="Reports_Refresh" xml:space="preserve"><value>🔄  Refresh</value></data>
+  <data name="Reports_Revenue" xml:space="preserve"><value>Revenue</value></data>
+  <data name="Reports_Invoices" xml:space="preserve"><value>Invoices</value></data>
+  <data name="Reports_ItemsSold" xml:space="preserve"><value>Items Sold</value></data>
+  <data name="Reports_AvgSale" xml:space="preserve"><value>Avg. Sale</value></data>
+  <data name="Reports_TopProducts" xml:space="preserve"><value>Top Products</value></data>
+  <data name="Reports_InvoicesSection" xml:space="preserve"><value>Invoices</value></data>
+  <data name="Reports_Close" xml:space="preserve"><value>Close</value></data>
+  <data name="Reports_FooterFormat" xml:space="preserve"><value>Report for {0}  ·  Generated {1}</value></data>
+  <data name="Audit_Title" xml:space="preserve"><value>Audit Log</value></data>
+  <data name="Audit_Header" xml:space="preserve"><value>Audit Log</value></data>
+  <data name="Audit_Subtitle" xml:space="preserve"><value>Review critical business actions by date range, action, and entity for the current store.</value></data>
+  <data name="Audit_FromDate" xml:space="preserve"><value>From:</value></data>
+  <data name="Audit_ToDate" xml:space="preserve"><value>To:</value></data>
+  <data name="Audit_Action" xml:space="preserve"><value>Action:</value></data>
+  <data name="Audit_Entity" xml:space="preserve"><value>Entity:</value></data>
+  <data name="Audit_Refresh" xml:space="preserve"><value>Refresh</value></data>
+  <data name="Audit_Close" xml:space="preserve"><value>Close</value></data>
+  <data name="Audit_NoRows" xml:space="preserve"><value>No audit entries match the current filters.</value></data>
+  <data name="Audit_AllActions" xml:space="preserve"><value>All actions</value></data>
+  <data name="Audit_AllEntities" xml:space="preserve"><value>All entities</value></data>
+  <data name="Audit_ColWhen" xml:space="preserve"><value>When</value></data>
+  <data name="Audit_ColActor" xml:space="preserve"><value>Actor</value></data>
+  <data name="Audit_ColAction" xml:space="preserve"><value>Action</value></data>
+  <data name="Audit_ColEntity" xml:space="preserve"><value>Entity</value></data>
+  <data name="Audit_ColDetails" xml:space="preserve"><value>Details</value></data>
+  <data name="Audit_CountFormat" xml:space="preserve"><value>Showing {0} audit entries.</value></data>
+  <data name="Audit_InvalidDateRange" xml:space="preserve"><value>The start date must be on or before the end date.</value></data>
+  <data name="ProductMgmt_Title" xml:space="preserve"><value>Products &amp; categories</value></data>
+  <data name="ProductMgmt_NewCategory" xml:space="preserve"><value>New category:</value></data>
+  <data name="ProductMgmt_AddCategory" xml:space="preserve"><value>Add category</value></data>
+  <data name="ProductMgmt_AddProduct" xml:space="preserve"><value>Add product</value></data>
+  <data name="ProductMgmt_Edit" xml:space="preserve"><value>Edit</value></data>
+  <data name="ProductMgmt_Delete" xml:space="preserve"><value>Delete</value></data>
+  <data name="ProductMgmt_InventorySnapshot" xml:space="preserve"><value>Inventory snapshot</value></data>
+  <data name="ProductMgmt_StockLedger" xml:space="preserve"><value>Stock movement audit</value></data>
+  <data name="ProductMgmt_StockHistoryHint" xml:space="preserve"><value>Select a product above to focus the movement history, or leave nothing selected to review the latest store-wide changes.</value></data>
+  <data name="ProductMgmt_RefreshHistory" xml:space="preserve"><value>Refresh</value></data>
+  <data name="ProductMgmt_StockHistoryAllFormat" xml:space="preserve"><value>Showing {0} recent stock movements across the store.</value></data>
+  <data name="ProductMgmt_StockHistoryFilteredFormat" xml:space="preserve"><value>Showing {1} movements for {0}.</value></data>
+  <data name="Col_Name" xml:space="preserve"><value>Name</value></data>
+  <data name="Col_Barcode" xml:space="preserve"><value>Barcode</value></data>
+  <data name="Col_Price" xml:space="preserve"><value>Price</value></data>
+  <data name="Col_Qty" xml:space="preserve"><value>Qty</value></data>
+  <data name="Col_Product" xml:space="preserve"><value>Product</value></data>
+  <data name="Col_MovementType" xml:space="preserve"><value>Type</value></data>
+  <data name="Col_Change" xml:space="preserve"><value>Change</value></data>
+  <data name="Col_After" xml:space="preserve"><value>After</value></data>
+  <data name="Col_Reference" xml:space="preserve"><value>Reference</value></data>
+  <data name="Col_When" xml:space="preserve"><value>When</value></data>
+  <data name="MovementType_OpeningStock" xml:space="preserve"><value>Opening stock</value></data>
+  <data name="MovementType_ManualSetAdjustment" xml:space="preserve"><value>Manual adjustment</value></data>
+  <data name="MovementType_Sale" xml:space="preserve"><value>Sale</value></data>
+  <data name="MovementType_Refund" xml:space="preserve"><value>Refund</value></data>
+  <data name="Product_AddTitle" xml:space="preserve"><value>Add Product</value></data>
+  <data name="Product_EditTitle" xml:space="preserve"><value>Edit Product</value></data>
+  <data name="Product_NameRequired" xml:space="preserve"><value>Product name is required.</value></data>
+  <data name="Product_SelectCategory" xml:space="preserve"><value>Select a category.</value></data>
+  <data name="Product_ValidPrice" xml:space="preserve"><value>Enter a valid price.</value></data>
+  <data name="Product_NameLabel" xml:space="preserve"><value>Product name *</value></data>
+  <data name="Product_BarcodeLabel" xml:space="preserve"><value>Barcode</value></data>
+  <data name="Product_CategoryLabel" xml:space="preserve"><value>Category</value></data>
+  <data name="Product_SellingPrice" xml:space="preserve"><value>Selling price *</value></data>
+  <data name="Product_CostPrice" xml:space="preserve"><value>Cost price</value></data>
+  <data name="Product_InitialStock" xml:space="preserve"><value>Initial stock</value></data>
+  <data name="Product_ImageLabel" xml:space="preserve"><value>Product image</value></data>
+  <data name="Product_NoImage" xml:space="preserve"><value>No image selected</value></data>
+  <data name="Product_Browse" xml:space="preserve"><value>Browse…</value></data>
+  <data name="Product_Clear" xml:space="preserve"><value>Clear</value></data>
+  <data name="Product_ActiveLabel" xml:space="preserve"><value>Product is active (visible in POS)</value></data>
+  <data name="Product_Cancel" xml:space="preserve"><value>Cancel</value></data>
+  <data name="Product_Save" xml:space="preserve"><value>Save</value></data>
+  <data name="Product_ImageDialogTitle" xml:space="preserve"><value>Select product image</value></data>
+  <data name="CustomerDisplay_Title" xml:space="preserve"><value>Customer Display — SmartPOS</value></data>
+  <data name="CustomerDisplay_Welcome" xml:space="preserve"><value>Welcome!</value></data>
+  <data name="CustomerDisplay_Subtitle" xml:space="preserve"><value>Your items will appear here</value></data>
+  <data name="CustomerDisplay_Total" xml:space="preserve"><value>TOTAL</value></data>
+  <data name="Msg_CreateCategoryFirst" xml:space="preserve"><value>Create a category first.</value></data>
+  <data name="Msg_ProductNotFound" xml:space="preserve"><value>Product not found.</value></data>
+  <data name="Msg_DeleteConfirmFormat" xml:space="preserve"><value>Delete '{0}'?</value></data>
+  <data name="Msg_ConfirmTitle" xml:space="preserve"><value>Confirm</value></data>
+</root>

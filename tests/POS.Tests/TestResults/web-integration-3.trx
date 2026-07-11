@@ -1,0 +1,196 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TestRun id="5581f990-9a84-40c6-9ad8-2e3fd0713dd4" name="User@ASUS 2026-05-21 13:54:47" runUser="Asus\User" xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010">
+  <Times creation="2026-05-21T13:54:47.7753327+03:00" queuing="2026-05-21T13:54:47.7753333+03:00" start="2026-05-21T13:54:38.6632087+03:00" finish="2026-05-21T13:54:48.7973157+03:00" />
+  <TestSettings name="default" id="455bce8f-7ee4-4f94-b77f-bc1fe972aef0">
+    <Deployment runDeploymentRoot="User_ASUS_2026-05-21_13_54_47" />
+  </TestSettings>
+  <Results>
+    <UnitTestResult executionId="5864ad49-89b6-4734-80bf-9651ba4980d0" testId="74383383-f939-07d1-39da-0d7a2c60cf16" testName="POS.Tests.WebIntegrationTests.Login_flow_redirects_unauthenticated_dashboard_requests_and_then_renders_dashboard" computerName="ASUS" duration="00:00:00.8646021" startTime="2026-05-21T13:54:48.6206448+03:00" endTime="2026-05-21T13:54:48.6206450+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="5864ad49-89b6-4734-80bf-9651ba4980d0">
+      <Output>
+        <ErrorInfo>
+          <Message>System.NotSupportedException: SQLite does not support expressions of type 'decimal' in ORDER BY clauses. Convert the values to a supported type, or use LINQ to Objects to order the results on the client side.&#xD;
+   at Microsoft.EntityFrameworkCore.Sqlite.Query.Internal.SqliteQueryableMethodTranslatingExpressionVisitor.TranslateOrderBy(ShapedQueryExpression source, LambdaExpression keySelector, Boolean ascending)&#xD;
+   at Microsoft.EntityFrameworkCore.Query.QueryableMethodTranslatingExpressionVisitor.VisitMethodCall(MethodCallExpression methodCallExpression)&#xD;
+   at Microsoft.EntityFrameworkCore.Query.RelationalQueryableMethodTranslatingExpressionVisitor.VisitMethodCall(MethodCallExpression methodCallExpression)&#xD;
+   at Microsoft.EntityFrameworkCore.Query.QueryableMethodTranslatingExpressionVisitor.VisitMethodCall(MethodCallExpression methodCallExpression)&#xD;
+   at Microsoft.EntityFrameworkCore.Query.RelationalQueryableMethodTranslatingExpressionVisitor.VisitMethodCall(MethodCallExpression methodCallExpression)&#xD;
+   at Microsoft.EntityFrameworkCore.Query.QueryableMethodTranslatingExpressionVisitor.VisitMethodCall(MethodCallExpression methodCallExpression)&#xD;
+   at Microsoft.EntityFrameworkCore.Query.RelationalQueryableMethodTranslatingExpressionVisitor.VisitMethodCall(MethodCallExpression methodCallExpression)&#xD;
+   at Microsoft.EntityFrameworkCore.Query.QueryableMethodTranslatingExpressionVisitor.Translate(Expression expression)&#xD;
+   at Microsoft.EntityFrameworkCore.Query.RelationalQueryableMethodTranslatingExpressionVisitor.Translate(Expression expression)&#xD;
+   at Microsoft.EntityFrameworkCore.Query.QueryCompilationContext.CreateQueryExecutor[TResult](Expression query)&#xD;
+   at Microsoft.EntityFrameworkCore.Storage.Database.CompileQuery[TResult](Expression query, Boolean async)&#xD;
+   at Microsoft.EntityFrameworkCore.Query.Internal.QueryCompiler.CompileQueryCore[TResult](IDatabase database, Expression query, IModel model, Boolean async)&#xD;
+   at Microsoft.EntityFrameworkCore.Query.Internal.QueryCompiler.&lt;&gt;c__DisplayClass12_0`1.&lt;ExecuteAsync&gt;b__0()&#xD;
+   at Microsoft.EntityFrameworkCore.Query.Internal.CompiledQueryCache.GetOrAddQuery[TResult](Object cacheKey, Func`1 compiler)&#xD;
+   at Microsoft.EntityFrameworkCore.Query.Internal.QueryCompiler.ExecuteAsync[TResult](Expression query, CancellationToken cancellationToken)&#xD;
+   at Microsoft.EntityFrameworkCore.Query.Internal.EntityQueryProvider.ExecuteAsync[TResult](Expression expression, CancellationToken cancellationToken)&#xD;
+   at Microsoft.EntityFrameworkCore.Query.Internal.EntityQueryable`1.GetAsyncEnumerator(CancellationToken cancellationToken)&#xD;
+   at System.Runtime.CompilerServices.ConfiguredCancelableAsyncEnumerable`1.GetAsyncEnumerator()&#xD;
+   at Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.ToListAsync[TSource](IQueryable`1 source, CancellationToken cancellationToken)&#xD;
+   at POS.Web.Controllers.DashboardController.Index(Nullable`1 date, CancellationToken cancellationToken) in C:\projects\POS\src\POS.Web\Controllers\DashboardController.cs:line 97&#xD;
+   at POS.Web.Controllers.DashboardController.Index(Nullable`1 date, CancellationToken cancellationToken) in C:\projects\POS\src\POS.Web\Controllers\DashboardController.cs:line 203&#xD;
+   at Microsoft.AspNetCore.Mvc.Infrastructure.ActionMethodExecutor.TaskOfIActionResultExecutor.Execute(ActionContext actionContext, IActionResultTypeMapper mapper, ObjectMethodExecutor executor, Object controller, Object[] arguments)&#xD;
+   at Microsoft.AspNetCore.Mvc.Infrastructure.ControllerActionInvoker.&lt;InvokeActionMethodAsync&gt;g__Awaited|12_0(ControllerActionInvoker invoker, ValueTask`1 actionResultValueTask)&#xD;
+   at Microsoft.AspNetCore.Mvc.Infrastructure.ControllerActionInvoker.&lt;InvokeNextActionFilterAsync&gt;g__Awaited|10_0(ControllerActionInvoker invoker, Task lastTask, State next, Scope scope, Object state, Boolean isCompleted)&#xD;
+   at Microsoft.AspNetCore.Mvc.Infrastructure.ControllerActionInvoker.Rethrow(ActionExecutedContextSealed context)&#xD;
+   at Microsoft.AspNetCore.Mvc.Infrastructure.ControllerActionInvoker.Next(State&amp; next, Scope&amp; scope, Object&amp; state, Boolean&amp; isCompleted)&#xD;
+   at Microsoft.AspNetCore.Mvc.Infrastructure.ControllerActionInvoker.InvokeInnerFilterAsync()&#xD;
+--- End of stack trace from previous location ---&#xD;
+   at Microsoft.AspNetCore.Mvc.Infrastructure.ResourceInvoker.&lt;InvokeNextResourceFilter&gt;g__Awaited|25_0(ResourceInvoker invoker, Task lastTask, State next, Scope scope, Object state, Boolean isCompleted)&#xD;
+   at Microsoft.AspNetCore.Mvc.Infrastructure.ResourceInvoker.Rethrow(ResourceExecutedContextSealed context)&#xD;
+   at Microsoft.AspNetCore.Mvc.Infrastructure.ResourceInvoker.Next(State&amp; next, Scope&amp; scope, Object&amp; state, Boolean&amp; isCompleted)&#xD;
+   at Microsoft.AspNetCore.Mvc.Infrastructure.ResourceInvoker.InvokeFilterPipelineAsync()&#xD;
+--- End of stack trace from previous location ---&#xD;
+   at Microsoft.AspNetCore.Mvc.Infrastructure.ResourceInvoker.&lt;InvokeAsync&gt;g__Awaited|17_0(ResourceInvoker invoker, Task task, IDisposable scope)&#xD;
+   at Microsoft.AspNetCore.Mvc.Infrastructure.ResourceInvoker.&lt;InvokeAsync&gt;g__Awaited|17_0(ResourceInvoker invoker, Task task, IDisposable scope)&#xD;
+   at Microsoft.AspNetCore.Authorization.AuthorizationMiddleware.Invoke(HttpContext context)&#xD;
+   at Program.&lt;&gt;c.&lt;&lt;&lt;Main&gt;$&gt;b__0_3&gt;d.MoveNext() in C:\projects\POS\src\POS.Web\Program.cs:line 96&#xD;
+--- End of stack trace from previous location ---&#xD;
+   at Microsoft.AspNetCore.Authentication.AuthenticationMiddleware.Invoke(HttpContext context)&#xD;
+   at Microsoft.AspNetCore.Diagnostics.DeveloperExceptionPageMiddlewareImpl.Invoke(HttpContext context)&#xD;
+&#xD;
+HEADERS&#xD;
+=======&#xD;
+Cookie: .AspNetCore.Antiforgery.zmzr_YdjDG4=CfDJ8GnTEqSxOWpJkryy07gGHlWu91XW4zHJUVrSjd-zR9AFUjIKNTalAJyGwIgtm8gMF78O_HnGnePwgQQFbNZ3w4aUIb0NrQ24BldjveGINdX7iq9HMDcKG-JdPhiRyZGCWzEU2V9DY46D4_uvXjYGJQ4; pos.dashboard.auth=CfDJ8GnTEqSxOWpJkryy07gGHlUJ65zRsAd1vPubRdPPUKPygrixsuzxToBjXnl7SxiAXCKebJvgbxBRLAdm7IH_NGG-d_O5B2cig-N4aXx6_5A1MELocoSBqRaWSLfksfxVQq_XvJXjneT82mFMv1WDkhPqTCZdvsmF1587V_OvB-7Di0NRR06c-VLhZ7IqZ5qtvR-UZfIj3RqyiS-TqF6GmBqaB5r5pa8x0lwe0Qg5hVS9M8v9Gx1yjM-Vkf3WxYQkiuPFMvjClZo1JGkseJU07idZDnAaP8Fyu3VsHDC_0RuNrf8yzOhHhlW8r3Np775BvpATNUy1BJhittuX6g_rgtb8i0KB0FnSg1Q__l8XNylU5q-emtI4UDjnah3KPNtoULRt2HW7m8YZ0CyfKxQM1c5shoacAD4XkcuSD-3XQGrS1n3Qq7roiJ1oi9Od4wpt1vl5CVyyT5Pv1ohy4XHuRbMgMrFxhL7RIj-OtZC-UchNOFValbfaQbmlf0-y38vun_I3GMeuEk2LCM3Tbtm6qUgTP5_QBI_JBQR6_1V0kvNAqyn_6XAwZAwqZLyoNGVZjIUTOza90GaTlamZtabCBxaox3xRFlgYPLIDnwmJEk-Dc0zHOcXru6YJgEWr4n3OcjNfV4Gm5fUWebTtcJY9qThyPFMkVceRccJf3ZC2dKb-aSgwMJDOKYywLcry24Fx2t8dCy5CgHxCX90sUGe5tpk&#xD;
+Host: localhost&#xD;
+</Message>
+          <StackTrace>   at POS.Tests.WebIntegrationTests.ReadHtmlAsync(HttpResponseMessage response) in C:\projects\POS\tests\POS.Tests\WebIntegrationTests.cs:line 160&#xD;
+   at POS.Tests.WebIntegrationTests.Login_flow_redirects_unauthenticated_dashboard_requests_and_then_renders_dashboard() in C:\projects\POS\tests\POS.Tests\WebIntegrationTests.cs:line 32&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="79e62f95-f083-4a88-a96d-c25efd59e07c" testId="426fc058-a14c-0d44-caba-3b3cceddcea2" testName="POS.Tests.WebIntegrationTests.Management_postbacks_create_user_and_persist_operational_settings" computerName="ASUS" duration="00:00:06.2709447" startTime="2026-05-21T13:54:47.7346651+03:00" endTime="2026-05-21T13:54:47.7346969+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="79e62f95-f083-4a88-a96d-c25efd59e07c" />
+  </Results>
+  <TestDefinitions>
+    <UnitTest name="POS.Tests.WebIntegrationTests.Management_postbacks_create_user_and_persist_operational_settings" storage="c:\projects\pos\tests\pos.tests\bin\debug\net8.0\pos.tests.dll" id="426fc058-a14c-0d44-caba-3b3cceddcea2">
+      <Execution id="79e62f95-f083-4a88-a96d-c25efd59e07c" />
+      <TestMethod codeBase="C:\projects\POS\tests\POS.Tests\bin\Debug\net8.0\POS.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="POS.Tests.WebIntegrationTests" name="Management_postbacks_create_user_and_persist_operational_settings" />
+    </UnitTest>
+    <UnitTest name="POS.Tests.WebIntegrationTests.Login_flow_redirects_unauthenticated_dashboard_requests_and_then_renders_dashboard" storage="c:\projects\pos\tests\pos.tests\bin\debug\net8.0\pos.tests.dll" id="74383383-f939-07d1-39da-0d7a2c60cf16">
+      <Execution id="5864ad49-89b6-4734-80bf-9651ba4980d0" />
+      <TestMethod codeBase="C:\projects\POS\tests\POS.Tests\bin\Debug\net8.0\POS.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="POS.Tests.WebIntegrationTests" name="Login_flow_redirects_unauthenticated_dashboard_requests_and_then_renders_dashboard" />
+    </UnitTest>
+  </TestDefinitions>
+  <TestEntries>
+    <TestEntry testId="74383383-f939-07d1-39da-0d7a2c60cf16" executionId="5864ad49-89b6-4734-80bf-9651ba4980d0" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="426fc058-a14c-0d44-caba-3b3cceddcea2" executionId="79e62f95-f083-4a88-a96d-c25efd59e07c" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+  </TestEntries>
+  <TestLists>
+    <TestList name="Results Not in a List" id="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestList name="All Loaded Results" id="19431567-8539-422a-85d7-44ee4e166bda" />
+  </TestLists>
+  <ResultSummary outcome="Failed">
+    <Counters total="2" executed="2" passed="1" failed="1" error="0" timeout="0" aborted="0" inconclusive="0" passedButRunAborted="0" notRunnable="0" notExecuted="0" disconnected="0" warning="0" completed="0" inProgress="0" pending="0" />
+    <Output>
+      <StdOut>[xUnit.net 00:00:00.02] xUnit.net VSTest Adapter v2.5.3.1+6b60a9e56a (64-bit .NET 8.0.25)&#xD;
+[xUnit.net 00:00:00.40]   Discovering: POS.Tests&#xD;
+[xUnit.net 00:00:00.59]   Discovered:  POS.Tests&#xD;
+[xUnit.net 00:00:00.61]   Starting:    POS.Tests&#xD;
+warn: Microsoft.EntityFrameworkCore.Query[10103]&#xD;
+      The query uses the 'First'/'FirstOrDefault' operator without 'OrderBy' and filter operators. This may lead to unpredictable results.&#xD;
+fail: Microsoft.AspNetCore.Diagnostics.DeveloperExceptionPageMiddleware[1]&#xD;
+      An unhandled exception has occurred while executing the request.&#xD;
+      System.NotSupportedException: SQLite does not support expressions of type 'decimal' in ORDER BY clauses. Convert the values to a supported type, or use LINQ to Objects to order the results on the client side.&#xD;
+         at Microsoft.EntityFrameworkCore.Sqlite.Query.Internal.SqliteQueryableMethodTranslatingExpressionVisitor.TranslateOrderBy(ShapedQueryExpression source, LambdaExpression keySelector, Boolean ascending)&#xD;
+         at Microsoft.EntityFrameworkCore.Query.QueryableMethodTranslatingExpressionVisitor.VisitMethodCall(MethodCallExpression methodCallExpression)&#xD;
+         at Microsoft.EntityFrameworkCore.Query.RelationalQueryableMethodTranslatingExpressionVisitor.VisitMethodCall(MethodCallExpression methodCallExpression)&#xD;
+         at Microsoft.EntityFrameworkCore.Query.QueryableMethodTranslatingExpressionVisitor.VisitMethodCall(MethodCallExpression methodCallExpression)&#xD;
+         at Microsoft.EntityFrameworkCore.Query.RelationalQueryableMethodTranslatingExpressionVisitor.VisitMethodCall(MethodCallExpression methodCallExpression)&#xD;
+         at Microsoft.EntityFrameworkCore.Query.QueryableMethodTranslatingExpressionVisitor.VisitMethodCall(MethodCallExpression methodCallExpression)&#xD;
+         at Microsoft.EntityFrameworkCore.Query.RelationalQueryableMethodTranslatingExpressionVisitor.VisitMethodCall(MethodCallExpression methodCallExpression)&#xD;
+         at Microsoft.EntityFrameworkCore.Query.QueryableMethodTranslatingExpressionVisitor.Translate(Expression expression)&#xD;
+         at Microsoft.EntityFrameworkCore.Query.RelationalQueryableMethodTranslatingExpressionVisitor.Translate(Expression expression)&#xD;
+         at Microsoft.EntityFrameworkCore.Query.QueryCompilationContext.CreateQueryExecutor[TResult](Expression query)&#xD;
+         at Microsoft.EntityFrameworkCore.Storage.Database.CompileQuery[TResult](Expression query, Boolean async)&#xD;
+         at Microsoft.EntityFrameworkCore.Query.Internal.QueryCompiler.CompileQueryCore[TResult](IDatabase database, Expression query, IModel model, Boolean async)&#xD;
+         at Microsoft.EntityFrameworkCore.Query.Internal.QueryCompiler.&lt;&gt;c__DisplayClass12_0`1.&lt;ExecuteAsync&gt;b__0()&#xD;
+         at Microsoft.EntityFrameworkCore.Query.Internal.CompiledQueryCache.GetOrAddQuery[TResult](Object cacheKey, Func`1 compiler)&#xD;
+         at Microsoft.EntityFrameworkCore.Query.Internal.QueryCompiler.ExecuteAsync[TResult](Expression query, CancellationToken cancellationToken)&#xD;
+         at Microsoft.EntityFrameworkCore.Query.Internal.EntityQueryProvider.ExecuteAsync[TResult](Expression expression, CancellationToken cancellationToken)&#xD;
+         at Microsoft.EntityFrameworkCore.Query.Internal.EntityQueryable`1.GetAsyncEnumerator(CancellationToken cancellationToken)&#xD;
+         at System.Runtime.CompilerServices.ConfiguredCancelableAsyncEnumerable`1.GetAsyncEnumerator()&#xD;
+         at Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.ToListAsync[TSource](IQueryable`1 source, CancellationToken cancellationToken)&#xD;
+         at POS.Web.Controllers.DashboardController.Index(Nullable`1 date, CancellationToken cancellationToken) in C:\projects\POS\src\POS.Web\Controllers\DashboardController.cs:line 97&#xD;
+         at POS.Web.Controllers.DashboardController.Index(Nullable`1 date, CancellationToken cancellationToken) in C:\projects\POS\src\POS.Web\Controllers\DashboardController.cs:line 203&#xD;
+         at Microsoft.AspNetCore.Mvc.Infrastructure.ActionMethodExecutor.TaskOfIActionResultExecutor.Execute(ActionContext actionContext, IActionResultTypeMapper mapper, ObjectMethodExecutor executor, Object controller, Object[] arguments)&#xD;
+         at Microsoft.AspNetCore.Mvc.Infrastructure.ControllerActionInvoker.&lt;InvokeActionMethodAsync&gt;g__Awaited|12_0(ControllerActionInvoker invoker, ValueTask`1 actionResultValueTask)&#xD;
+         at Microsoft.AspNetCore.Mvc.Infrastructure.ControllerActionInvoker.&lt;InvokeNextActionFilterAsync&gt;g__Awaited|10_0(ControllerActionInvoker invoker, Task lastTask, State next, Scope scope, Object state, Boolean isCompleted)&#xD;
+         at Microsoft.AspNetCore.Mvc.Infrastructure.ControllerActionInvoker.Rethrow(ActionExecutedContextSealed context)&#xD;
+         at Microsoft.AspNetCore.Mvc.Infrastructure.ControllerActionInvoker.Next(State&amp; next, Scope&amp; scope, Object&amp; state, Boolean&amp; isCompleted)&#xD;
+         at Microsoft.AspNetCore.Mvc.Infrastructure.ControllerActionInvoker.InvokeInnerFilterAsync()&#xD;
+      --- End of stack trace from previous location ---&#xD;
+         at Microsoft.AspNetCore.Mvc.Infrastructure.ResourceInvoker.&lt;InvokeNextResourceFilter&gt;g__Awaited|25_0(ResourceInvoker invoker, Task lastTask, State next, Scope scope, Object state, Boolean isCompleted)&#xD;
+         at Microsoft.AspNetCore.Mvc.Infrastructure.ResourceInvoker.Rethrow(ResourceExecutedContextSealed context)&#xD;
+         at Microsoft.AspNetCore.Mvc.Infrastructure.ResourceInvoker.Next(State&amp; next, Scope&amp; scope, Object&amp; state, Boolean&amp; isCompleted)&#xD;
+         at Microsoft.AspNetCore.Mvc.Infrastructure.ResourceInvoker.InvokeFilterPipelineAsync()&#xD;
+      --- End of stack trace from previous location ---&#xD;
+         at Microsoft.AspNetCore.Mvc.Infrastructure.ResourceInvoker.&lt;InvokeAsync&gt;g__Awaited|17_0(ResourceInvoker invoker, Task task, IDisposable scope)&#xD;
+         at Microsoft.AspNetCore.Mvc.Infrastructure.ResourceInvoker.&lt;InvokeAsync&gt;g__Awaited|17_0(ResourceInvoker invoker, Task task, IDisposable scope)&#xD;
+         at Microsoft.AspNetCore.Authorization.AuthorizationMiddleware.Invoke(HttpContext context)&#xD;
+         at Program.&lt;&gt;c.&lt;&lt;&lt;Main&gt;$&gt;b__0_3&gt;d.MoveNext() in C:\projects\POS\src\POS.Web\Program.cs:line 96&#xD;
+      --- End of stack trace from previous location ---&#xD;
+         at Microsoft.AspNetCore.Authentication.AuthenticationMiddleware.Invoke(HttpContext context)&#xD;
+         at Microsoft.AspNetCore.Diagnostics.DeveloperExceptionPageMiddlewareImpl.Invoke(HttpContext context)&#xD;
+[xUnit.net 00:00:07.99]       System.NotSupportedException: SQLite does not support expressions of type 'decimal' in ORDER BY clauses. Convert the values to a supported type, or use LINQ to Objects to order the results on the client side.&#xD;
+[xUnit.net 00:00:07.99]          at Microsoft.EntityFrameworkCore.Sqlite.Query.Internal.SqliteQueryableMethodTranslatingExpressionVisitor.TranslateOrderBy(ShapedQueryExpression source, LambdaExpression keySelector, Boolean ascending)&#xD;
+[xUnit.net 00:00:07.99]          at Microsoft.EntityFrameworkCore.Query.QueryableMethodTranslatingExpressionVisitor.VisitMethodCall(MethodCallExpression methodCallExpression)&#xD;
+[xUnit.net 00:00:07.99]          at Microsoft.EntityFrameworkCore.Query.RelationalQueryableMethodTranslatingExpressionVisitor.VisitMethodCall(MethodCallExpression methodCallExpression)&#xD;
+[xUnit.net 00:00:07.99]          at Microsoft.EntityFrameworkCore.Query.QueryableMethodTranslatingExpressionVisitor.VisitMethodCall(MethodCallExpression methodCallExpression)&#xD;
+[xUnit.net 00:00:07.99]          at Microsoft.EntityFrameworkCore.Query.RelationalQueryableMethodTranslatingExpressionVisitor.VisitMethodCall(MethodCallExpression methodCallExpression)&#xD;
+[xUnit.net 00:00:07.99]          at Microsoft.EntityFrameworkCore.Query.QueryableMethodTranslatingExpressionVisitor.VisitMethodCall(MethodCallExpression methodCallExpression)&#xD;
+[xUnit.net 00:00:07.99]          at Microsoft.EntityFrameworkCore.Query.RelationalQueryableMethodTranslatingExpressionVisitor.VisitMethodCall(MethodCallExpression methodCallExpression)&#xD;
+[xUnit.net 00:00:07.99]          at Microsoft.EntityFrameworkCore.Query.QueryableMethodTranslatingExpressionVisitor.Translate(Expression expression)&#xD;
+[xUnit.net 00:00:07.99]          at Microsoft.EntityFrameworkCore.Query.RelationalQueryableMethodTranslatingExpressionVisitor.Translate(Expression expression)&#xD;
+[xUnit.net 00:00:07.99]          at Microsoft.EntityFrameworkCore.Query.QueryCompilationContext.CreateQueryExecutor[TResult](Expression query)&#xD;
+[xUnit.net 00:00:07.99]          at Microsoft.EntityFrameworkCore.Storage.Database.CompileQuery[TResult](Expression query, Boolean async)&#xD;
+[xUnit.net 00:00:07.99]          at Microsoft.EntityFrameworkCore.Query.Internal.QueryCompiler.CompileQueryCore[TResult](IDatabase database, Expression query, IModel model, Boolean async)&#xD;
+[xUnit.net 00:00:07.99]          at Microsoft.EntityFrameworkCore.Query.Internal.QueryCompiler.&lt;&gt;c__DisplayClass12_0`1.&lt;ExecuteAsync&gt;b__0()&#xD;
+[xUnit.net 00:00:07.99]          at Microsoft.EntityFrameworkCore.Query.Internal.CompiledQueryCache.GetOrAddQuery[TResult](Object cacheKey, Func`1 compiler)&#xD;
+[xUnit.net 00:00:07.99]          at Microsoft.EntityFrameworkCore.Query.Internal.QueryCompiler.ExecuteAsync[TResult](Expression query, CancellationToken cancellationToken)&#xD;
+[xUnit.net 00:00:07.99]          at Microsoft.EntityFrameworkCore.Query.Internal.EntityQueryProvider.ExecuteAsync[TResult](Expression expression, CancellationToken cancellationToken)&#xD;
+[xUnit.net 00:00:07.99]          at Microsoft.EntityFrameworkCore.Query.Internal.EntityQueryable`1.GetAsyncEnumerator(CancellationToken cancellationToken)&#xD;
+[xUnit.net 00:00:07.99]          at System.Runtime.CompilerServices.ConfiguredCancelableAsyncEnumerable`1.GetAsyncEnumerator()&#xD;
+[xUnit.net 00:00:07.99]          at Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.ToListAsync[TSource](IQueryable`1 source, CancellationToken cancellationToken)&#xD;
+[xUnit.net 00:00:07.99]          at POS.Web.Controllers.DashboardController.Index(Nullable`1 date, CancellationToken cancellationToken) in C:\projects\POS\src\POS.Web\Controllers\DashboardController.cs:line 97&#xD;
+[xUnit.net 00:00:07.99]          at POS.Web.Controllers.DashboardController.Index(Nullable`1 date, CancellationToken cancellationToken) in C:\projects\POS\src\POS.Web\Controllers\DashboardController.cs:line 203&#xD;
+[xUnit.net 00:00:07.99]          at Microsoft.AspNetCore.Mvc.Infrastructure.ActionMethodExecutor.TaskOfIActionResultExecutor.Execute(ActionContext actionContext, IActionResultTypeMapper mapper, ObjectMethodExecutor executor, Object controller, Object[] arguments)&#xD;
+[xUnit.net 00:00:07.99]          at Microsoft.AspNetCore.Mvc.Infrastructure.ControllerActionInvoker.&lt;InvokeActionMethodAsync&gt;g__Awaited|12_0(ControllerActionInvoker invoker, ValueTask`1 actionResultValueTask)&#xD;
+[xUnit.net 00:00:07.99]          at Microsoft.AspNetCore.Mvc.Infrastructure.ControllerActionInvoker.&lt;InvokeNextActionFilterAsync&gt;g__Awaited|10_0(ControllerActionInvoker invoker, Task lastTask, State next, Scope scope, Object state, Boolean isCompleted)&#xD;
+[xUnit.net 00:00:07.99]          at Microsoft.AspNetCore.Mvc.Infrastructure.ControllerActionInvoker.Rethrow(ActionExecutedContextSealed context)&#xD;
+[xUnit.net 00:00:07.99]          at Microsoft.AspNetCore.Mvc.Infrastructure.ControllerActionInvoker.Next(State&amp; next, Scope&amp; scope, Object&amp; state, Boolean&amp; isCompleted)&#xD;
+[xUnit.net 00:00:07.99]          at Microsoft.AspNetCore.Mvc.Infrastructure.ControllerActionInvoker.InvokeInnerFilterAsync()&#xD;
+[xUnit.net 00:00:07.99]       --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:07.99]          at Microsoft.AspNetCore.Mvc.Infrastructure.ResourceInvoker.&lt;InvokeNextResourceFilter&gt;g__Awaited|25_0(ResourceInvoker invoker, Task lastTask, State next, Scope scope, Object state, Boolean isCompleted)&#xD;
+[xUnit.net 00:00:07.99]          at Microsoft.AspNetCore.Mvc.Infrastructure.ResourceInvoker.Rethrow(ResourceExecutedContextSealed context)&#xD;
+[xUnit.net 00:00:07.99]          at Microsoft.AspNetCore.Mvc.Infrastructure.ResourceInvoker.Next(State&amp; next, Scope&amp; scope, Object&amp; state, Boolean&amp; isCompleted)&#xD;
+[xUnit.net 00:00:07.99]          at Microsoft.AspNetCore.Mvc.Infrastructure.ResourceInvoker.InvokeFilterPipelineAsync()&#xD;
+[xUnit.net 00:00:07.99]       --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:07.99]          at Microsoft.AspNetCore.Mvc.Infrastructure.ResourceInvoker.&lt;InvokeAsync&gt;g__Awaited|17_0(ResourceInvoker invoker, Task task, IDisposable scope)&#xD;
+[xUnit.net 00:00:07.99]          at Microsoft.AspNetCore.Mvc.Infrastructure.ResourceInvoker.&lt;InvokeAsync&gt;g__Awaited|17_0(ResourceInvoker invoker, Task task, IDisposable scope)&#xD;
+[xUnit.net 00:00:07.99]          at Microsoft.AspNetCore.Authorization.AuthorizationMiddleware.Invoke(HttpContext context)&#xD;
+[xUnit.net 00:00:07.99]          at Program.&lt;&gt;c.&lt;&lt;&lt;Main&gt;$&gt;b__0_3&gt;d.MoveNext() in C:\projects\POS\src\POS.Web\Program.cs:line 96&#xD;
+[xUnit.net 00:00:07.99]       --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:07.99]          at Microsoft.AspNetCore.Authentication.AuthenticationMiddleware.Invoke(HttpContext context)&#xD;
+[xUnit.net 00:00:07.99]          at Microsoft.AspNetCore.Diagnostics.DeveloperExceptionPageMiddlewareImpl.Invoke(HttpContext context)&#xD;
+[xUnit.net 00:00:07.99]       &#xD;
+[xUnit.net 00:00:07.99]       HEADERS&#xD;
+[xUnit.net 00:00:07.99]       =======&#xD;
+[xUnit.net 00:00:07.99]       Cookie: .AspNetCore.Antiforgery.zmzr_YdjDG4=CfDJ8GnTEqSxOWpJkryy07gGHlWu91XW4zHJUVrSjd-zR9AFUjIKNTalAJyGwIgtm8gMF78O_HnGnePwgQQFbNZ3w4aUIb0NrQ24BldjveGINdX7iq9HMDcKG-JdPhiRyZGCWzEU2V9DY46D4_uvXjYGJQ4; pos.dashboard.auth=CfDJ8GnTEqSxOWpJkryy07gGHlUJ65zRsAd1vPubRdPPUKPygrixsuzxToBjXnl7SxiAXCKebJvgbxBRLAdm7IH_NGG-d_O5B2cig-N4aXx6_5A1MELocoSBqRaWSLfksfxVQq_XvJXjneT82mFMv1WDkhPqTCZdvsmF1587V_OvB-7Di0NRR06c-VLhZ7IqZ5qtvR-UZfIj3RqyiS-TqF6GmBqaB5r5pa8x0lwe0Qg5hVS9M8v9Gx1yjM-Vkf3WxYQkiuPFMvjClZo1JGkseJU07idZDnAaP8Fyu3VsHDC_0RuNrf8yzOhHhlW8r3Np775BvpATNUy1BJhittuX6g_rgtb8i0KB0FnSg1Q__l8XNylU5q-emtI4UDjnah3KPNtoULRt2HW7m8YZ0CyfKxQM1c5shoacAD4XkcuSD-3XQGrS1n3Qq7roiJ1oi9Od4wpt1vl5CVyyT5Pv1ohy4XHuRbMgMrFxhL7RIj-OtZC-UchNOFValbfaQbmlf0-y38vun_I3GMeuEk2LCM3Tbtm6qUgTP5_QBI_JBQR6_1V0kvNAqyn_6XAwZAwqZLyoNGVZjIUTOza90GaTlamZtabCBxaox3xRFlgYPLIDnwmJEk-Dc0zHOcXru6YJgEWr4n3OcjNfV4Gm5fUWebTtcJY9qThyPFMkVceRccJf3ZC2dKb-aSgwMJDOKYywLcry24Fx2t8dCy5CgHxCX90sUGe5tpk&#xD;
+[xUnit.net 00:00:07.99]       Host: localhost&#xD;
+[xUnit.net 00:00:07.99]       &#xD;
+[xUnit.net 00:00:07.99]       Stack Trace:&#xD;
+[xUnit.net 00:00:07.99]         C:\projects\POS\tests\POS.Tests\WebIntegrationTests.cs(160,0): at POS.Tests.WebIntegrationTests.ReadHtmlAsync(HttpResponseMessage response)&#xD;
+[xUnit.net 00:00:07.99]         C:\projects\POS\tests\POS.Tests\WebIntegrationTests.cs(32,0): at POS.Tests.WebIntegrationTests.Login_flow_redirects_unauthenticated_dashboard_requests_and_then_renders_dashboard()&#xD;
+[xUnit.net 00:00:07.99]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:07.99]   Finished:    POS.Tests&#xD;
+</StdOut>
+    </Output>
+    <RunInfos>
+      <RunInfo computerName="ASUS" outcome="Error" timestamp="2026-05-21T13:54:48.6161821+03:00">
+        <Text>[xUnit.net 00:00:07.99]     POS.Tests.WebIntegrationTests.Login_flow_redirects_unauthenticated_dashboard_requests_and_then_renders_dashboard [FAIL]</Text>
+      </RunInfo>
+    </RunInfos>
+  </ResultSummary>
+</TestRun>

@@ -41,12 +41,12 @@
             <StackPanel x:Name="IdlePanel"
                         VerticalAlignment="Center"
                         HorizontalAlignment="Center">
-                <TextBlock Text="Welcome!"
+                <TextBlock x:Name="CdWelcomeTb"
                            FontSize="28" FontWeight="Bold"
                            Foreground="White"
                            HorizontalAlignment="Center"
                            Margin="0,0,0,6"/>
-                <TextBlock Text="Your items will appear here"
+                <TextBlock x:Name="CdSubtitleTb"
                            FontSize="13"
                            Foreground="#6B7280"
                            HorizontalAlignment="Center"/>
@@ -100,8 +100,8 @@
                 Background="#1F2937"
                 Padding="20,14">
             <DockPanel LastChildFill="False">
-                <TextBlock DockPanel.Dock="Left"
-                           Text="TOTAL"
+                <TextBlock x:Name="CdTotalLabelTb"
+                           DockPanel.Dock="Left"
                            FontSize="13" FontWeight="Bold"
                            Foreground="#9CA3AF"
                            VerticalAlignment="Center"/>

@@ -19,10 +19,10 @@
 
             <!-- Title -->
             <StackPanel Grid.Row="0" Margin="0,0,0,12">
-                <TextBlock Text="Refund Sale"
+                <TextBlock x:Name="RefundTitleText"
                            FontSize="16" FontWeight="SemiBold"
                            Foreground="{StaticResource TextPrimaryBrush}"/>
-                <TextBlock Text="Select a completed sale to refund. Stock will be restored."
+                <TextBlock x:Name="RefundSubtitleText"
                            FontSize="11"
                            Foreground="{StaticResource TextSecondaryBrush}"
                            Margin="0,2,0,0"/>
@@ -36,7 +36,7 @@
                     CornerRadius="6"
                     Padding="10,8"
                     Margin="0,0,0,10">
-                <TextBlock Text="⚠  This action cannot be undone. The invoice will be marked Cancelled and all item quantities returned to stock."
+                <TextBlock x:Name="RefundWarningText"
                            FontSize="11"
                            Foreground="#92400E"
                            TextWrapping="Wrap"/>
@@ -48,90 +48,77 @@
                     BorderThickness="0.5"
                     CornerRadius="6"
                     ClipToBounds="True">
-                <ListBox x:Name="InvoiceList"
-                         BorderThickness="0"
-                         Background="{StaticResource BgPrimaryBrush}"
-                         SelectionChanged="InvoiceList_SelectionChanged"
-                         ScrollViewer.HorizontalScrollBarVisibility="Disabled">
-                    <ListBox.Resources>
-                        <SolidColorBrush x:Key="{x:Static SystemColors.HighlightBrushKey}"       Color="#FEF3C7"/>
-                        <SolidColorBrush x:Key="{x:Static SystemColors.HighlightTextBrushKey}"   Color="#111827"/>
-                        <SolidColorBrush x:Key="{x:Static SystemColors.InactiveSelectionHighlightBrushKey}" Color="#FEF3C7"/>
-                    </ListBox.Resources>
-                    <ListBox.ItemContainerStyle>
-                        <Style TargetType="ListBoxItem">
-                            <Setter Property="Padding" Value="0"/>
-                            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
-                            <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
-                            <Setter Property="BorderBrush" Value="{StaticResource PanelBorderBrush}"/>
-                            <Setter Property="BorderThickness" Value="0,0,0,0.5"/>
-                            <Setter Property="Template">
-                                <Setter.Value>
-                                    <ControlTemplate TargetType="ListBoxItem">
-                                        <Border Background="{TemplateBinding Background}"
-                                                BorderBrush="{TemplateBinding BorderBrush}"
-                                                BorderThickness="{TemplateBinding BorderThickness}"
-                                                Padding="12,10">
-                                            <ContentPresenter/>
-                                        </Border>
-                                        <ControlTemplate.Triggers>
-                                            <Trigger Property="IsSelected"   Value="True">
-                                                <Setter Property="Background" Value="#FEF3C7"/>
-                                            </Trigger>
-                                            <Trigger Property="IsMouseOver" Value="True">
-                                                <Setter Property="Background" Value="{StaticResource BgSecondaryBrush}"/>
-                                            </Trigger>
-                                        </ControlTemplate.Triggers>
-                                    </ControlTemplate>
-                                </Setter.Value>
-                            </Setter>
-                        </Style>
-                    </ListBox.ItemContainerStyle>
-                    <ListBox.ItemTemplate>
-                        <DataTemplate>
-                            <DockPanel LastChildFill="False">
-                                <StackPanel DockPanel.Dock="Left">
-                                    <TextBlock Text="{Binding InvoiceNumber}"
-                                               FontSize="12" FontWeight="SemiBold"
-                                               Foreground="{StaticResource TextPrimaryBrush}"/>
-                                    <TextBlock Text="{Binding PaidAt}"
-                                               FontSize="10"
-                                               Foreground="{StaticResource TextTertiaryBrush}"/>
-                                </StackPanel>
-                                <TextBlock DockPanel.Dock="Right"
-                                           Text="{Binding Total, StringFormat={}{0:N2}}"
-                                           FontSize="13" FontWeight="SemiBold"
-                                           Foreground="{StaticResource DangerBrush}"
-                                           VerticalAlignment="Center"/>
-                            </DockPanel>
-                        </DataTemplate>
-                    </ListBox.ItemTemplate>
-
-                    <!-- Empty state -->
-                    <ListBox.Style>
-                        <Style TargetType="ListBox">
-                            <Style.Triggers>
-                                <Trigger Property="HasItems" Value="False">
-                                    <Setter Property="Template">
-                                        <Setter.Value>
-                                            <ControlTemplate>
-                                                <Border Background="{StaticResource BgPrimaryBrush}"
-                                                        VerticalAlignment="Center">
-                                                    <TextBlock Text="No recent paid invoices found."
-                                                               FontSize="12"
-                                                               Foreground="{StaticResource TextSecondaryBrush}"
-                                                               HorizontalAlignment="Center"
-                                                               VerticalAlignment="Center"
-                                                               Margin="0,40"/>
-                                                </Border>
-                                            </ControlTemplate>
-                                        </Setter.Value>
-                                    </Setter>
-                                </Trigger>
-                            </Style.Triggers>
-                        </Style>
-                    </ListBox.Style>
-                </ListBox>
+                <Grid MinHeight="120">
+                    <ListBox x:Name="InvoiceList"
+                             BorderThickness="0"
+                             Background="{StaticResource BgPrimaryBrush}"
+                             SelectionChanged="InvoiceList_SelectionChanged"
+                             ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                        <ListBox.Resources>
+                            <SolidColorBrush x:Key="{x:Static SystemColors.HighlightBrushKey}"       Color="#FEF3C7"/>
+                            <SolidColorBrush x:Key="{x:Static SystemColors.HighlightTextBrushKey}"   Color="#111827"/>
+                            <SolidColorBrush x:Key="{x:Static SystemColors.InactiveSelectionHighlightBrushKey}" Color="#FEF3C7"/>
+                        </ListBox.Resources>
+                        <ListBox.ItemContainerStyle>
+                            <Style TargetType="ListBoxItem">
+                                <Setter Property="Padding" Value="0"/>
+                                <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                                <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+                                <Setter Property="BorderBrush" Value="{StaticResource PanelBorderBrush}"/>
+                                <Setter Property="BorderThickness" Value="0,0,0,0.5"/>
+                                <Setter Property="Template">
+                                    <Setter.Value>
+                                        <ControlTemplate TargetType="ListBoxItem">
+                                            <Border Background="{TemplateBinding Background}"
+                                                    BorderBrush="{TemplateBinding BorderBrush}"
+                                                    BorderThickness="{TemplateBinding BorderThickness}"
+                                                    Padding="12,10">
+                                                <ContentPresenter/>
+                                            </Border>
+                                            <ControlTemplate.Triggers>
+                                                <Trigger Property="IsSelected"   Value="True">
+                                                    <Setter Property="Background" Value="#FEF3C7"/>
+                                                </Trigger>
+                                                <Trigger Property="IsMouseOver" Value="True">
+                                                    <Setter Property="Background" Value="{StaticResource BgSecondaryBrush}"/>
+                                                </Trigger>
+                                            </ControlTemplate.Triggers>
+                                        </ControlTemplate>
+                                    </Setter.Value>
+                                </Setter>
+                            </Style>
+                        </ListBox.ItemContainerStyle>
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <DockPanel LastChildFill="False">
+                                    <StackPanel DockPanel.Dock="Left">
+                                        <TextBlock Text="{Binding InvoiceNumber}"
+                                                   FontSize="12" FontWeight="SemiBold"
+                                                   Foreground="{StaticResource TextPrimaryBrush}"/>
+                                        <TextBlock Text="{Binding PaidAt}"
+                                                   FontSize="10"
+                                                   Foreground="{StaticResource TextTertiaryBrush}"/>
+                                    </StackPanel>
+                                    <TextBlock DockPanel.Dock="Right"
+                                               Text="{Binding Total, StringFormat={}{0:N2}}"
+                                               FontSize="13" FontWeight="SemiBold"
+                                               Foreground="{StaticResource DangerBrush}"
+                                               VerticalAlignment="Center"/>
+                                </DockPanel>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                    <TextBlock x:Name="RefundListEmptyText"
+                               FontSize="12"
+                               Foreground="{StaticResource TextSecondaryBrush}"
+                               HorizontalAlignment="Center"
+                               VerticalAlignment="Center"
+                               Margin="0,40"
+                               TextWrapping="Wrap"
+                               TextAlignment="Center"
+                               Visibility="Collapsed"
+                               IsHitTestVisible="False"/>
+                </Grid>
             </Border>
 
             <!-- Divider -->
@@ -141,8 +128,8 @@
 
             <!-- Footer -->
             <DockPanel Grid.Row="4" LastChildFill="False">
-                <Button DockPanel.Dock="Left"
-                        Content="Cancel"
+                <Button x:Name="RefundCancelBtn"
+                        DockPanel.Dock="Left"
                         Click="Cancel_Click"
                         Style="{StaticResource GhostButton}"
                         Width="80"/>
