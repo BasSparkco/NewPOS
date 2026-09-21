@@ -1,7 +1,9 @@
 using System.Net;
 using System.Security.Claims;
+using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.HttpOverrides;
+using Microsoft.AspNetCore.RateLimiting;
 using POS.Application.Abstractions;
 using POS.Core.Enums;
 using POS.Infrastructure;
@@ -55,6 +57,21 @@ builder.Services.AddAuthorization(options =>
     options.AddPolicy(WebAuthorizationPolicies.ProcessRefunds, policy =>
         policy.RequireAssertion(ctx => GetPermissions(ctx.User).HasFlag(Permission.ProcessRefunds)));
 });
+builder.Services.AddRateLimiter(options =>
+{
+    // Per tenant.md's identity section: throttle login attempts to slow down brute-force/enumeration.
+    // Partitioned by client IP, not by username, so a failed guess never reveals whether the account exists.
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    options.AddPolicy(WebRateLimitPolicies.Login, httpContext =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 10,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 0
+            }));
+});
 
 var app = builder.Build();
 
@@ -75,6 +92,7 @@ if (requireHttps)
 
 app.UseStaticFiles();
 app.UseRouting();
+app.UseRateLimiter();
 app.UseAuthentication();
 app.Use(async (context, next) =>
 {

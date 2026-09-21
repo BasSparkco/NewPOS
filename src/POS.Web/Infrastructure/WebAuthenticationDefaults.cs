@@ -21,6 +21,11 @@ internal static class WebAuthorizationPolicies
     public const string ProcessRefunds = "Permission:ProcessRefunds";
 }
 
+internal static class WebRateLimitPolicies
+{
+    public const string Login = "login";
+}
+
 internal static class WebClaimTypes
 {
     public const string TenantId = "tenant_id";

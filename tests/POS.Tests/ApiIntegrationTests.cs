@@ -13,6 +13,27 @@ namespace POS.Tests;
 public class ApiIntegrationTests
 {
     [Fact]
+    public async Task Login_endpoint_rate_limits_repeated_attempts_from_the_same_client()
+    {
+        using var factory = new ApiTestFactory();
+        using var client = factory.CreateClient();
+
+        // Policy allows 10 requests per minute per client IP (tenant.md's identity section: throttle
+        // login to slow brute-force/enumeration). All requests share the test server's loopback address,
+        // so the 11th request in this single window must be rejected regardless of the credentials sent.
+        HttpResponseMessage? response = null;
+        for (var attempt = 0; attempt < 10; attempt++)
+        {
+            response = await client.PostAsJsonAsync("/api/auth/login", new LoginRequest("admin", $"wrong-password-{attempt}"));
+        }
+
+        Assert.NotEqual(HttpStatusCode.TooManyRequests, response!.StatusCode);
+
+        var eleventh = await client.PostAsJsonAsync("/api/auth/login", new LoginRequest("admin", "wrong-password-11"));
+        Assert.Equal(HttpStatusCode.TooManyRequests, eleventh.StatusCode);
+    }
+
+    [Fact]
     public async Task Login_and_catalog_endpoints_return_seeded_data()
     {
         using var factory = new ApiTestFactory();

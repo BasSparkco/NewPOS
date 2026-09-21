@@ -2,6 +2,7 @@ using System.Security.Claims;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using POS.Application.Abstractions;
 using POS.Core.Enums;
 using POS.Web.Infrastructure;
@@ -34,6 +35,7 @@ public sealed class AccountController : Controller
 
     [HttpPost]
     [ValidateAntiForgeryToken]
+    [EnableRateLimiting(WebRateLimitPolicies.Login)]
     public async Task<IActionResult> Login(LoginViewModel model, CancellationToken cancellationToken)
     {
         if (!ModelState.IsValid)

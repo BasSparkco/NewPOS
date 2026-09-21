@@ -39,6 +39,11 @@ internal sealed class InvoiceSyncService : IInvoiceSyncService
     private readonly IDbContextFactory<PosDbContext> _dbFactory;
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly ICurrentSession _session;
+    // One sync pass (InvoiceSyncBackgroundService.ExecuteAsync) calls up to 16 push/pull methods against a
+    // fresh scoped InvoiceSyncService instance; caching the authorized client for this instance's lifetime
+    // turns that into a single /api/auth/login call per pass instead of one per method — both far kinder to
+    // the server and compatible with login rate limiting (tenant.md's identity section).
+    private HttpClient? _cachedAuthorizedClient;
 
     public InvoiceSyncService(
         IDbContextFactory<PosDbContext> dbFactory,
@@ -1416,6 +1421,9 @@ internal sealed class InvoiceSyncService : IInvoiceSyncService
 
     private async Task<HttpClient?> TryCreateAuthorizedClientAsync(string apiBaseUrl, CancellationToken cancellationToken)
     {
+        if (_cachedAuthorizedClient is not null)
+            return _cachedAuthorizedClient;
+
         // The API now verifies a real password on every login (Stage 4T/T2). The sync worker re-authenticates
         // as the currently signed-in local user, so it needs that same verified password — captured in memory
         // only, at login time, via ICurrentSession.SetPassword — to get its own HTTP session for these calls.
@@ -1434,6 +1442,7 @@ internal sealed class InvoiceSyncService : IInvoiceSyncService
             return null;
 
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", login.AccessToken);
+        _cachedAuthorizedClient = client;
         return client;
     }
 

@@ -3,8 +3,10 @@ using System.Globalization;
 using System.Net;
 using System.Security.Claims;
 using System.Text;
+using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.HttpOverrides;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using POS.Api;
@@ -27,6 +29,7 @@ const string ProcessRefundsPolicy = "Permission:ProcessRefunds";
 const string ManageUsersPolicy = "Permission:ManageUsers";
 const string ManageSettingsPolicy = "Permission:ManageSettings";
 const string ManageProductsPolicy = "Permission:ManageProducts";
+const string LoginRateLimitPolicy = "login";
 const string DevelopmentSigningKey = "local-development-signing-key-1234567890";
 
 var applyMigrationsOnStartup = ReadBooleanSetting(builder.Configuration, "Database:ApplyMigrationsOnStartup", builder.Environment.IsDevelopment());
@@ -105,6 +108,21 @@ builder.Services.AddAuthorization(options =>
     options.AddPolicy(ManageProductsPolicy, policy =>
         policy.RequireAssertion(ctx => GetPermissions(ctx.User).HasFlag(Permission.ManageProducts)));
 });
+builder.Services.AddRateLimiter(options =>
+{
+    // Per tenant.md's identity section: throttle login attempts to slow down brute-force/enumeration.
+    // Partitioned by client IP, not by username, so a failed guess never reveals whether the account exists.
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    options.AddPolicy(LoginRateLimitPolicy, httpContext =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 10,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 0
+            }));
+});
 builder.Services
     .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
@@ -150,6 +168,7 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
+app.UseRateLimiter();
 app.UseAuthentication();
 app.Use(async (context, next) =>
 {
@@ -290,7 +309,7 @@ app.MapPost("/api/auth/login", async (
         session.RoleName,
         session.BaseCurrencyCode,
         session.CurrencySymbol));
-});
+}).RequireRateLimiting(LoginRateLimitPolicy);
 
 app.MapGet("/api/auth/me", (ClaimsPrincipal user) =>
 {
