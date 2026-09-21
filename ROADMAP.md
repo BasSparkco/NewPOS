@@ -102,8 +102,8 @@ multi-branch reporting. Preserve the existing desktop, sync and dashboard work.
 
 - [x] T0 — Audit actual code and approve ownership/migration decisions.
 - [~] T1 — Tenant schema, store access and verified data migration. (SQLite rehearsed; PostgreSQL rehearsal and read-side sync scoping still open — see STATUS.md.)
-- [~] T2 — Verified identity, enrollment and server-side authorization. (Password auth, device enrollment, tenant-scoped login, granular Web/API permissions, change/reset password, and minimal tenant provisioning all landed; rate limiting, offline auth expiry, broader API permission coverage, and a Web audit viewer remain — see STATUS.md "Remaining T2 scope".)
-- [ ] T3 — Tenant/store-bound desktop profiles and offline access.
+- [~] T2 — Verified identity, enrollment and server-side authorization. (Password auth, device enrollment, tenant-scoped login, granular Web/API permissions, change/reset password, minimal tenant provisioning, rate limiting, offline auth expiry, broader API permission coverage, and a Web audit viewer all landed; an audit trail/UI for tenant provisioning and a per-request sync device credential remain — see STATUS.md "Remaining T2 scope".)
+- [~] T3 — Tenant/store-bound desktop profiles and offline access. (A WPF "join an existing business" bootstrap landed, letting a fresh install bind to an existing tenant/store instead of always seeding an independent one; re-pointing an already-provisioned device to a different tenant remains deferred — see STATUS.md.)
 - [ ] T4 — Scoped, authorized and replay-safe synchronization.
 - [ ] T5 — Tenant-aware administration and store access.
 - [ ] T6 — Isolation, migration and resilience release tests.

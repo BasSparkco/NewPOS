@@ -1,11 +1,14 @@
 using System.IO;
+using System.Linq;
 using System.Windows;
 using System.Windows.Media;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using POS.Application.Abstractions;
 using POS.Infrastructure;
+using POS.Infrastructure.Data;
 using POS.Wpf.Services;
 using POS.Wpf.ViewModels;
 using POS.Wpf.Windows;
@@ -65,6 +68,9 @@ public partial class App : System.Windows.Application
             .ConfigureAppConfiguration((_, config) =>
             {
                 config.AddJsonFile("appsettings.json", optional: false, reloadOnChange: true);
+                // Written by SetupViewModel after joining an existing business (Stage 4T/T3), so
+                // Sync:Enabled/Sync:ApiBaseUrl survive future launches without editing appsettings.json.
+                config.AddJsonFile("appsettings.local.json", optional: true, reloadOnChange: true);
             })
             .UseSerilog((context, _, _) =>
             {
@@ -98,10 +104,35 @@ public partial class App : System.Windows.Application
                 services.AddTransient<DeviceManagementWindow>();
                 services.AddTransient<ChangePasswordViewModel>();
                 services.AddTransient<ChangePasswordWindow>();
+                services.AddTransient<SetupViewModel>();
+                services.AddTransient<SetupWindow>();
             })
             .Build();
 
-        _host.Services.ApplyPosDatabaseMigrations();
+        // Migrations always run; auto-seeding a brand-new independent business no longer happens
+        // unconditionally — SetupWindow below decides that only on a genuinely fresh install.
+        _host.Services.ApplyPosDatabaseMigrations(seedDemoData: false);
+
+        if (IsFreshInstall())
+        {
+            var setup = _host.Services.GetRequiredService<SetupWindow>();
+            setup.Topmost = true;
+            if (setup.ShowDialog() != true)
+            {
+                Shutdown();
+                return;
+            }
+
+            if (setup.DataContext is SetupViewModel { JoinedExistingBusiness: true })
+            {
+                // JoinExistingBusinessAsync already signed this session in for real (AuthService.LoginAsync
+                // against the just-pulled local user) — skip LoginWindow and go straight into the app.
+                ShowMainWindow();
+                return;
+            }
+            // "Start fresh" was chosen and DatabaseSeeder.SeedIfNeeded already ran — fall through to the
+            // normal LoginWindow flow below, unchanged from every existing install's experience.
+        }
 
         var login = _host.Services.GetRequiredService<LoginWindow>();
         login.Topmost = true;
@@ -111,7 +142,25 @@ public partial class App : System.Windows.Application
             return;
         }
 
-        var main = _host.Services.GetRequiredService<MainWindow>();
+        ShowMainWindow();
+    }
+
+    /// <summary>
+    /// A fresh install's own migrations always insert exactly one placeholder "bootstrap tenant" row
+    /// (to backfill any pre-existing single-tenant data) — Users, not Tenants, is the real "has this
+    /// device ever been configured" signal (verified against the actual migration; see BusinessJoinService).
+    /// </summary>
+    private bool IsFreshInstall()
+    {
+        using var scope = _host!.Services.CreateScope();
+        var dbFactory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<PosDbContext>>();
+        using var db = dbFactory.CreateDbContext();
+        return !db.Users.Any();
+    }
+
+    private void ShowMainWindow()
+    {
+        var main = _host!.Services.GetRequiredService<MainWindow>();
         MainWindow = main;
         ShutdownMode = ShutdownMode.OnMainWindowClose;
         main.Show();

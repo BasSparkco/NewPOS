@@ -257,4 +257,16 @@ Share this with whoever is setting up that register — it will not be shown aga
   <data name="Msg_ProductNotFound" xml:space="preserve"><value>Product not found.</value></data>
   <data name="Msg_DeleteConfirmFormat" xml:space="preserve"><value>Delete '{0}'?</value></data>
   <data name="Msg_ConfirmTitle" xml:space="preserve"><value>Confirm</value></data>
+  <data name="Setup_Title" xml:space="preserve"><value>Set up this register</value></data>
+  <data name="Setup_Intro" xml:space="preserve"><value>This is a fresh install. Is this register for a brand-new business, or should it join a business that's already running elsewhere?</value></data>
+  <data name="Setup_StartFreshButton" xml:space="preserve"><value>Start a new business</value></data>
+  <data name="Setup_JoinButton" xml:space="preserve"><value>Join an existing business</value></data>
+  <data name="Setup_Join_ApiUrlLabel" xml:space="preserve"><value>Server address</value></data>
+  <data name="Setup_Join_SlugLabel" xml:space="preserve"><value>Business slug</value></data>
+  <data name="Setup_Join_UsernameLabel" xml:space="preserve"><value>Username</value></data>
+  <data name="Setup_Join_PasswordLabel" xml:space="preserve"><value>Password</value></data>
+  <data name="Setup_Join_SubmitButton" xml:space="preserve"><value>Join</value></data>
+  <data name="Setup_BackButton" xml:space="preserve"><value>Back</value></data>
+  <data name="Setup_Join_MissingFields" xml:space="preserve"><value>Server address, business slug, username and password are all required.</value></data>
+  <data name="Setup_Join_InProgress" xml:space="preserve"><value>Signing in and downloading this business's data — this can take a moment...</value></data>
 </root>

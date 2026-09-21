@@ -257,4 +257,16 @@
   <data name="Msg_ProductNotFound" xml:space="preserve"><value>המוצר לא נמצא.</value></data>
   <data name="Msg_DeleteConfirmFormat" xml:space="preserve"><value>למחוק את '{0}'?</value></data>
   <data name="Msg_ConfirmTitle" xml:space="preserve"><value>אישור</value></data>
+  <data name="Setup_Title" xml:space="preserve"><value>הגדרת קופה זו</value></data>
+  <data name="Setup_Intro" xml:space="preserve"><value>זו התקנה חדשה. האם קופה זו מיועדת לעסק חדש, או שעליה להצטרף לעסק שפועל כבר במקום אחר?</value></data>
+  <data name="Setup_StartFreshButton" xml:space="preserve"><value>התחלת עסק חדש</value></data>
+  <data name="Setup_JoinButton" xml:space="preserve"><value>הצטרפות לעסק קיים</value></data>
+  <data name="Setup_Join_ApiUrlLabel" xml:space="preserve"><value>כתובת השרת</value></data>
+  <data name="Setup_Join_SlugLabel" xml:space="preserve"><value>מזהה העסק</value></data>
+  <data name="Setup_Join_UsernameLabel" xml:space="preserve"><value>שם משתמש</value></data>
+  <data name="Setup_Join_PasswordLabel" xml:space="preserve"><value>סיסמה</value></data>
+  <data name="Setup_Join_SubmitButton" xml:space="preserve"><value>הצטרפות</value></data>
+  <data name="Setup_BackButton" xml:space="preserve"><value>חזרה</value></data>
+  <data name="Setup_Join_MissingFields" xml:space="preserve"><value>כתובת השרת, מזהה העסק, שם המשתמש והסיסמה — כולם שדות חובה.</value></data>
+  <data name="Setup_Join_InProgress" xml:space="preserve"><value>מתחבר ומוריד את נתוני העסק — זה עלול לקחת רגע...</value></data>
 </root>

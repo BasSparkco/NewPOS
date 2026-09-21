@@ -257,4 +257,16 @@
   <data name="Msg_ProductNotFound" xml:space="preserve"><value>المنتج غير موجود.</value></data>
   <data name="Msg_DeleteConfirmFormat" xml:space="preserve"><value>حذف '{0}'؟</value></data>
   <data name="Msg_ConfirmTitle" xml:space="preserve"><value>تأكيد</value></data>
+  <data name="Setup_Title" xml:space="preserve"><value>إعداد هذا الجهاز</value></data>
+  <data name="Setup_Intro" xml:space="preserve"><value>هذا تثبيت جديد. هل هذا الجهاز لمشروع تجاري جديد، أم يجب أن ينضم إلى مشروع يعمل بالفعل في مكان آخر؟</value></data>
+  <data name="Setup_StartFreshButton" xml:space="preserve"><value>بدء مشروع تجاري جديد</value></data>
+  <data name="Setup_JoinButton" xml:space="preserve"><value>الانضمام إلى مشروع تجاري قائم</value></data>
+  <data name="Setup_Join_ApiUrlLabel" xml:space="preserve"><value>عنوان الخادم</value></data>
+  <data name="Setup_Join_SlugLabel" xml:space="preserve"><value>معرّف المشروع التجاري</value></data>
+  <data name="Setup_Join_UsernameLabel" xml:space="preserve"><value>اسم المستخدم</value></data>
+  <data name="Setup_Join_PasswordLabel" xml:space="preserve"><value>كلمة المرور</value></data>
+  <data name="Setup_Join_SubmitButton" xml:space="preserve"><value>انضمام</value></data>
+  <data name="Setup_BackButton" xml:space="preserve"><value>رجوع</value></data>
+  <data name="Setup_Join_MissingFields" xml:space="preserve"><value>عنوان الخادم ومعرّف المشروع واسم المستخدم وكلمة المرور كلها مطلوبة.</value></data>
+  <data name="Setup_Join_InProgress" xml:space="preserve"><value>جارٍ تسجيل الدخول وتحميل بيانات هذا المشروع التجاري — قد يستغرق هذا لحظة...</value></data>
 </root>

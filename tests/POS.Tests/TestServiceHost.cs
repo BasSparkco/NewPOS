@@ -47,7 +47,8 @@ internal sealed class TestServiceHost : IAsyncDisposable
 
     public static async Task<TestServiceHost> CreateAsync(
         IDictionary<string, string?>? extraConfiguration = null,
-        Action<IServiceCollection>? configureServices = null)
+        Action<IServiceCollection>? configureServices = null,
+        bool seedBaseline = true)
     {
         var dbPath = Path.Combine(Path.GetTempPath(), $"pos-tests-{Guid.NewGuid():N}.db");
         var session = new TestCurrentSession();
@@ -83,6 +84,19 @@ internal sealed class TestServiceHost : IAsyncDisposable
         var categoryId = Guid.NewGuid();
         var baseCurrencyId = Guid.NewGuid();
         var altCurrencyId = Guid.NewGuid();
+
+        if (!seedBaseline)
+        {
+            // A genuinely fresh WPF install: real migrations (not EnsureCreated) already seed global
+            // reference Currency rows — with the same fixed IDs a real remote server's migrations
+            // produce — before any Tenant/Store/User exists. Mirror that exactly: real migrations,
+            // no Tenant/Store/Role/User/Category rows, session left unauthenticated.
+            await using var freshDb = await dbFactory.CreateDbContextAsync();
+            await freshDb.Database.EnsureDeletedAsync();
+            await freshDb.Database.MigrateAsync();
+
+            return new TestServiceHost(provider, dbPath, session, Guid.Empty, Guid.Empty, Guid.Empty, Guid.Empty, Guid.Empty, Guid.Empty);
+        }
 
         await using (var db = await dbFactory.CreateDbContextAsync())
         {

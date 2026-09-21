@@ -27,3 +27,17 @@ To require an admin to explicitly provision and enroll every register (multi-Box
 
 With that on, a machine must be provisioned (Sidebar → Devices → "Provision a new Box", requires the ManageSettings permission) and then enrolled with the one-time code shown (Sidebar → Devices → "Enroll this machine") before it can start a sale.
 
+## Joining an existing business (Stage 4T/T3)
+
+A genuinely fresh WPF install (no local `pos.db`, or one with no accounts in it yet) shows a one-time
+"Set up this register" screen before login, offering two paths:
+
+- **Start a new business** — today's existing behavior: seeds an independent demo business locally
+  (see the demo credentials above).
+- **Join an existing business** — enter the API server address, business slug, and an existing user's
+  username/password for that business. This signs in against the remote server, pulls its
+  catalog/settings/users/devices down into the local database, and signs this session in for real —
+  no separate login step afterward. `Sync:Enabled`/`Sync:ApiBaseUrl` are set for this run immediately
+  and also written to `appsettings.local.json` next to `appsettings.json` so future launches keep
+  syncing with the same server.
+
