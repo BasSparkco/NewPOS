@@ -1317,6 +1317,129 @@ public class WebIntegrationTests
             filteredHtml);
     }
 
+    [Fact]
+    public async Task Audit_page_lists_matching_entries_and_respects_filters()
+    {
+        using var factory = new WebTestFactory();
+        using var client = factory.CreateClient(new WebApplicationFactoryClientOptions
+        {
+            AllowAutoRedirect = false
+        });
+
+        await LoginAsAdminAsync(client);
+
+        var matchingId = Guid.NewGuid();
+        var otherId = Guid.NewGuid();
+        var now = DateTime.UtcNow;
+
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var dbFactory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<PosDbContext>>();
+            await using var db = await dbFactory.CreateDbContextAsync();
+            var storeId = await db.Stores.AsNoTracking().Select(s => s.Id).SingleAsync();
+            var tenantId = await db.Stores.AsNoTracking().Select(s => s.TenantId).SingleAsync();
+            var adminUserId = await db.Users.AsNoTracking().Where(u => u.Username == "admin").Select(u => u.Id).SingleAsync();
+
+            db.AuditLogs.Add(new AuditLog
+            {
+                Id = matchingId,
+                TenantId = tenantId,
+                StoreId = storeId,
+                UserId = adminUserId,
+                Action = "ProductUpdated",
+                EntityName = "Product",
+                EntityId = Guid.NewGuid(),
+                Details = "Price changed",
+                CreatedAt = now,
+                UpdatedAt = now,
+                IsDeleted = false
+            });
+            db.AuditLogs.Add(new AuditLog
+            {
+                Id = otherId,
+                TenantId = tenantId,
+                StoreId = storeId,
+                UserId = adminUserId,
+                Action = "SaleCompleted",
+                EntityName = "Invoice",
+                EntityId = Guid.NewGuid(),
+                Details = "Cash sale",
+                CreatedAt = now,
+                UpdatedAt = now,
+                IsDeleted = false
+            });
+            await db.SaveChangesAsync();
+        }
+
+        var unfilteredPage = await client.GetAsync("/Audit");
+        var unfilteredHtml = await ReadHtmlAsync(unfilteredPage);
+        Assert.Equal(HttpStatusCode.OK, unfilteredPage.StatusCode);
+        Assert.Equal(2, Regex.Matches(unfilteredHtml, "table-row--audit").Count);
+        Assert.Contains("ProductUpdated", unfilteredHtml, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("SaleCompleted", unfilteredHtml, StringComparison.OrdinalIgnoreCase);
+
+        var filteredPage = await client.GetAsync("/Audit?actionName=ProductUpdated");
+        var filteredHtml = await ReadHtmlAsync(filteredPage);
+        Assert.Equal(HttpStatusCode.OK, filteredPage.StatusCode);
+        Assert.Single(Regex.Matches(filteredHtml, "table-row--audit"));
+        Assert.Contains("ProductUpdated", filteredHtml, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("SaleCompleted", filteredHtml, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task Audit_page_is_denied_without_ViewAudit_permission()
+    {
+        using var factory = new WebTestFactory();
+        using var client = factory.CreateClient(new WebApplicationFactoryClientOptions
+        {
+            AllowAutoRedirect = false
+        });
+
+        // A custom role with ManageProducts but not ViewAudit — reaches the dashboard (DashboardAccess
+        // only needs any permission) but must be refused the audit trail.
+        const string password = "ProductsOnlyAuditor1!";
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var dbFactory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<PosDbContext>>();
+            await using var db = await dbFactory.CreateDbContextAsync();
+            var storeId = await db.Stores.AsNoTracking().Select(s => s.Id).SingleAsync();
+            var tenantId = await db.Stores.AsNoTracking().Select(s => s.TenantId).SingleAsync();
+
+            var now = DateTime.UtcNow;
+            var roleId = Guid.NewGuid();
+            db.Roles.Add(new Role
+            {
+                Id = roleId,
+                TenantId = tenantId,
+                Name = "Products Only Auditor",
+                PermissionsMask = (int)Permission.ManageProducts,
+                CreatedAt = now,
+                UpdatedAt = now
+            });
+            db.Users.Add(new User
+            {
+                Id = Guid.NewGuid(),
+                TenantId = tenantId,
+                Username = "no.audit.manager",
+                NormalizedUsername = "NO.AUDIT.MANAGER",
+                PasswordHash = BCrypt.Net.BCrypt.HashPassword(password),
+                RoleId = roleId,
+                StoreId = storeId,
+                IsActive = true,
+                CreatedAt = now,
+                UpdatedAt = now,
+                IsDeleted = false
+            });
+            await db.SaveChangesAsync();
+        }
+
+        await LoginAsync(client, "no.audit.manager", password);
+
+        var auditAttempt = await client.GetAsync("/Audit");
+        Assert.Equal(HttpStatusCode.Redirect, auditAttempt.StatusCode);
+        Assert.Equal("/account/access-denied", auditAttempt.Headers.Location?.AbsolutePath);
+    }
+
     private static async Task<HttpResponseMessage> LoginAsAdminAsync(HttpClient client) =>
         await LoginAsync(client, "admin", POS.Infrastructure.Data.DatabaseSeeder.DemoAdminPassword);
 

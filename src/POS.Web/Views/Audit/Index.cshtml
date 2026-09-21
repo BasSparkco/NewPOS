@@ -1,0 +1,85 @@
+@model POS.Web.Models.AuditViewModel
+@{
+    ViewData["Title"] = "Audit log";
+}
+
+<section class="management-hero">
+    <div class="hero-copy">
+        <div>
+            <span class="eyebrow">Store administration</span>
+            <h1 class="hero-title">Review who changed what, and when.</h1>
+            <p class="hero-subtitle">
+                Read-only view of the same audit trail the desktop app records for critical write-side actions
+                (currency policy, product/category changes, stock adjustments, sales, refunds, hold/resume/cancel).
+            </p>
+        </div>
+    </div>
+</section>
+
+<section class="panel-grid">
+    <article class="panel panel--span-12 panel-stack">
+        <div class="panel-header">
+            <div>
+                <span class="eyebrow">Audit trail</span>
+                <h2 class="panel-title">Recent entries</h2>
+            </div>
+            <div class="muted">Most recent 200 entries for this store, newest first.</div>
+        </div>
+
+        <form method="get" class="inline-ledger-filter">
+            <div>
+                <label for="audit-from">From date</label>
+                <input id="audit-from" name="fromDate" type="date" class="form-control" value="@(Model.FromDate?.ToString("yyyy-MM-dd"))" />
+            </div>
+            <div>
+                <label for="audit-to">To date</label>
+                <input id="audit-to" name="toDate" type="date" class="form-control" value="@(Model.ToDate?.ToString("yyyy-MM-dd"))" />
+            </div>
+            <div>
+                <label for="audit-action">Action (exact match)</label>
+                <input id="audit-action" name="actionName" type="text" class="form-control" placeholder="e.g. ProductUpdated" value="@Model.Action" />
+            </div>
+            <div>
+                <label for="audit-entity">Entity (exact match)</label>
+                <input id="audit-entity" name="entityName" type="text" class="form-control" placeholder="e.g. Product" value="@Model.EntityName" />
+            </div>
+            <div class="inline-form-actions">
+                <button type="submit" class="shell-button shell-button--ghost">Filter</button>
+            </div>
+            @if (Model.FromDate.HasValue || Model.ToDate.HasValue || !string.IsNullOrWhiteSpace(Model.Action) || !string.IsNullOrWhiteSpace(Model.EntityName))
+            {
+                <div class="inline-form-actions">
+                    <a asp-action="Index" class="shell-button shell-button--ghost">Clear</a>
+                </div>
+            }
+        </form>
+
+        @if (Model.Entries.Count == 0)
+        {
+            <div class="empty-state">No audit entries match the current filters.</div>
+        }
+        else
+        {
+            <div class="table-list">
+                @foreach (var entry in Model.Entries)
+                {
+                    <div class="table-row table-row--audit">
+                        <div>
+                            <div class="table-main">@entry.CreatedAtLocal.ToString("g")</div>
+                            <div class="table-sub">@(string.IsNullOrWhiteSpace(entry.Username) ? "Unknown user" : entry.Username)</div>
+                        </div>
+                        <div class="table-main">@entry.Action</div>
+                        <div>
+                            <div class="table-main">@entry.EntityName</div>
+                            @if (entry.EntityId.HasValue)
+                            {
+                                <div class="table-sub">@entry.EntityId.Value.ToString("N")[..12].ToUpperInvariant()</div>
+                            }
+                        </div>
+                        <div class="table-sub">@(string.IsNullOrWhiteSpace(entry.Details) ? "No details" : entry.Details)</div>
+                    </div>
+                }
+            </div>
+        }
+    </article>
+</section>

@@ -588,6 +588,10 @@ a {
   grid-template-columns: minmax(0, 1fr) minmax(140px, 0.7fr) minmax(120px, 0.6fr) minmax(0, 1fr);
 }
 
+.table-row--audit {
+  grid-template-columns: minmax(150px, 0.8fr) minmax(0, 0.9fr) minmax(0, 0.9fr) minmax(0, 1.4fr);
+}
+
 .status-pill {
   display: inline-flex;
   align-items: center;
@@ -704,7 +708,8 @@ a {
   .table-row--inventory,
   .table-row--users,
   .table-row--invoices,
-  .table-row--stock {
+  .table-row--stock,
+  .table-row--audit {
     grid-template-columns: 1fr;
   }
 
