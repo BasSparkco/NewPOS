@@ -11,6 +11,13 @@
   <data name="Login_SignIn" xml:space="preserve"><value>دخول</value></data>
   <data name="Login_FailedTitle" xml:space="preserve"><value>نقطة البيع</value></data>
   <data name="Login_Failed" xml:space="preserve"><value>اسم المستخدم أو كلمة المرور غير صحيحة.</value></data>
+  <data name="ChangePassword_Title" xml:space="preserve"><value>تغيير كلمة المرور</value></data>
+  <data name="ChangePassword_CurrentPassword" xml:space="preserve"><value>كلمة المرور الحالية</value></data>
+  <data name="ChangePassword_NewPassword" xml:space="preserve"><value>كلمة المرور الجديدة</value></data>
+  <data name="ChangePassword_ConfirmPassword" xml:space="preserve"><value>تأكيد كلمة المرور الجديدة</value></data>
+  <data name="ChangePassword_Save" xml:space="preserve"><value>حفظ</value></data>
+  <data name="ChangePassword_Cancel" xml:space="preserve"><value>إلغاء</value></data>
+  <data name="ChangePassword_Mismatch" xml:space="preserve"><value>كلمة المرور الجديدة وتأكيدها غير متطابقين.</value></data>
   <data name="CurrencySettings_Title" xml:space="preserve"><value>إعدادات المتجر</value></data>
   <data name="CurrencySettings_Header" xml:space="preserve"><value>إعدادات المتجر</value></data>
   <data name="CurrencySettings_Subtitle" xml:space="preserve"><value>إدارة قواعد التشغيل ونص تذييل الإيصال وسياسة العملة المستخدمة في نقطة البيع.</value></data>
@@ -124,6 +131,9 @@
 
 شارك هذه الكلمة بأمان مع المستخدم — لن تظهر مرة أخرى.</value></data>
   <data name="Users_UpdatedFormat" xml:space="preserve"><value>تم تحديث المستخدم '{0}'.</value></data>
+  <data name="Users_ResetPassword" xml:space="preserve"><value>إعادة تعيين كلمة المرور</value></data>
+  <data name="Users_SelectUserForPasswordReset" xml:space="preserve"><value>يرجى اختيار مستخدم لإعادة التعيين.</value></data>
+  <data name="Users_PasswordResetFormat" xml:space="preserve"><value>تمت إعادة تعيين كلمة المرور للمستخدم '{0}'.</value></data>
   <data name="Users_RoleNameRequired" xml:space="preserve"><value>اسم الدور مطلوب.</value></data>
   <data name="Users_RoleCreatedFormat" xml:space="preserve"><value>تم إنشاء الدور '{0}'.</value></data>
   <data name="Users_PermissionsHeader" xml:space="preserve"><value>صلاحيات الدور</value></data>

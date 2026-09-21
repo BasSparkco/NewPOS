@@ -26,6 +26,7 @@ public sealed class ManagementController : Controller
     private readonly ISettingsService _settingsService;
     private readonly ICurrencyService _currencyService;
     private readonly IAuditLogService _auditLogService;
+    private readonly IUserManagementService _userManagementService;
     private readonly ICurrentSession _session;
 
     public ManagementController(
@@ -34,6 +35,7 @@ public sealed class ManagementController : Controller
         ISettingsService settingsService,
         ICurrencyService currencyService,
         IAuditLogService auditLogService,
+        IUserManagementService userManagementService,
         ICurrentSession session)
     {
         _dbFactory = dbFactory;
@@ -41,6 +43,7 @@ public sealed class ManagementController : Controller
         _settingsService = settingsService;
         _currencyService = currencyService;
         _auditLogService = auditLogService;
+        _userManagementService = userManagementService;
         _session = session;
     }
 
@@ -399,6 +402,28 @@ public sealed class ManagementController : Controller
             cancellationToken);
 
         TempData["ManagementSuccess"] = $"User '{user.Username}' updated.";
+        return RedirectToAction(nameof(Index));
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    [Authorize(Policy = WebAuthorizationPolicies.ManageUsers)]
+    public async Task<IActionResult> ResetUserPassword(Guid userId, CancellationToken cancellationToken)
+    {
+        if (userId == Guid.Empty)
+        {
+            TempData["ManagementError"] = "User id is required.";
+            return RedirectToAction(nameof(Index));
+        }
+
+        var (success, error, generatedPassword) = await _userManagementService.ResetUserPasswordAsync(userId, cancellationToken);
+        if (!success || generatedPassword is null)
+        {
+            TempData["ManagementError"] = error ?? "Could not reset password.";
+            return RedirectToAction(nameof(Index));
+        }
+
+        TempData["ManagementSuccess"] = $"Temporary password: {generatedPassword} — share this securely; it will not be shown again.";
         return RedirectToAction(nameof(Index));
     }
 

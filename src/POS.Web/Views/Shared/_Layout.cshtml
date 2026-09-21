@@ -22,6 +22,7 @@
                 <div class="shell-actions">
                     <a class="shell-link" asp-controller="Dashboard" asp-action="Index">Dashboard</a>
                     <a class="shell-link" asp-controller="Management" asp-action="Index">Management</a>
+                    <a class="shell-link" asp-controller="Account" asp-action="ChangePassword">Change password</a>
                     <div class="user-chip">
                         <span class="user-chip__name">@User.Identity.Name</span>
                         <span class="user-chip__role">@User.FindFirstValue(ClaimTypes.Role)</span>

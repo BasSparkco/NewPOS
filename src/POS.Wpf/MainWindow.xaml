@@ -394,6 +394,14 @@
                             <TextBlock FontSize="13">🖼</TextBlock>
                         </ToggleButton>
 
+                        <!-- Change my password -->
+                        <Button Style="{StaticResource TopBarIconButton}"
+                                Margin="0,0,4,0"
+                                Command="{Binding ChangePasswordCommand}"
+                                ToolTip="{Binding ChangePasswordToolTip}">
+                            <TextBlock FontSize="13">🔒</TextBlock>
+                        </Button>
+
                         <!-- Dark mode toggle -->
                         <ToggleButton Style="{StaticResource TopBarToggleButton}"
                                       Margin="0,0,8,0"

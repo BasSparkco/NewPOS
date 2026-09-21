@@ -85,6 +85,10 @@
                             Margin="0,8,0,0"
                             Style="{StaticResource GhostButton}"
                             Command="{Binding NewUserCommand}"/>
+                    <Button x:Name="UsersResetPasswordBtn"
+                            Margin="0,8,0,0"
+                            Style="{StaticResource GhostButton}"
+                            Command="{Binding ResetPasswordCommand}"/>
 
                     <Border BorderBrush="{StaticResource PanelBorderBrush}" BorderThickness="0,1,0,0" Margin="0,20,0,16"/>
 

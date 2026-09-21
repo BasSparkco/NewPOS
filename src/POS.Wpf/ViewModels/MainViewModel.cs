@@ -201,6 +201,7 @@ public partial class MainViewModel : ObservableObject
     public string ScanToolTip => T("Price Check / Scan (F2)", "فحص السعر / مسح (F2)", "בדיקת מחיר / סריקה (F2)");
     public string ToggleImagesToolTip => T("Toggle Product Images", "إظهار/إخفاء صور المنتجات", "הצג/הסתר תמונות מוצרים");
     public string ToggleDarkModeToolTip => T("Toggle Dark Mode", "تبديل الوضع الداكن", "החלף מצב כהה");
+    public string ChangePasswordToolTip => T("Change my password", "تغيير كلمة المرور الخاصة بي", "שנה את הסיסמה שלי");
     public string AppTitle => T("POS", "نقطة البيع", "קופה");
 
     /// <summary>Store base currency for display (symbol when available, else ISO code).</summary>
@@ -551,6 +552,16 @@ public partial class MainViewModel : ObservableObject
         window.Owner = System.Windows.Application.Current.MainWindow;
         window.ShowDialog();
         SelectedPage = "Cashier";
+    }
+
+    /// <summary>Top bar: opens the self-service change-password dialog. No permission required — any signed-in user may change their own password.</summary>
+    [RelayCommand]
+    private void ChangePassword()
+    {
+        var window = _services.GetRequiredService<ChangePasswordWindow>();
+        window.Owner = System.Windows.Application.Current.MainWindow;
+        if (window.ShowDialog() == true)
+            StatusText = T("Password changed.", "تم تغيير كلمة المرور.", "הסיסמה שונתה.");
     }
 
     /// <summary>Sidebar: Devices → opens the Box provisioning/enrollment/revocation window (requires ManageSettings).</summary>
@@ -1217,6 +1228,7 @@ public partial class MainViewModel : ObservableObject
         OnPropertyChanged(nameof(ScanToolTip));
         OnPropertyChanged(nameof(ToggleImagesToolTip));
         OnPropertyChanged(nameof(ToggleDarkModeToolTip));
+        OnPropertyChanged(nameof(ChangePasswordToolTip));
         OnPropertyChanged(nameof(AppTitle));
         OnPropertyChanged(nameof(InvoiceLabel));
         OnPropertyChanged(nameof(InvoiceStatusLabel));

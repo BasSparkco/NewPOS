@@ -95,7 +95,7 @@ internal sealed class UserManagementService : IUserManagementService
             TenantId = tenantId,
             Username = username,
             NormalizedUsername = normalized.ToUpperInvariant(),
-            PasswordHash = BCrypt.Net.BCrypt.HashPassword(generatedPassword),
+            PasswordHash = PasswordHasher.Hash(generatedPassword),
             RoleId = role.Id,
             StoreId = storeId,
             IsActive = isActive,
@@ -168,6 +168,50 @@ internal sealed class UserManagementService : IUserManagementService
             cancellationToken);
 
         return (true, null);
+    }
+
+    public async Task<(bool Success, string? Error)> ChangeOwnPasswordAsync(string currentPassword, string newPassword, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(currentPassword) || string.IsNullOrWhiteSpace(newPassword))
+            return (false, "Current and new password are required.");
+
+        if (newPassword.Length < 8)
+            return (false, "New password must be at least 8 characters.");
+
+        await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken);
+        var user = await db.Users.FirstOrDefaultAsync(u => u.Id == _session.UserId && !u.IsDeleted, cancellationToken);
+        if (user is null)
+            return (false, "User not found.");
+
+        if (!PasswordHasher.Verify(currentPassword, user.PasswordHash))
+            return (false, "Current password is incorrect.");
+
+        user.PasswordHash = PasswordHasher.Hash(newPassword);
+        user.UpdatedAt = DateTime.UtcNow;
+        await db.SaveChangesAsync(cancellationToken);
+
+        await TryWriteAuditAsync("UserPasswordChanged", nameof(User), user.Id, $"Username={user.Username}", cancellationToken);
+
+        return (true, null);
+    }
+
+    public async Task<(bool Success, string? Error, string? GeneratedPassword)> ResetUserPasswordAsync(Guid userId, CancellationToken cancellationToken = default)
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken);
+        var storeId = _session.StoreId;
+
+        var user = await db.Users.FirstOrDefaultAsync(u => u.Id == userId && u.StoreId == storeId && !u.IsDeleted, cancellationToken);
+        if (user is null)
+            return (false, "User not found.", null);
+
+        var generatedPassword = RandomPasswordGenerator.Generate();
+        user.PasswordHash = PasswordHasher.Hash(generatedPassword);
+        user.UpdatedAt = DateTime.UtcNow;
+        await db.SaveChangesAsync(cancellationToken);
+
+        await TryWriteAuditAsync("UserPasswordReset", nameof(User), user.Id, $"Username={user.Username}", cancellationToken);
+
+        return (true, null, generatedPassword);
     }
 
     public async Task<(bool Success, string? Error, RoleDto? Role)> CreateRoleAsync(string roleName, int permissionsMask = 0, CancellationToken cancellationToken = default)

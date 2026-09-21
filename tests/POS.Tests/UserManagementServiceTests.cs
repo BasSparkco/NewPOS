@@ -1,6 +1,8 @@
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using POS.Application.Abstractions;
 using POS.Core.Enums;
+using POS.Infrastructure.Data;
 
 namespace POS.Tests;
 
@@ -82,6 +84,92 @@ public class UserManagementServiceTests
 
             var reloaded = (await users.GetRolesAsync()).Single(r => r.Id == role.Id);
             Assert.Equal((int)grant, reloaded.PermissionsMask);
+        });
+    }
+
+    [Fact]
+    public async Task ChangeOwnPassword_succeeds_with_correct_current_password_and_rejects_wrong_one()
+    {
+        await using var host = await TestServiceHost.CreateAsync();
+
+        const string currentPassword = "CurrentPw1!";
+        const string newPassword = "NewPassword2@";
+
+        // Seeded fixture user has a placeholder, non-BCrypt PasswordHash — give it a real one first.
+        await host.ExecuteScopeAsync(async services =>
+        {
+            var dbFactory = services.GetRequiredService<IDbContextFactory<PosDbContext>>();
+            await using var db = await dbFactory.CreateDbContextAsync();
+            var user = await db.Users.SingleAsync(u => u.Id == host.UserId);
+            user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(currentPassword);
+            await db.SaveChangesAsync();
+        });
+
+        await host.ExecuteScopeAsync(async services =>
+        {
+            var users = services.GetRequiredService<IUserManagementService>();
+
+            var (wrongSuccess, wrongError) = await users.ChangeOwnPasswordAsync("not-the-password", newPassword);
+            Assert.False(wrongSuccess);
+            Assert.NotNull(wrongError);
+
+            var (success, error) = await users.ChangeOwnPasswordAsync(currentPassword, newPassword);
+            Assert.True(success, error);
+        });
+
+        await host.ExecuteScopeAsync(async services =>
+        {
+            var dbFactory = services.GetRequiredService<IDbContextFactory<PosDbContext>>();
+            await using var db = await dbFactory.CreateDbContextAsync();
+            var user = await db.Users.SingleAsync(u => u.Id == host.UserId);
+            Assert.True(BCrypt.Net.BCrypt.Verify(newPassword, user.PasswordHash));
+        });
+    }
+
+    [Fact]
+    public async Task ChangeOwnPassword_rejects_new_password_shorter_than_8_characters()
+    {
+        await using var host = await TestServiceHost.CreateAsync();
+
+        await host.ExecuteScopeAsync(async services =>
+        {
+            var dbFactory = services.GetRequiredService<IDbContextFactory<PosDbContext>>();
+            await using var db = await dbFactory.CreateDbContextAsync();
+            var user = await db.Users.SingleAsync(u => u.Id == host.UserId);
+            user.PasswordHash = BCrypt.Net.BCrypt.HashPassword("CurrentPw1!");
+            await db.SaveChangesAsync();
+        });
+
+        await host.ExecuteScopeAsync(async services =>
+        {
+            var users = services.GetRequiredService<IUserManagementService>();
+            var (success, error) = await users.ChangeOwnPasswordAsync("CurrentPw1!", "short");
+            Assert.False(success);
+            Assert.NotNull(error);
+        });
+    }
+
+    [Fact]
+    public async Task ResetUserPassword_generates_a_new_password_that_verifies_against_the_stored_hash()
+    {
+        await using var host = await TestServiceHost.CreateAsync();
+
+        await host.ExecuteScopeAsync(async services =>
+        {
+            var users = services.GetRequiredService<IUserManagementService>();
+            var role = Assert.Single(await users.GetRolesAsync());
+            var (createSuccess, createError, _) = await users.CreateUserAsync("resettarget", role.Id, true);
+            Assert.True(createSuccess, createError);
+
+            var created = (await users.GetUsersAsync()).Single(u => u.Username == "resettarget");
+            var (success, error, generatedPassword) = await users.ResetUserPasswordAsync(created.Id);
+            Assert.True(success, error);
+            Assert.False(string.IsNullOrWhiteSpace(generatedPassword));
+
+            var dbFactory = services.GetRequiredService<IDbContextFactory<PosDbContext>>();
+            await using var db = await dbFactory.CreateDbContextAsync();
+            var reloaded = await db.Users.SingleAsync(u => u.Id == created.Id);
+            Assert.True(BCrypt.Net.BCrypt.Verify(generatedPassword, reloaded.PasswordHash));
         });
     }
 

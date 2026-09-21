@@ -96,6 +96,8 @@ public partial class App : System.Windows.Application
                 services.AddTransient<UserManagementWindow>();
                 services.AddTransient<DeviceManagementViewModel>();
                 services.AddTransient<DeviceManagementWindow>();
+                services.AddTransient<ChangePasswordViewModel>();
+                services.AddTransient<ChangePasswordWindow>();
             })
             .Build();
 

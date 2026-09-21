@@ -34,6 +34,7 @@ public partial class UserManagementWindow : Window
         UsersActiveCheck.Content = Locale.Get("Users_Active");
         UsersSaveBtn.Content = Locale.Get("Users_Save");
         UsersNewBtn.Content = Locale.Get("Users_New");
+        UsersResetPasswordBtn.Content = Locale.Get("Users_ResetPassword");
         UsersNewRoleHeaderTb.Text = Locale.Get("Users_NewRoleHeader");
         UsersNewRoleHintTb.Text = Locale.Get("Users_NewRoleHint");
         UsersAddRoleBtn.Content = Locale.Get("Users_AddRole");

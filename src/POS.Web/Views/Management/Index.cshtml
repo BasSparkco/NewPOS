@@ -423,6 +423,15 @@
                         </label>
                         <input type="hidden" name="IsActive" value="false" />
                         <button type="submit" class="shell-button shell-button--ghost">Save</button>
+                        <button type="submit"
+                                class="shell-button shell-button--ghost"
+                                formaction="/Management/ResetUserPassword"
+                                formmethod="post"
+                                name="userId"
+                                value="@user.UserId"
+                                title="Reset password">
+                            Reset password
+                        </button>
                         <div class="inline-user-form__meta">
                             <span class="metric-copy">Last updated @user.UpdatedAtLocal.ToString("g")</span>
                             @if (user.IsCurrentUser)

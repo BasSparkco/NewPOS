@@ -39,7 +39,7 @@ internal sealed class AuthService : IAuthService
 
         // Same generic message whether the tenant/username doesn't exist, the account is inactive, or
         // the password is wrong — do not let a login failure reveal which of those it was.
-        if (user is null || !user.IsActive || !VerifyPassword(password, user.PasswordHash))
+        if (user is null || !user.IsActive || !PasswordHasher.Verify(password, user.PasswordHash))
             return new AuthResult(false, genericFailure);
 
         var role = await db.Roles
@@ -97,21 +97,5 @@ internal sealed class AuthService : IAuthService
             .ToListAsync(cancellationToken);
 
         return candidates.Count == 1 && candidates[0].Status == TenantStatus.Active ? candidates[0].Id : null;
-    }
-
-    private static bool VerifyPassword(string password, string passwordHash)
-    {
-        if (string.IsNullOrEmpty(passwordHash))
-            return false;
-
-        try
-        {
-            return BCrypt.Net.BCrypt.Verify(password, passwordHash);
-        }
-        catch (BCrypt.Net.SaltParseException)
-        {
-            // Malformed/legacy hash — never treat it as a match.
-            return false;
-        }
     }
 }

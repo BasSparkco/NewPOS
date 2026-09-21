@@ -13,11 +13,13 @@ namespace POS.Web.Controllers;
 public sealed class AccountController : Controller
 {
     private readonly IAuthService _authService;
+    private readonly IUserManagementService _userManagementService;
     private readonly ICurrentSession _session;
 
-    public AccountController(IAuthService authService, ICurrentSession session)
+    public AccountController(IAuthService authService, IUserManagementService userManagementService, ICurrentSession session)
     {
         _authService = authService;
+        _userManagementService = userManagementService;
         _session = session;
     }
 
@@ -87,6 +89,35 @@ public sealed class AccountController : Controller
         _session.Clear();
         await HttpContext.SignOutAsync(WebAuthenticationDefaults.Scheme);
         return RedirectToAction(nameof(Login));
+    }
+
+    [Authorize]
+    [HttpGet]
+    public IActionResult ChangePassword() => View(new ChangePasswordViewModel());
+
+    [Authorize]
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> ChangePassword(ChangePasswordViewModel model, CancellationToken cancellationToken)
+    {
+        if (!ModelState.IsValid)
+            return View(model);
+
+        if (model.NewPassword != model.ConfirmPassword)
+        {
+            ModelState.AddModelError(string.Empty, "New password and confirmation do not match.");
+            return View(model);
+        }
+
+        var (success, error) = await _userManagementService.ChangeOwnPasswordAsync(model.CurrentPassword, model.NewPassword, cancellationToken);
+        if (!success)
+        {
+            ModelState.AddModelError(string.Empty, error ?? "Could not change password.");
+            return View(model);
+        }
+
+        TempData["ManagementSuccess"] = "Password changed.";
+        return RedirectToAction("Index", "Management");
     }
 
     [HttpGet("/account/access-denied")]

@@ -146,6 +146,43 @@ public partial class UserManagementViewModel : ObservableObject
     }
 
     [RelayCommand]
+    private async Task ResetPasswordAsync()
+    {
+        if (SelectedUser is null)
+        {
+            MessageBox.Show(Locale.Get("Users_SelectUserForPasswordReset"), Locale.Get("App_TitleShort"), MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        IsBusy = true;
+        try
+        {
+            await using var scope = _scopeFactory.CreateAsyncScope();
+            var users = scope.ServiceProvider.GetRequiredService<IUserManagementService>();
+            var username = SelectedUser.Username;
+            var (success, error, generatedPassword) = await users.ResetUserPasswordAsync(SelectedUser.Id);
+
+            if (!success || generatedPassword is null)
+            {
+                MessageBox.Show(error, Locale.Get("App_TitleShort"), MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
+            MessageBox.Show(
+                string.Format(Locale.Get("Users_TemporaryPasswordFormat"), username, generatedPassword),
+                Locale.Get("App_TitleShort"),
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
+
+            StatusText = string.Format(Locale.Get("Users_PasswordResetFormat"), username);
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
+    [RelayCommand]
     private async Task AddRoleAsync()
     {
         var name = NewRoleNameText.Trim();

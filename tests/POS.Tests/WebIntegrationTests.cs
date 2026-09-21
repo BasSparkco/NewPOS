@@ -162,6 +162,105 @@ public class WebIntegrationTests
     }
 
     [Fact]
+    public async Task Self_service_change_password_updates_the_signed_in_users_own_credential()
+    {
+        using var factory = new WebTestFactory();
+        using var client = factory.CreateClient(new WebApplicationFactoryClientOptions
+        {
+            AllowAutoRedirect = false
+        });
+
+        await LoginAsAdminAsync(client);
+
+        const string newPassword = "BrandNewAdminPw1!";
+        var changePasswordPage = await client.GetAsync("/Account/ChangePassword");
+        var changePasswordHtml = await ReadHtmlAsync(changePasswordPage);
+
+        var changePasswordResponse = await client.PostAsync(
+            "/Account/ChangePassword",
+            BuildFormContent(changePasswordHtml, new Dictionary<string, string>
+            {
+                ["CurrentPassword"] = POS.Infrastructure.Data.DatabaseSeeder.DemoAdminPassword,
+                ["NewPassword"] = newPassword,
+                ["ConfirmPassword"] = newPassword
+            }));
+
+        Assert.Equal(HttpStatusCode.Redirect, changePasswordResponse.StatusCode);
+
+        await using var scope = factory.Services.CreateAsyncScope();
+        var dbFactory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<PosDbContext>>();
+        await using var db = await dbFactory.CreateDbContextAsync();
+        var admin = await db.Users.AsNoTracking().SingleAsync(u => u.Username == "admin" && !u.IsDeleted);
+
+        Assert.True(BCrypt.Net.BCrypt.Verify(newPassword, admin.PasswordHash));
+        Assert.False(BCrypt.Net.BCrypt.Verify(POS.Infrastructure.Data.DatabaseSeeder.DemoAdminPassword, admin.PasswordHash));
+    }
+
+    [Fact]
+    public async Task Admin_can_reset_another_users_password()
+    {
+        using var factory = new WebTestFactory();
+        using var client = factory.CreateClient(new WebApplicationFactoryClientOptions
+        {
+            AllowAutoRedirect = false
+        });
+
+        await LoginAsAdminAsync(client);
+
+        Guid cashierRoleId;
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var dbFactory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<PosDbContext>>();
+            await using var db = await dbFactory.CreateDbContextAsync();
+            cashierRoleId = await db.Roles.AsNoTracking().Where(r => r.Name == "Cashier").Select(r => r.Id).SingleAsync();
+        }
+
+        var managementPage = await client.GetAsync("/Management");
+        var managementHtml = await ReadHtmlAsync(managementPage);
+
+        await client.PostAsync(
+            "/Management/CreateUser",
+            BuildFormContent(managementHtml, new Dictionary<string, string>
+            {
+                ["Username"] = "reset.target",
+                ["RoleId"] = cashierRoleId.ToString(),
+                ["IsActive"] = "true"
+            }));
+
+        Guid targetUserId;
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var dbFactory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<PosDbContext>>();
+            await using var db = await dbFactory.CreateDbContextAsync();
+            targetUserId = await db.Users.AsNoTracking().Where(u => u.Username == "reset.target").Select(u => u.Id).SingleAsync();
+        }
+
+        var refreshedManagement = await client.GetAsync("/Management");
+        var refreshedHtml = await ReadHtmlAsync(refreshedManagement);
+
+        var resetResponse = await client.PostAsync(
+            "/Management/ResetUserPassword",
+            BuildFormContent(refreshedHtml, new Dictionary<string, string> { ["userId"] = targetUserId.ToString() }));
+
+        Assert.Equal(HttpStatusCode.Redirect, resetResponse.StatusCode);
+
+        var afterResetPage = await client.GetAsync("/Management");
+        var afterResetHtml = await ReadHtmlAsync(afterResetPage);
+
+        var match = Regex.Match(afterResetHtml, "Temporary password: (?<password>\\S+)");
+        Assert.True(match.Success, "Expected the temporary password flash message on the Management page.");
+        // Razor HTML-encodes the flash message, so a generated password containing e.g. '&' or '<' needs decoding back.
+        var generatedPassword = WebUtility.HtmlDecode(match.Groups["password"].Value);
+
+        await using var verifyScope = factory.Services.CreateAsyncScope();
+        var verifyDbFactory = verifyScope.ServiceProvider.GetRequiredService<IDbContextFactory<PosDbContext>>();
+        await using var verifyDb = await verifyDbFactory.CreateDbContextAsync();
+        var target = await verifyDb.Users.AsNoTracking().SingleAsync(u => u.Id == targetUserId);
+
+        Assert.True(BCrypt.Net.BCrypt.Verify(generatedPassword, target.PasswordHash));
+    }
+
+    [Fact]
     public async Task Management_postbacks_create_user_and_persist_operational_settings()
     {
         using var factory = new WebTestFactory();
