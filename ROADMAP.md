@@ -91,14 +91,18 @@ This file is the **single path from project start to the long-term vision**, sta
 
 ## Stage 4T — Multi-tenant SaaS foundation
 
-Detailed plan: [tenant.md](tenant.md).
+Detailed plan: [tenant.md](tenant.md). For live, detailed per-step progress
+(what landed, what's deliberately deferred, and exactly what's left) see
+[STATUS.md](STATUS.md)'s Stage 4T section — that's the authoritative
+continuation point for picking this work back up, this checklist is just
+the summary.
 
 This is a production-readiness prerequisite for Stage 5.1 and for Stage 5.2
 multi-branch reporting. Preserve the existing desktop, sync and dashboard work.
 
-- [ ] T0 — Audit actual code and approve ownership/migration decisions.
-- [ ] T1 — Tenant schema, store access and verified data migration.
-- [ ] T2 — Verified identity, enrollment and server-side authorization.
+- [x] T0 — Audit actual code and approve ownership/migration decisions.
+- [~] T1 — Tenant schema, store access and verified data migration. (SQLite rehearsed; PostgreSQL rehearsal and read-side sync scoping still open — see STATUS.md.)
+- [~] T2 — Verified identity, enrollment and server-side authorization. (Password auth, device enrollment, tenant-scoped login, granular Web/API permissions, change/reset password, and minimal tenant provisioning all landed; rate limiting, offline auth expiry, broader API permission coverage, and a Web audit viewer remain — see STATUS.md "Remaining T2 scope".)
 - [ ] T3 — Tenant/store-bound desktop profiles and offline access.
 - [ ] T4 — Scoped, authorized and replay-safe synchronization.
 - [ ] T5 — Tenant-aware administration and store access.
@@ -197,4 +201,4 @@ Best candidates to promote soon after the current Stage 3/4 work:
 
 ---
 
-*Last updated: Stage 4 is complete. The implementation covers outbound and inbound sync for invoices, audit logs, categories, products, devices, users, store settings, and currency policy, aggregate-level invoice conflict handling, username-aware user reconciliation, device freshness guards, inventory reconciliation for synced paid/refunded invoices, a dedicated global change-sequence model for aggregate pull cursors and outbound aggregate push cursors, and the deployment/runtime hardening needed for PostgreSQL-backed API rollout. The current broader aggregate-coverage pass is complete for the mutable admin data that actually has write paths today; optional Stage 3 item 3 remains deferred.*
+*Last updated 2026-09-21: Stages 0–4 are complete (see their sections above for details; optional Stage 3 item 3 remains deferred). Stage 4T (multi-tenant SaaS foundation) is now the active work: T0 is complete, T1 and T2 are in progress — see [STATUS.md](STATUS.md) Stage 4T for the authoritative, detailed, continuously-updated record of exactly what has landed and what's left; this file's checklist above is kept in sync with it. Stage 5.1 (`POS.Web`) has a working baseline predating the Stage 4T pass and will need adaptation once T2–T5 land, per tenant.md.*
