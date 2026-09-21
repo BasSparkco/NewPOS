@@ -23,7 +23,7 @@ public partial class PaymentWindow : Window
     }
 
     private string FormatMoney(decimal amount) =>
-        amount.ToString("N2", CultureInfo.CurrentCulture)
+        Locale.ToDisplayDigits(amount.ToString("N2", CultureInfo.InvariantCulture))
         + (_currencySuffix is null ? "" : " " + _currencySuffix);
 
     private void ApplyLocalization()

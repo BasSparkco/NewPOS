@@ -46,7 +46,10 @@ namespace POS.Infrastructure.Data.Migrations
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("INTEGER");
 
-                    b.Property<Guid>("StoreId")
+                    b.Property<Guid?>("StoreId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("TenantId")
                         .HasColumnType("TEXT");
 
                     b.Property<DateTime>("UpdatedAt")
@@ -60,6 +63,8 @@ namespace POS.Infrastructure.Data.Migrations
                     b.HasIndex("UserId");
 
                     b.HasIndex("StoreId", "CreatedAt");
+
+                    b.HasIndex("TenantId", "CreatedAt");
 
                     b.HasIndex("StoreId", "Action", "EntityName", "CreatedAt");
 
@@ -83,12 +88,17 @@ namespace POS.Infrastructure.Data.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("TEXT");
 
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("TEXT");
+
                     b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("TEXT");
 
                     b.HasKey("Id");
 
                     b.HasIndex("Name");
+
+                    b.HasIndex("TenantId");
 
                     b.ToTable("Categories", (string)null);
                 });
@@ -105,10 +115,6 @@ namespace POS.Infrastructure.Data.Migrations
                         .HasColumnType("TEXT");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("TEXT");
-
-                    b.Property<decimal>("ExchangeRate")
-                        .HasPrecision(18, 6)
                         .HasColumnType("TEXT");
 
                     b.Property<bool>("IsDeleted")
@@ -143,12 +149,25 @@ namespace POS.Infrastructure.Data.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("TEXT");
 
+                    b.Property<DateTime?>("EnrolledAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("EnrollmentCodeHash")
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
                     b.Property<bool>("IsDeleted")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("IsRevoked")
                         .HasColumnType("INTEGER");
 
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("RevokedAt")
                         .HasColumnType("TEXT");
 
                     b.Property<Guid>("StoreId")
@@ -159,10 +178,15 @@ namespace POS.Infrastructure.Data.Migrations
                         .HasColumnType("INTEGER")
                         .HasDefaultValue(1);
 
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("TEXT");
+
                     b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("TEXT");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("TenantId");
 
                     b.HasIndex("StoreId", "Name")
                         .IsUnique();
@@ -192,14 +216,19 @@ namespace POS.Infrastructure.Data.Migrations
                     b.Property<Guid>("StoreId")
                         .HasColumnType("TEXT");
 
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("TEXT");
+
                     b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("TEXT");
 
                     b.HasKey("Id");
 
+                    b.HasIndex("ProductId");
+
                     b.HasIndex("StoreId");
 
-                    b.HasIndex("ProductId", "StoreId")
+                    b.HasIndex("TenantId", "StoreId", "ProductId")
                         .IsUnique();
 
                     b.ToTable("Inventories", (string)null);
@@ -222,7 +251,7 @@ namespace POS.Infrastructure.Data.Migrations
                     b.Property<Guid?>("CustomerId")
                         .HasColumnType("TEXT");
 
-                    b.Property<Guid?>("DeviceId")
+                    b.Property<Guid>("DeviceId")
                         .HasColumnType("TEXT");
 
                     b.Property<bool>("IsDeleted")
@@ -252,6 +281,9 @@ namespace POS.Infrastructure.Data.Migrations
                         .HasPrecision(5, 2)
                         .HasColumnType("TEXT");
 
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("TEXT");
+
                     b.Property<decimal>("TotalAmount")
                         .HasPrecision(18, 2)
                         .HasColumnType("TEXT");
@@ -265,6 +297,8 @@ namespace POS.Infrastructure.Data.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("DeviceId");
+
+                    b.HasIndex("TenantId");
 
                     b.HasIndex("UserId");
 
@@ -398,6 +432,9 @@ namespace POS.Infrastructure.Data.Migrations
                         .HasPrecision(18, 2)
                         .HasColumnType("TEXT");
 
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("TEXT");
+
                     b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("TEXT");
 
@@ -406,6 +443,8 @@ namespace POS.Infrastructure.Data.Migrations
                     b.HasIndex("Barcode");
 
                     b.HasIndex("CategoryId");
+
+                    b.HasIndex("TenantId");
 
                     b.ToTable("Products", (string)null);
                 });
@@ -427,12 +466,18 @@ namespace POS.Infrastructure.Data.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("TEXT");
 
+                    b.Property<int>("PermissionsMask")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("TEXT");
+
                     b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("TEXT");
 
                     b.HasKey("Id");
 
-                    b.HasIndex("Name")
+                    b.HasIndex("TenantId", "Name")
                         .IsUnique();
 
                     b.ToTable("Roles", (string)null);
@@ -458,6 +503,9 @@ namespace POS.Infrastructure.Data.Migrations
                     b.Property<Guid>("StoreId")
                         .HasColumnType("TEXT");
 
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("TEXT");
+
                     b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("TEXT");
 
@@ -467,6 +515,8 @@ namespace POS.Infrastructure.Data.Migrations
                         .HasColumnType("TEXT");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("TenantId");
 
                     b.HasIndex("StoreId", "Key")
                         .IsUnique();
@@ -517,6 +567,9 @@ namespace POS.Infrastructure.Data.Migrations
                     b.Property<Guid>("StoreId")
                         .HasColumnType("TEXT");
 
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("TEXT");
+
                     b.Property<int>("Type")
                         .HasColumnType("INTEGER");
 
@@ -535,6 +588,8 @@ namespace POS.Infrastructure.Data.Migrations
                     b.HasIndex("InvoiceItemId");
 
                     b.HasIndex("ProductId");
+
+                    b.HasIndex("TenantId");
 
                     b.HasIndex("UserId");
 
@@ -571,12 +626,17 @@ namespace POS.Infrastructure.Data.Migrations
                         .HasMaxLength(50)
                         .HasColumnType("TEXT");
 
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("TEXT");
+
                     b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("TEXT");
 
                     b.HasKey("Id");
 
                     b.HasIndex("BaseCurrencyId");
+
+                    b.HasIndex("TenantId");
 
                     b.ToTable("Stores", (string)null);
                 });
@@ -605,13 +665,89 @@ namespace POS.Infrastructure.Data.Migrations
                     b.Property<Guid?>("StoreId")
                         .HasColumnType("TEXT");
 
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("TEXT");
+
                     b.HasKey("Id");
 
                     b.HasIndex("AggregateType", "Id");
 
                     b.HasIndex("StoreId", "AggregateType", "Id");
 
+                    b.HasIndex("TenantId", "AggregateType", "Id");
+
                     b.ToTable("SyncChanges", (string)null);
+                });
+
+            modelBuilder.Entity("POS.Core.Entities.Tenant", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("NormalizedSlug")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("NormalizedSlug")
+                        .IsUnique();
+
+                    b.ToTable("Tenants", (string)null);
+                });
+
+            modelBuilder.Entity("POS.Core.Entities.TenantCurrencyRate", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("CurrencyId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("ExchangeRate")
+                        .HasPrecision(18, 6)
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CurrencyId");
+
+                    b.HasIndex("TenantId", "CurrencyId")
+                        .IsUnique();
+
+                    b.ToTable("TenantCurrencyRates", (string)null);
                 });
 
             modelBuilder.Entity("POS.Core.Entities.User", b =>
@@ -629,6 +765,11 @@ namespace POS.Infrastructure.Data.Migrations
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("INTEGER");
 
+                    b.Property<string>("NormalizedUsername")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("PasswordHash")
                         .IsRequired()
                         .HasMaxLength(500)
@@ -638,6 +779,9 @@ namespace POS.Infrastructure.Data.Migrations
                         .HasColumnType("TEXT");
 
                     b.Property<Guid>("StoreId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("TenantId")
                         .HasColumnType("TEXT");
 
                     b.Property<DateTime>("UpdatedAt")
@@ -654,10 +798,46 @@ namespace POS.Infrastructure.Data.Migrations
 
                     b.HasIndex("StoreId");
 
-                    b.HasIndex("Username")
+                    b.HasIndex("TenantId", "NormalizedUsername")
                         .IsUnique();
 
                     b.ToTable("Users", (string)null);
+                });
+
+            modelBuilder.Entity("POS.Core.Entities.UserStoreAccess", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid>("StoreId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("StoreId");
+
+                    b.HasIndex("UserId");
+
+                    b.HasIndex("TenantId", "UserId", "StoreId")
+                        .IsUnique();
+
+                    b.ToTable("UserStoreAccesses", (string)null);
                 });
 
             modelBuilder.Entity("POS.Core.Entities.AuditLog", b =>
@@ -665,6 +845,11 @@ namespace POS.Infrastructure.Data.Migrations
                     b.HasOne("POS.Core.Entities.Store", "Store")
                         .WithMany()
                         .HasForeignKey("StoreId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("POS.Core.Entities.Tenant", "Tenant")
+                        .WithMany()
+                        .HasForeignKey("TenantId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
@@ -675,7 +860,20 @@ namespace POS.Infrastructure.Data.Migrations
 
                     b.Navigation("Store");
 
+                    b.Navigation("Tenant");
+
                     b.Navigation("User");
+                });
+
+            modelBuilder.Entity("POS.Core.Entities.Category", b =>
+                {
+                    b.HasOne("POS.Core.Entities.Tenant", "Tenant")
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Tenant");
                 });
 
             modelBuilder.Entity("POS.Core.Entities.Device", b =>
@@ -686,7 +884,15 @@ namespace POS.Infrastructure.Data.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("POS.Core.Entities.Tenant", "Tenant")
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
                     b.Navigation("Store");
+
+                    b.Navigation("Tenant");
                 });
 
             modelBuilder.Entity("POS.Core.Entities.Inventory", b =>
@@ -703,9 +909,17 @@ namespace POS.Infrastructure.Data.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
+                    b.HasOne("POS.Core.Entities.Tenant", "Tenant")
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
                     b.Navigation("Product");
 
                     b.Navigation("Store");
+
+                    b.Navigation("Tenant");
                 });
 
             modelBuilder.Entity("POS.Core.Entities.Invoice", b =>
@@ -713,11 +927,18 @@ namespace POS.Infrastructure.Data.Migrations
                     b.HasOne("POS.Core.Entities.Device", "Device")
                         .WithMany("Invoices")
                         .HasForeignKey("DeviceId")
-                        .OnDelete(DeleteBehavior.Restrict);
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
 
                     b.HasOne("POS.Core.Entities.Store", "Store")
                         .WithMany()
                         .HasForeignKey("StoreId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("POS.Core.Entities.Tenant", "Tenant")
+                        .WithMany()
+                        .HasForeignKey("TenantId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
@@ -730,6 +951,8 @@ namespace POS.Infrastructure.Data.Migrations
                     b.Navigation("Device");
 
                     b.Navigation("Store");
+
+                    b.Navigation("Tenant");
 
                     b.Navigation("User");
                 });
@@ -772,7 +995,26 @@ namespace POS.Infrastructure.Data.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("POS.Core.Entities.Tenant", "Tenant")
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
                     b.Navigation("Category");
+
+                    b.Navigation("Tenant");
+                });
+
+            modelBuilder.Entity("POS.Core.Entities.Role", b =>
+                {
+                    b.HasOne("POS.Core.Entities.Tenant", "Tenant")
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Tenant");
                 });
 
             modelBuilder.Entity("POS.Core.Entities.Setting", b =>
@@ -783,7 +1025,15 @@ namespace POS.Infrastructure.Data.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
+                    b.HasOne("POS.Core.Entities.Tenant", "Tenant")
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
                     b.Navigation("Store");
+
+                    b.Navigation("Tenant");
                 });
 
             modelBuilder.Entity("POS.Core.Entities.StockMovement", b =>
@@ -815,6 +1065,12 @@ namespace POS.Infrastructure.Data.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("POS.Core.Entities.Tenant", "Tenant")
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
                     b.HasOne("POS.Core.Entities.User", "User")
                         .WithMany()
                         .HasForeignKey("UserId")
@@ -830,6 +1086,8 @@ namespace POS.Infrastructure.Data.Migrations
 
                     b.Navigation("Store");
 
+                    b.Navigation("Tenant");
+
                     b.Navigation("User");
                 });
 
@@ -841,7 +1099,15 @@ namespace POS.Infrastructure.Data.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("POS.Core.Entities.Tenant", "Tenant")
+                        .WithMany("Stores")
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
                     b.Navigation("BaseCurrency");
+
+                    b.Navigation("Tenant");
                 });
 
             modelBuilder.Entity("POS.Core.Entities.SyncChange", b =>
@@ -851,7 +1117,34 @@ namespace POS.Infrastructure.Data.Migrations
                         .HasForeignKey("StoreId")
                         .OnDelete(DeleteBehavior.Restrict);
 
+                    b.HasOne("POS.Core.Entities.Tenant", "Tenant")
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
                     b.Navigation("Store");
+
+                    b.Navigation("Tenant");
+                });
+
+            modelBuilder.Entity("POS.Core.Entities.TenantCurrencyRate", b =>
+                {
+                    b.HasOne("POS.Core.Entities.Currency", "Currency")
+                        .WithMany()
+                        .HasForeignKey("CurrencyId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("POS.Core.Entities.Tenant", "Tenant")
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Currency");
+
+                    b.Navigation("Tenant");
                 });
 
             modelBuilder.Entity("POS.Core.Entities.User", b =>
@@ -868,9 +1161,44 @@ namespace POS.Infrastructure.Data.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("POS.Core.Entities.Tenant", "Tenant")
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
                     b.Navigation("Role");
 
                     b.Navigation("Store");
+
+                    b.Navigation("Tenant");
+                });
+
+            modelBuilder.Entity("POS.Core.Entities.UserStoreAccess", b =>
+                {
+                    b.HasOne("POS.Core.Entities.Store", "Store")
+                        .WithMany()
+                        .HasForeignKey("StoreId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("POS.Core.Entities.Tenant", "Tenant")
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("POS.Core.Entities.User", "User")
+                        .WithMany("StoreAccesses")
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Store");
+
+                    b.Navigation("Tenant");
+
+                    b.Navigation("User");
                 });
 
             modelBuilder.Entity("POS.Core.Entities.Category", b =>
@@ -907,9 +1235,16 @@ namespace POS.Infrastructure.Data.Migrations
                     b.Navigation("Devices");
                 });
 
+            modelBuilder.Entity("POS.Core.Entities.Tenant", b =>
+                {
+                    b.Navigation("Stores");
+                });
+
             modelBuilder.Entity("POS.Core.Entities.User", b =>
                 {
                     b.Navigation("Invoices");
+
+                    b.Navigation("StoreAccesses");
                 });
 #pragma warning restore 612, 618
         }

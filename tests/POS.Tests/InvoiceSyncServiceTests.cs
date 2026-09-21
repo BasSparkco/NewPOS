@@ -6,6 +6,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using POS.Application.Abstractions;
 using POS.Application.Models;
+using POS.Core.Enums;
 using POS.Infrastructure.Data;
 
 namespace POS.Tests;
@@ -516,6 +517,97 @@ public class InvoiceSyncServiceTests
     }
 
     [Fact]
+    public async Task Pull_remote_users_applies_fresher_role_permissions_and_ignores_stale_ones()
+    {
+        var userId = Guid.NewGuid();
+        var createdAt = DateTime.UtcNow.AddMinutes(-10);
+        UserSyncPullResultDto results = new(Array.Empty<UserSyncDto>(), "1");
+
+        var handler = new FakeSyncHttpMessageHandler((request, _) =>
+        {
+            if (request.RequestUri?.AbsolutePath == "/api/auth/login")
+            {
+                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = JsonContent.Create(new { accessToken = "test-token" })
+                });
+            }
+
+            if (request.RequestUri?.AbsolutePath == "/api/sync/users/pull")
+            {
+                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = JsonContent.Create(results)
+                });
+            }
+
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.NotFound));
+        });
+
+        await using var host = await TestServiceHost.CreateAsync(
+            new Dictionary<string, string?>
+            {
+                ["Sync:Enabled"] = "true",
+                ["Sync:ApiBaseUrl"] = "https://sync.example.test",
+                ["Sync:BatchSize"] = "10"
+            },
+            services =>
+            {
+                services.RemoveAll<IHttpClientFactory>();
+                services.AddSingleton<IHttpClientFactory>(new FakeHttpClientFactory(handler));
+            });
+
+        await host.ExecuteScopeAsync(async services =>
+        {
+            var sync = services.GetRequiredService<IInvoiceSyncService>();
+            var dbFactory = services.GetRequiredService<IDbContextFactory<PosDbContext>>();
+
+            var firstRoleUpdatedAt = DateTime.UtcNow;
+            results = new UserSyncPullResultDto(
+            [
+                new UserSyncDto(userId, "remote.supervisor", "hash-1", "Supervisor", true, createdAt, DateTime.UtcNow, false,
+                    (int)Permission.ViewReports, firstRoleUpdatedAt)
+            ], "1");
+            await sync.PullRemoteUsersAsync();
+
+            await using (var db = await dbFactory.CreateDbContextAsync())
+            {
+                var role = await db.Roles.AsNoTracking().SingleAsync(r => r.Name == "Supervisor");
+                Assert.Equal((int)Permission.ViewReports, role.PermissionsMask);
+            }
+
+            // Stale update (older RoleUpdatedAt) must be ignored.
+            results = new UserSyncPullResultDto(
+            [
+                new UserSyncDto(userId, "remote.supervisor", "hash-1", "Supervisor", true, createdAt, DateTime.UtcNow.AddSeconds(1), false,
+                    (int)Permission.None, firstRoleUpdatedAt.AddMinutes(-5))
+            ], "2");
+            await sync.PullRemoteUsersAsync();
+
+            await using (var db = await dbFactory.CreateDbContextAsync())
+            {
+                var role = await db.Roles.AsNoTracking().SingleAsync(r => r.Name == "Supervisor");
+                Assert.Equal((int)Permission.ViewReports, role.PermissionsMask);
+            }
+
+            // Fresher update must be applied.
+            var freshMask = Permission.ViewReports | Permission.ProcessRefunds;
+            results = new UserSyncPullResultDto(
+            [
+                new UserSyncDto(userId, "remote.supervisor", "hash-1", "Supervisor", true, createdAt, DateTime.UtcNow.AddSeconds(2), false,
+                    (int)freshMask, firstRoleUpdatedAt.AddMinutes(5))
+            ], "3");
+            await sync.PullRemoteUsersAsync();
+
+            await using (var db = await dbFactory.CreateDbContextAsync())
+            {
+                var role = await db.Roles.AsNoTracking().SingleAsync(r => r.Name == "Supervisor");
+                Assert.Equal((int)freshMask, role.PermissionsMask);
+            }
+        });
+    }
+
+    [Fact]
     public async Task Pull_remote_audit_logs_applies_snapshot_and_persists_cursor()
     {
         var auditLogId = Guid.NewGuid();
@@ -808,6 +900,7 @@ public class InvoiceSyncServiceTests
                 db.Devices.Add(new POS.Core.Entities.Device
                 {
                     Id = localDeviceId,
+                    TenantId = host.TenantId,
                     StoreId = host.StoreId,
                     Name = "Shared Register",
                     CreatedAt = localUpdatedAt.AddMinutes(-20),
@@ -900,6 +993,7 @@ public class InvoiceSyncServiceTests
                 db.Devices.Add(new POS.Core.Entities.Device
                 {
                     Id = deviceId,
+                    TenantId = host.TenantId,
                     StoreId = host.StoreId,
                     Name = "Back Office POS",
                     CreatedAt = updatedAt.AddMinutes(-15),
@@ -1247,6 +1341,7 @@ public class InvoiceSyncServiceTests
                 db.Settings.Add(new POS.Core.Entities.Setting
                 {
                     Id = Guid.NewGuid(),
+                    TenantId = host.TenantId,
                     StoreId = host.StoreId,
                     Key = "ReceiptFooterText",
                     Value = "Push footer",
@@ -1345,7 +1440,9 @@ public class InvoiceSyncServiceTests
                 db.Users.Add(new POS.Core.Entities.User
                 {
                     Id = userId,
+                    TenantId = host.TenantId,
                     Username = "push.user",
+                    NormalizedUsername = "PUSH.USER",
                     PasswordHash = "push-hash",
                     RoleId = roleId,
                     StoreId = host.StoreId,
@@ -1368,8 +1465,11 @@ public class InvoiceSyncServiceTests
             Assert.Equal("push.user", pushed.Username);
             Assert.Equal("Admin", pushed.RoleName);
             Assert.Equal("push-hash", pushed.PasswordHash);
+            Assert.Equal((int)Permission.All, pushed.RolePermissionsMask);
 
             await using var verifyDb = await dbFactory.CreateDbContextAsync();
+            var adminRoleUpdatedAt = await verifyDb.Roles.AsNoTracking().Where(r => r.Name == "Admin").Select(r => r.UpdatedAt).SingleAsync();
+            Assert.Equal(adminRoleUpdatedAt, pushed.RoleUpdatedAt);
             var cursor = await verifyDb.Settings.AsNoTracking()
                 .Where(x => x.StoreId == host.StoreId && x.Key == "Sync.UserPushSinceVersion" && !x.IsDeleted)
                 .Select(x => x.Value)

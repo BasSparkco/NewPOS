@@ -174,7 +174,7 @@
                                         </StackPanel>
                                         <!-- Price -->
                                         <TextBlock DockPanel.Dock="Right"
-                                                   Text="{Binding Price, StringFormat={}{0:N2}}"
+                                                   Text="{Binding Price, Converter={StaticResource Digits}, ConverterParameter=N2}"
                                                    FontSize="13" FontWeight="SemiBold"
                                                    Foreground="{StaticResource AccentBrush}"
                                                    VerticalAlignment="Center"/>

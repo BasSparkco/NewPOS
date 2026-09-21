@@ -74,7 +74,7 @@ public partial class RefundWindow : Window
         if (InvoiceList.SelectedItem is not RefundInvoiceRow row) return;
 
         var body = string.Format(CultureInfo.CurrentUICulture, Locale.Get("Refund_ConfirmBody"),
-            row.InvoiceNumber, row.Total.ToString("N2", CultureInfo.CurrentUICulture), row.PaidAt);
+            row.InvoiceNumber, Locale.ToDisplayDigits(row.Total.ToString("N2", CultureInfo.InvariantCulture)), row.PaidAt);
         var confirm = MessageBox.Show(body, Locale.Get("Refund_ConfirmTitle"), MessageBoxButton.YesNo, MessageBoxImage.Question);
 
         if (confirm != MessageBoxResult.Yes) return;

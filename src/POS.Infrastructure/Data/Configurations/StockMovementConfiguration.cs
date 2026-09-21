@@ -17,6 +17,10 @@ internal sealed class StockMovementConfiguration : IEntityTypeConfiguration<Stoc
 
         builder.HasIndex(e => new { e.StoreId, e.ProductId, e.CreatedAt });
         builder.HasIndex(e => e.InvoiceId);
+        builder.HasOne(e => e.Tenant)
+            .WithMany()
+            .HasForeignKey(e => e.TenantId)
+            .OnDelete(DeleteBehavior.Restrict);
         builder.HasOne(e => e.Product)
             .WithMany()
             .HasForeignKey(e => e.ProductId)

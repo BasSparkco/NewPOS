@@ -18,6 +18,7 @@ using POS.Infrastructure.Data;
 
 var builder = WebApplication.CreateBuilder(args);
 
+const string TenantIdClaim = "tenant_id";
 const string StoreIdClaim = "store_id";
 const string CurrencyCodeClaim = "currency_code";
 const string CurrencySymbolClaim = "currency_symbol";
@@ -129,23 +130,27 @@ app.Use(async (context, next) =>
         var user = context.User;
         if (user.Identity?.IsAuthenticated == true)
         {
+            var tenantId = TryParseGuid(user.FindFirstValue(TenantIdClaim));
             var userId = TryParseGuid(user.FindFirstValue(ClaimTypes.NameIdentifier));
             var storeId = TryParseGuid(user.FindFirstValue(StoreIdClaim));
             var username = user.FindFirstValue(ClaimTypes.Name);
             var roleName = user.FindFirstValue(ClaimTypes.Role);
             var baseCurrencyCode = user.FindFirstValue(CurrencyCodeClaim);
 
-            if (userId.HasValue
+            if (tenantId.HasValue
+                && userId.HasValue
                 && storeId.HasValue
                 && !string.IsNullOrWhiteSpace(username)
                 && !string.IsNullOrWhiteSpace(roleName)
                 && !string.IsNullOrWhiteSpace(baseCurrencyCode))
             {
                 session.Set(
+                    tenantId.Value,
                     userId.Value,
                     storeId.Value,
                     username,
                     roleName,
+                    0, // Permission enforcement is not wired up for the API/JWT auth surface yet — sync-only for now.
                     baseCurrencyCode,
                     user.FindFirstValue(CurrencySymbolClaim));
             }
@@ -188,7 +193,7 @@ app.MapPost("/api/auth/login", async (
     ICurrentSession session,
     CancellationToken cancellationToken) =>
 {
-    var result = await authService.LoginAsync(request.Username, cancellationToken);
+    var result = await authService.LoginAsync(request.Username, request.Password, request.TenantSlug, cancellationToken);
     if (!result.Success || !session.IsAuthenticated)
         return Results.Unauthorized();
 
@@ -202,6 +207,7 @@ app.MapPost("/api/auth/login", async (
         new(ClaimTypes.NameIdentifier, session.UserId.ToString()),
         new(ClaimTypes.Name, session.Username),
         new(ClaimTypes.Role, session.RoleName),
+        new(TenantIdClaim, session.TenantId.ToString()),
         new(StoreIdClaim, session.StoreId.ToString()),
         new(CurrencyCodeClaim, session.BaseCurrencyCode)
     };
@@ -522,6 +528,7 @@ syncApi.MapPost("/invoices/push", async (
 
     await using var db = await dbFactory.CreateDbContextAsync(cancellationToken);
     await using var tx = await db.Database.BeginTransactionAsync(cancellationToken);
+    var tenantId = await ResolveTenantIdAsync(db, storeId.Value, cancellationToken);
 
     var results = new List<InvoiceSyncInvoiceResultDto>(request.Invoices.Count);
 
@@ -553,7 +560,7 @@ syncApi.MapPost("/invoices/push", async (
             }
 
             var invoiceUserId = await ResolveInvoiceUserIdAsync(db, storeId.Value, userId.Value, incoming.Username, cancellationToken);
-            var device = await GetOrCreateSyncDeviceAsync(db, storeId.Value, incoming, cancellationToken);
+            var device = await GetOrCreateSyncDeviceAsync(db, tenantId, storeId.Value, incoming, cancellationToken);
             var existing = await db.Invoices
                 .Include(i => i.Items)
                 .Include(i => i.Payments)
@@ -561,10 +568,11 @@ syncApi.MapPost("/invoices/push", async (
 
             if (existing is null)
             {
-                var created = CreateInvoiceFromSync(incoming, storeId.Value, invoiceUserId, device?.Id);
+                var created = CreateInvoiceFromSync(incoming, tenantId, storeId.Value, invoiceUserId, device.Id);
                 db.Invoices.Add(created);
                 await ReconcileInvoiceInventoryAsync(
                     db,
+                    tenantId,
                     storeId.Value,
                     invoiceUserId,
                     created.Id,
@@ -589,9 +597,10 @@ syncApi.MapPost("/invoices/push", async (
             }
 
             var previousInventoryEffect = BuildInventoryEffect(existing.Status, existing.Items);
-            ApplyInvoiceSnapshot(existing, incoming, invoiceUserId, device?.Id);
+            ApplyInvoiceSnapshot(existing, incoming, invoiceUserId, device.Id);
             await ReconcileInvoiceInventoryAsync(
                 db,
+                tenantId,
                 storeId.Value,
                 invoiceUserId,
                 existing.Id,
@@ -860,6 +869,7 @@ syncApi.MapPost("/audit-logs/push", async (
 
     await using var db = await dbFactory.CreateDbContextAsync(cancellationToken);
     await using var tx = await db.Database.BeginTransactionAsync(cancellationToken);
+    var tenantId = await ResolveTenantIdAsync(db, storeId.Value, cancellationToken);
 
     var results = new List<AuditLogSyncItemResultDto>(request.AuditLogs.Count);
 
@@ -880,6 +890,7 @@ syncApi.MapPost("/audit-logs/push", async (
             db.AuditLogs.Add(new AuditLog
             {
                 Id = incoming.Id,
+                TenantId = tenantId,
                 StoreId = storeId.Value,
                 UserId = userId,
                 Action = incoming.Action,
@@ -919,6 +930,7 @@ syncApi.MapPost("/devices/push", async (
 
     await using var db = await dbFactory.CreateDbContextAsync(cancellationToken);
     await using var tx = await db.Database.BeginTransactionAsync(cancellationToken);
+    var tenantId = await ResolveTenantIdAsync(db, storeId.Value, cancellationToken);
 
     var results = new List<DeviceSyncItemResultDto>(request.Devices.Count);
 
@@ -926,7 +938,7 @@ syncApi.MapPost("/devices/push", async (
     {
         try
         {
-            var existing = await UpsertDeviceSnapshotAsync(db, storeId.Value, incoming, cancellationToken);
+            var existing = await UpsertDeviceSnapshotAsync(db, tenantId, storeId.Value, incoming, cancellationToken);
             if (existing.UpdatedAt > incoming.UpdatedAt)
             {
                 results.Add(new DeviceSyncItemResultDto(incoming.DeviceId, "Skipped", existing.UpdatedAt, null));
@@ -1057,6 +1069,7 @@ syncApi.MapPost("/products/push", async (
 
     await using var db = await dbFactory.CreateDbContextAsync(cancellationToken);
     await using var tx = await db.Database.BeginTransactionAsync(cancellationToken);
+    var tenantId = await ResolveTenantIdAsync(db, storeId.Value, cancellationToken);
 
     var results = new List<ProductSyncItemResultDto>(request.Products.Count);
 
@@ -1064,7 +1077,7 @@ syncApi.MapPost("/products/push", async (
     {
         try
         {
-            await EnsureCategoryAsync(db, incoming.CategoryId, incoming.CategoryName, incoming.CreatedAt, incoming.UpdatedAt, cancellationToken);
+            await EnsureCategoryAsync(db, tenantId, incoming.CategoryId, incoming.CategoryName, incoming.CreatedAt, incoming.UpdatedAt, cancellationToken);
 
             var existing = await db.Products
                 .FirstOrDefaultAsync(p => p.Id == incoming.ProductId, cancellationToken);
@@ -1080,13 +1093,14 @@ syncApi.MapPost("/products/push", async (
                 existing = new Product
                 {
                     Id = incoming.ProductId,
+                    TenantId = tenantId,
                     CreatedAt = incoming.CreatedAt
                 };
                 db.Products.Add(existing);
             }
 
             ApplyProductSnapshot(existing, incoming);
-            await UpsertProductInventoryAsync(db, storeId.Value, userId.Value, incoming, cancellationToken);
+            await UpsertProductInventoryAsync(db, tenantId, storeId.Value, userId.Value, incoming, cancellationToken);
             results.Add(new ProductSyncItemResultDto(incoming.ProductId, "Applied", incoming.UpdatedAt, null));
         }
         catch (Exception ex)
@@ -1110,6 +1124,7 @@ syncApi.MapPost("/categories/push", async (
 
     await using var db = await dbFactory.CreateDbContextAsync(cancellationToken);
     await using var tx = await db.Database.BeginTransactionAsync(cancellationToken);
+    var tenantId = await ResolveSoleTenantIdAsync(db, cancellationToken);
 
     var results = new List<CategorySyncItemResultDto>(request.Categories.Count);
 
@@ -1134,7 +1149,8 @@ syncApi.MapPost("/categories/push", async (
             {
                 existing = new Category
                 {
-                    Id = incoming.CategoryId
+                    Id = incoming.CategoryId,
+                    TenantId = tenantId
                 };
                 db.Categories.Add(existing);
             }
@@ -1168,6 +1184,7 @@ syncApi.MapPost("/settings/push", async (
 
     await using var db = await dbFactory.CreateDbContextAsync(cancellationToken);
     await using var tx = await db.Database.BeginTransactionAsync(cancellationToken);
+    var tenantId = await ResolveTenantIdAsync(db, storeId.Value, cancellationToken);
 
     var results = new List<SettingSyncItemResultDto>(request.Settings.Count);
 
@@ -1195,6 +1212,7 @@ syncApi.MapPost("/settings/push", async (
                 db.Settings.Add(new Setting
                 {
                     Id = Guid.NewGuid(),
+                    TenantId = tenantId,
                     StoreId = storeId.Value,
                     Key = incoming.Key,
                     Value = incoming.Value,
@@ -1239,6 +1257,7 @@ syncApi.MapPost("/users/push", async (
 
     await using var db = await dbFactory.CreateDbContextAsync(cancellationToken);
     await using var tx = await db.Database.BeginTransactionAsync(cancellationToken);
+    var tenantId = await ResolveTenantIdAsync(db, storeId.Value, cancellationToken);
 
     var results = new List<UserSyncItemResultDto>(request.Users.Count);
 
@@ -1265,19 +1284,20 @@ syncApi.MapPost("/users/push", async (
                 continue;
             }
 
-            var roleId = await EnsureRoleAsync(db, incoming.RoleName, incoming.UpdatedAt, cancellationToken);
+            var roleId = await EnsureRoleAsync(db, tenantId, incoming.RoleName, incoming.RolePermissionsMask, incoming.RoleUpdatedAt, cancellationToken);
 
             if (existing is null)
             {
                 existing = new User
                 {
                     Id = incoming.UserId,
+                    TenantId = tenantId,
                     StoreId = storeId.Value
                 };
                 db.Users.Add(existing);
             }
 
-            ApplyUserSnapshot(existing, incoming, roleId, storeId.Value);
+            ApplyUserSnapshot(existing, incoming, tenantId, roleId, storeId.Value);
             results.Add(new UserSyncItemResultDto(incoming.UserId, "Applied", incoming.UpdatedAt, null));
         }
         catch (Exception ex)
@@ -1541,7 +1561,9 @@ static IQueryable<UserSyncDto> ProjectUserSyncItems(IQueryable<User> users) =>
         u.IsActive,
         u.CreatedAt,
         u.UpdatedAt,
-        u.IsDeleted));
+        u.IsDeleted,
+        u.Role != null ? u.Role.PermissionsMask : 0,
+        u.Role != null ? u.Role.UpdatedAt : default));
 
 static IQueryable<DeviceSyncDto> ProjectDeviceSyncItems(IQueryable<Device> devices) =>
     devices.Select(d => new DeviceSyncDto(
@@ -1550,7 +1572,11 @@ static IQueryable<DeviceSyncDto> ProjectDeviceSyncItems(IQueryable<Device> devic
         d.SyncVersion,
         d.CreatedAt,
         d.UpdatedAt,
-        d.IsDeleted));
+        d.IsDeleted,
+        d.EnrollmentCodeHash,
+        d.EnrolledAt,
+        d.IsRevoked,
+        d.RevokedAt));
 
 static IQueryable<AuditLogSyncDto> ProjectAuditLogSyncItems(IQueryable<AuditLog> auditLogs) =>
     auditLogs.Select(a => new AuditLogSyncDto(
@@ -1567,25 +1593,46 @@ static async Task<DateTime> GetCurrencyPolicyUpdatedAtAsync(
     Guid storeId,
     CancellationToken cancellationToken)
 {
-    var storeUpdatedAt = await db.Stores
+    var store = await db.Stores
         .AsNoTracking()
         .Where(s => s.Id == storeId && !s.IsDeleted)
-        .Select(s => (DateTime?)s.UpdatedAt)
-        .FirstOrDefaultAsync(cancellationToken)
-        ?? DateTime.MinValue;
+        .Select(s => new { s.TenantId, s.UpdatedAt })
+        .FirstOrDefaultAsync(cancellationToken);
 
-    var currencyUpdatedAt = await db.Currencies
-        .AsNoTracking()
-        .Where(c => !c.IsDeleted)
-        .Select(c => (DateTime?)c.UpdatedAt)
-        .MaxAsync(cancellationToken)
-        ?? DateTime.MinValue;
+    var storeUpdatedAt = store?.UpdatedAt ?? DateTime.MinValue;
 
-    return storeUpdatedAt >= currencyUpdatedAt ? storeUpdatedAt : currencyUpdatedAt;
+    var rateUpdatedAt = store is null
+        ? DateTime.MinValue
+        : await db.TenantCurrencyRates
+            .AsNoTracking()
+            .Where(r => r.TenantId == store.TenantId && !r.IsDeleted)
+            .Select(r => (DateTime?)r.UpdatedAt)
+            .MaxAsync(cancellationToken)
+            ?? DateTime.MinValue;
+
+    return storeUpdatedAt >= rateUpdatedAt ? storeUpdatedAt : rateUpdatedAt;
 }
+
+static async Task<Guid> ResolveTenantIdAsync(PosDbContext db, Guid storeId, CancellationToken cancellationToken) =>
+    await db.Stores
+        .AsNoTracking()
+        .Where(s => s.Id == storeId)
+        .Select(s => (Guid?)s.TenantId)
+        .FirstOrDefaultAsync(cancellationToken)
+    ?? Guid.Empty;
+
+// The categories/push endpoint has no auth context to derive a tenant from (see Stage 4T audit finding #6
+// in docs/TENANT_T0_AUDIT.md) — falls back to the sole bootstrap tenant until T4 adds real per-request scope.
+static async Task<Guid> ResolveSoleTenantIdAsync(PosDbContext db, CancellationToken cancellationToken) =>
+    await db.Tenants
+        .AsNoTracking()
+        .OrderBy(t => t.CreatedAt)
+        .Select(t => t.Id)
+        .FirstOrDefaultAsync(cancellationToken);
 
 static async Task EnsureCategoryAsync(
     PosDbContext db,
+    Guid tenantId,
     Guid categoryId,
     string categoryName,
     DateTime createdAt,
@@ -1597,7 +1644,8 @@ static async Task EnsureCategoryAsync(
     {
         existing = new Category
         {
-            Id = categoryId
+            Id = categoryId,
+            TenantId = tenantId
         };
         db.Categories.Add(existing);
     }
@@ -1620,6 +1668,7 @@ static void ApplyCategorySnapshot(Category existing, CategorySyncDto incoming)
 
 static async Task<Device> UpsertDeviceSnapshotAsync(
     PosDbContext db,
+    Guid tenantId,
     Guid storeId,
     DeviceSyncDto incoming,
     CancellationToken cancellationToken)
@@ -1643,6 +1692,7 @@ static async Task<Device> UpsertDeviceSnapshotAsync(
         device = new Device
         {
             Id = incoming.DeviceId,
+            TenantId = tenantId,
             StoreId = storeId
         };
         db.Devices.Add(device);
@@ -1657,6 +1707,16 @@ static async Task<Device> UpsertDeviceSnapshotAsync(
     device.CreatedAt = incoming.CreatedAt;
     device.UpdatedAt = incoming.UpdatedAt;
     device.IsDeleted = incoming.IsDeleted;
+    device.EnrollmentCodeHash = incoming.EnrollmentCodeHash;
+    device.EnrolledAt = incoming.EnrolledAt;
+    // Sticky: revocation can never be undone by a generic snapshot upsert (a stale/compromised
+    // client pushing IsRevoked=false with a newer UpdatedAt must not be able to un-revoke itself).
+    // There is no "reactivate" feature yet — revoking is currently a one-way action.
+    if (incoming.IsRevoked && !device.IsRevoked)
+    {
+        device.IsRevoked = true;
+        device.RevokedAt = incoming.RevokedAt ?? DateTime.UtcNow;
+    }
     return device;
 }
 
@@ -1695,19 +1755,26 @@ static async Task<User?> FindUserBySyncIdentityAsync(
 
 static async Task<Guid> EnsureRoleAsync(
     PosDbContext db,
+    Guid tenantId,
     string roleName,
-    DateTime updatedAt,
+    int permissionsMask,
+    DateTime roleUpdatedAt,
     CancellationToken cancellationToken)
 {
     var normalizedRoleName = roleName.Trim();
-    var existing = await db.Roles.FirstOrDefaultAsync(r => r.Name == normalizedRoleName, cancellationToken);
+    var existing = await db.Roles.FirstOrDefaultAsync(r => r.TenantId == tenantId && r.Name == normalizedRoleName, cancellationToken);
     if (existing is not null)
     {
         if (existing.IsDeleted)
             existing.IsDeleted = false;
 
-        if (existing.UpdatedAt < updatedAt)
-            existing.UpdatedAt = updatedAt;
+        // Same UpdatedAt-precedence rule used for every other synced aggregate: only apply the
+        // incoming permission mask if it is actually fresher than what's already local.
+        if (roleUpdatedAt > existing.UpdatedAt)
+        {
+            existing.PermissionsMask = permissionsMask;
+            existing.UpdatedAt = roleUpdatedAt;
+        }
 
         return existing.Id;
     }
@@ -1715,18 +1782,22 @@ static async Task<Guid> EnsureRoleAsync(
     var role = new Role
     {
         Id = Guid.NewGuid(),
+        TenantId = tenantId,
         Name = normalizedRoleName,
-        CreatedAt = updatedAt,
-        UpdatedAt = updatedAt,
+        PermissionsMask = permissionsMask,
+        CreatedAt = roleUpdatedAt,
+        UpdatedAt = roleUpdatedAt,
         IsDeleted = false
     };
     db.Roles.Add(role);
     return role.Id;
 }
 
-static void ApplyUserSnapshot(User existing, UserSyncDto incoming, Guid roleId, Guid storeId)
+static void ApplyUserSnapshot(User existing, UserSyncDto incoming, Guid tenantId, Guid roleId, Guid storeId)
 {
+    existing.TenantId = tenantId;
     existing.Username = string.IsNullOrWhiteSpace(incoming.Username) ? existing.Username : incoming.Username.Trim();
+    existing.NormalizedUsername = existing.Username.Trim().ToUpperInvariant();
     existing.PasswordHash = incoming.PasswordHash;
     existing.RoleId = roleId;
     existing.StoreId = storeId;
@@ -1753,6 +1824,7 @@ static void ApplyProductSnapshot(Product existing, ProductSyncDto incoming)
 
 static async Task UpsertProductInventoryAsync(
     PosDbContext db,
+    Guid tenantId,
     Guid storeId,
     Guid userId,
     ProductSyncDto incoming,
@@ -1767,6 +1839,7 @@ static async Task UpsertProductInventoryAsync(
         inventory = new Inventory
         {
             Id = Guid.NewGuid(),
+            TenantId = tenantId,
             ProductId = incoming.ProductId,
             StoreId = storeId,
             Quantity = incoming.QuantityOnHand,
@@ -1790,6 +1863,7 @@ static async Task UpsertProductInventoryAsync(
     db.StockMovements.Add(new StockMovement
     {
         Id = Guid.NewGuid(),
+        TenantId = tenantId,
         ProductId = incoming.ProductId,
         StoreId = storeId,
         InventoryId = inventory.Id,
@@ -1854,11 +1928,12 @@ static IResult? ValidateInvoiceMutationAccess(InvoiceAccessInfo? invoice, Guid c
     return null;
 }
 
-static Invoice CreateInvoiceFromSync(InvoiceSyncInvoiceDto incoming, Guid storeId, Guid userId, Guid? deviceId)
+static Invoice CreateInvoiceFromSync(InvoiceSyncInvoiceDto incoming, Guid tenantId, Guid storeId, Guid userId, Guid deviceId)
 {
     var invoice = new Invoice
     {
         Id = incoming.InvoiceId,
+        TenantId = tenantId,
         StoreId = storeId,
         UserId = userId,
         DeviceId = deviceId,
@@ -1908,7 +1983,7 @@ static Invoice CreateInvoiceFromSync(InvoiceSyncInvoiceDto incoming, Guid storeI
     return invoice;
 }
 
-static void ApplyInvoiceSnapshot(Invoice existing, InvoiceSyncInvoiceDto incoming, Guid userId, Guid? deviceId)
+static void ApplyInvoiceSnapshot(Invoice existing, InvoiceSyncInvoiceDto incoming, Guid userId, Guid deviceId)
 {
     existing.UserId = userId;
     existing.DeviceId = deviceId;
@@ -1983,6 +2058,7 @@ static void ApplyInvoiceSnapshot(Invoice existing, InvoiceSyncInvoiceDto incomin
 
 static async Task ReconcileInvoiceInventoryAsync(
     PosDbContext db,
+    Guid tenantId,
     Guid storeId,
     Guid userId,
     Guid invoiceId,
@@ -2016,6 +2092,7 @@ static async Task ReconcileInvoiceInventoryAsync(
             inventory = new Inventory
             {
                 Id = Guid.NewGuid(),
+                TenantId = tenantId,
                 ProductId = productId,
                 StoreId = storeId,
                 Quantity = 0m,
@@ -2032,6 +2109,7 @@ static async Task ReconcileInvoiceInventoryAsync(
         db.StockMovements.Add(new StockMovement
         {
             Id = Guid.NewGuid(),
+            TenantId = tenantId,
             ProductId = productId,
             StoreId = storeId,
             InventoryId = inventory.Id,
@@ -2085,17 +2163,24 @@ static void ApplyPaymentSnapshot(Payment existingPayment, InvoiceSyncPaymentDto 
     existingPayment.IsDeleted = payment.IsDeleted;
 }
 
-static async Task<Device?> GetOrCreateSyncDeviceAsync(
+// Every invoice must be keyed by a Box (Device) — when the pushed invoice carries no device
+// identity at all, we resolve/create a per-store fallback "Unknown Device" row instead of
+// leaving DeviceId unset, since Invoice.DeviceId is required. Routed separately from
+// UpsertDeviceSnapshotAsync's Id/Name matching so a missing device identity never generates a
+// fresh random Id on every call (which would otherwise keep rebinding the fallback device's Id).
+static async Task<Device> GetOrCreateSyncDeviceAsync(
     PosDbContext db,
+    Guid tenantId,
     Guid storeId,
     InvoiceSyncInvoiceDto incoming,
     CancellationToken cancellationToken)
 {
     if (incoming.DeviceId is null && string.IsNullOrWhiteSpace(incoming.DeviceName))
-        return null;
+        return await GetOrCreateFallbackDeviceAsync(db, tenantId, storeId, incoming.UpdatedAt, cancellationToken);
 
     return await UpsertDeviceSnapshotAsync(
         db,
+        tenantId,
         storeId,
         new DeviceSyncDto(
             incoming.DeviceId ?? Guid.NewGuid(),
@@ -2105,6 +2190,33 @@ static async Task<Device?> GetOrCreateSyncDeviceAsync(
             incoming.UpdatedAt,
             false),
         cancellationToken);
+}
+
+static async Task<Device> GetOrCreateFallbackDeviceAsync(
+    PosDbContext db,
+    Guid tenantId,
+    Guid storeId,
+    DateTime now,
+    CancellationToken cancellationToken)
+{
+    const string fallbackName = "Unknown Device";
+    var existing = await db.Devices
+        .FirstOrDefaultAsync(d => d.StoreId == storeId && d.Name == fallbackName && !d.IsDeleted, cancellationToken);
+    if (existing is not null)
+        return existing;
+
+    var created = new Device
+    {
+        Id = Guid.NewGuid(),
+        TenantId = tenantId,
+        StoreId = storeId,
+        Name = fallbackName,
+        SyncVersion = 1,
+        CreatedAt = now,
+        UpdatedAt = now
+    };
+    db.Devices.Add(created);
+    return created;
 }
 
 static async Task<Guid> ResolveInvoiceUserIdAsync(
@@ -2139,7 +2251,7 @@ static IResult MapSaleError(Exception exception)
 
 internal sealed record SequenceGuidChange(long Sequence, Guid EntityId);
 internal sealed record SequenceKeyChange(long Sequence, string EntityKey);
-internal sealed record LoginRequest(string Username);
+internal sealed record LoginRequest(string Username, string Password, string? TenantSlug = null);
 internal sealed record AddSaleLineRequest(Guid ProductId, decimal Quantity);
 internal sealed record UpdateSaleLineQuantityRequest(decimal Quantity);
 internal sealed record UpdateSaleLineDiscountRequest(decimal DiscountPercent);

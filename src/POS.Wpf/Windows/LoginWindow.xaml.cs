@@ -22,6 +22,7 @@ public partial class LoginWindow : Window
         Locale.ApplyFlowDirection(this);
         Title              = Locale.Get("Login_Title");
         LoginUserLabel.Text = Locale.Get("Login_Username");
+        LoginPasswordLabel.Text = Locale.Get("Login_Password");
         LoginSignInBtn.Content = Locale.Get("Login_SignIn");
     }
 
@@ -39,6 +40,7 @@ public partial class LoginWindow : Window
             return;
 
         vm.Username = UsernameBox.Text;
+        vm.Password = PasswordBox.Password;
 
         var binding = UsernameBox.GetBindingExpression(System.Windows.Controls.TextBox.TextProperty);
         binding?.UpdateSource();

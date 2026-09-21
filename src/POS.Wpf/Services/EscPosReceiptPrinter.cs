@@ -45,6 +45,11 @@ public sealed class EscPosReceiptPrinter : IReceiptPrinter
         sb.AppendLine($"Total ({r.Currency}): {r.Total:N2}");
         sb.AppendLine($"Cash:   {r.CashTendered:N2}");
         sb.AppendLine($"Change: {r.Change:N2}");
+        if (!string.IsNullOrWhiteSpace(r.Notes))
+        {
+            sb.AppendLine(new string('-', 32));
+            sb.AppendLine($"Note: {r.Notes}");
+        }
         sb.AppendLine();
         sb.AppendLine("Thank you!");
         sb.Append('\x1D').Append('V').Append('\x41').Append('\x03'); // cut

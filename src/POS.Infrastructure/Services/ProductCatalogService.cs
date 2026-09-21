@@ -24,6 +24,14 @@ internal sealed class ProductCatalogService : IProductCatalogService
         _session = session;
     }
 
+    private async Task<Guid> GetTenantIdAsync(PosDbContext db, CancellationToken cancellationToken) =>
+        await db.Stores
+            .AsNoTracking()
+            .Where(s => s.Id == _session.StoreId && !s.IsDeleted)
+            .Select(s => (Guid?)s.TenantId)
+            .FirstOrDefaultAsync(cancellationToken)
+            ?? throw new InvalidOperationException("Store not found.");
+
     public async Task<IReadOnlyList<CategoryDto>> GetCategoriesAsync(CancellationToken cancellationToken = default)
     {
         await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken);
@@ -42,10 +50,12 @@ internal sealed class ProductCatalogService : IProductCatalogService
             throw new ArgumentException("Name is required.", nameof(name));
 
         await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken);
+        var tenantId = await GetTenantIdAsync(db, cancellationToken);
         var now = DateTime.UtcNow;
         var entity = new Category
         {
             Id = Guid.NewGuid(),
+            TenantId = tenantId,
             Name = name.Trim(),
             CreatedAt = now,
             UpdatedAt = now
@@ -116,13 +126,16 @@ internal sealed class ProductCatalogService : IProductCatalogService
             cancellationToken);
     }
 
-    public async Task<IReadOnlyList<ProductListItemDto>> SearchProductsAsync(string? query, Guid? categoryId = null, CancellationToken cancellationToken = default)
+    public async Task<IReadOnlyList<ProductListItemDto>> SearchProductsAsync(string? query, Guid? categoryId = null, CancellationToken cancellationToken = default, bool includeInactive = false)
     {
         var storeId = _session.StoreId;
         await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken);
         var q = db.Products
             .AsNoTracking()
-            .Where(p => !p.IsDeleted && p.IsActive);
+            .Where(p => !p.IsDeleted);
+
+        if (!includeInactive)
+            q = q.Where(p => p.IsActive);
 
         if (!string.IsNullOrWhiteSpace(query))
         {
@@ -133,15 +146,19 @@ internal sealed class ProductCatalogService : IProductCatalogService
         if (categoryId.HasValue)
             q = q.Where(p => p.CategoryId == categoryId.Value);
 
-        var products = await q
+        var withCategory = q
             .OrderBy(p => p.Name)
-            .Take(200)
-            .ToListAsync(cancellationToken);
+            .Select(p => new { Product = p, CategoryName = p.Category!.Name });
+
+        if (!includeInactive)
+            withCategory = withCategory.Take(200);
+
+        var products = await withCategory.ToListAsync(cancellationToken);
 
         if (products.Count == 0)
             return Array.Empty<ProductListItemDto>();
 
-        var ids = products.Select(p => p.Id).ToList();
+        var ids = products.Select(p => p.Product.Id).ToList();
         var qtyByProduct = await db.Inventories
             .AsNoTracking()
             .Where(i => ids.Contains(i.ProductId) && i.StoreId == storeId && !i.IsDeleted)
@@ -151,13 +168,16 @@ internal sealed class ProductCatalogService : IProductCatalogService
 
         return products
             .Select(p => new ProductListItemDto(
-                p.Id,
-                p.Name,
-                p.Barcode,
-                p.Price,
-                qtyByProduct.GetValueOrDefault(p.Id),
-                qtyByProduct.GetValueOrDefault(p.Id) <= lowStockThreshold,
-                p.ImagePath))
+                p.Product.Id,
+                p.Product.Name,
+                p.Product.Barcode,
+                p.Product.Price,
+                qtyByProduct.GetValueOrDefault(p.Product.Id),
+                qtyByProduct.GetValueOrDefault(p.Product.Id) <= lowStockThreshold,
+                p.Product.ImagePath,
+                p.Product.CategoryId,
+                p.CategoryName,
+                p.Product.IsActive))
             .ToList();
     }
 
@@ -228,10 +248,12 @@ internal sealed class ProductCatalogService : IProductCatalogService
         var storeId = _session.StoreId;
         var now = DateTime.UtcNow;
         await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken);
+        var tenantId = await GetTenantIdAsync(db, cancellationToken);
 
         var product = new Product
         {
             Id = Guid.NewGuid(),
+            TenantId = tenantId,
             Name = input.Name.Trim(),
             Barcode = string.IsNullOrWhiteSpace(input.Barcode) ? null : input.Barcode.Trim(),
             Price = input.Price,
@@ -248,6 +270,7 @@ internal sealed class ProductCatalogService : IProductCatalogService
         var inv = new Inventory
         {
             Id = Guid.NewGuid(),
+            TenantId = tenantId,
             ProductId = product.Id,
             StoreId = storeId,
             Quantity = input.InitialStock < 0 ? 0 : input.InitialStock,
@@ -261,6 +284,7 @@ internal sealed class ProductCatalogService : IProductCatalogService
             db.StockMovements.Add(new StockMovement
             {
                 Id = Guid.NewGuid(),
+                TenantId = tenantId,
                 ProductId = product.Id,
                 StoreId = storeId,
                 InventoryId = inv.Id,
@@ -292,6 +316,7 @@ internal sealed class ProductCatalogService : IProductCatalogService
     {
         var storeId = _session.StoreId;
         await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken);
+        var tenantId = await GetTenantIdAsync(db, cancellationToken);
         var product = await db.Products.FirstOrDefaultAsync(p => p.Id == input.Id && !p.IsDeleted, cancellationToken)
             ?? throw new InvalidOperationException("Product not found.");
 
@@ -323,6 +348,7 @@ internal sealed class ProductCatalogService : IProductCatalogService
             inv = new Inventory
             {
                 Id = Guid.NewGuid(),
+                TenantId = tenantId,
                 ProductId = product.Id,
                 StoreId = storeId,
                 Quantity = input.InitialStock < 0 ? 0 : input.InitialStock,
@@ -339,6 +365,7 @@ internal sealed class ProductCatalogService : IProductCatalogService
                 db.StockMovements.Add(new StockMovement
                 {
                     Id = Guid.NewGuid(),
+                    TenantId = tenantId,
                     ProductId = product.Id,
                     StoreId = storeId,
                     InventoryId = inv.Id,
@@ -367,6 +394,7 @@ internal sealed class ProductCatalogService : IProductCatalogService
                 db.StockMovements.Add(new StockMovement
                 {
                     Id = Guid.NewGuid(),
+                    TenantId = tenantId,
                     ProductId = product.Id,
                     StoreId = storeId,
                     InventoryId = inv.Id,

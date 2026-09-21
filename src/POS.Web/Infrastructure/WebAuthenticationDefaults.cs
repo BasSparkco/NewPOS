@@ -12,6 +12,7 @@ internal static class WebAuthorizationPolicies
 
 internal static class WebClaimTypes
 {
+    public const string TenantId = "tenant_id";
     public const string StoreId = "store_id";
     public const string CurrencyCode = "currency_code";
     public const string CurrencySymbol = "currency_symbol";

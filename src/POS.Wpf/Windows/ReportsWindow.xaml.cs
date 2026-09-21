@@ -93,10 +93,10 @@ public partial class ReportsWindow : Window
         decimal itemsSold = lines.Sum(l => l.Quantity);
         decimal avg       = count > 0 ? revenue / count : 0m;
 
-        CardRevenue.Text  = revenue.ToString("N2");
-        CardInvoices.Text = count.ToString();
-        CardItems.Text    = itemsSold.ToString("N0");
-        CardAvg.Text      = avg.ToString("N2");
+        CardRevenue.Text  = Locale.ToDisplayDigits(revenue.ToString("N2", CultureInfo.InvariantCulture));
+        CardInvoices.Text = Locale.ToDisplayDigits(count.ToString(CultureInfo.InvariantCulture));
+        CardItems.Text    = Locale.ToDisplayDigits(itemsSold.ToString("N0", CultureInfo.InvariantCulture));
+        CardAvg.Text      = Locale.ToDisplayDigits(avg.ToString("N2", CultureInfo.InvariantCulture));
 
         // Top products
         var topProducts = lines
@@ -118,12 +118,12 @@ public partial class ReportsWindow : Window
         InvoicesList.ItemsSource = invoices.Select(i => new ReportInvoiceRow
         {
             InvoiceNumber = i.Id.ToString("N")[..12].ToUpperInvariant(),
-            Time          = i.UpdatedAt.ToLocalTime().ToString("HH:mm"),
+            Time          = Locale.ToDisplayDigits(i.UpdatedAt.ToLocalTime().ToString("HH:mm", CultureInfo.InvariantCulture)),
             Total         = i.TotalAmount
         }).ToList();
 
-        var dStr = date.ToString("D", CultureInfo.CurrentUICulture);
-        var tStr = DateTime.Now.ToString("t", CultureInfo.CurrentUICulture);
+        var dStr = Locale.ToDisplayDigits(date.ToString("D", CultureInfo.CurrentUICulture));
+        var tStr = Locale.ToDisplayDigits(DateTime.Now.ToString("t", CultureInfo.CurrentUICulture));
         FooterText.Text = string.Format(CultureInfo.CurrentUICulture, Locale.Get("Reports_FooterFormat"), dStr, tStr);
     }
 

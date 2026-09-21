@@ -23,8 +23,10 @@ public partial class CurrencySettingsWindow : Window
         OperationalHeaderTb.Text = Locale.Get("CurrencySettings_OperationalHeader");
         OperationalSubtitleTb.Text = Locale.Get("CurrencySettings_OperationalSubtitle");
         AllowNegativeStockCheck.Content = Locale.Get("CurrencySettings_AllowNegativeStock");
+        UseArabicIndicDigitsCheck.Content = Locale.Get("CurrencySettings_UseArabicIndicDigits");
         LowStockThresholdLbl.Text = Locale.Get("CurrencySettings_LowStockThreshold");
         DefaultTaxPercentLbl.Text = Locale.Get("CurrencySettings_DefaultTaxPercent");
+        PricesIncludeVatCheck.Content = Locale.Get("CurrencySettings_PricesIncludeVat");
         ReceiptFooterLbl.Text = Locale.Get("CurrencySettings_ReceiptFooter");
         ExchangeRatesHeaderTb.Text = Locale.Get("CurrencySettings_ExchangeRatesHeader");
         CurrencyStoreLbl.Text = Locale.Get("CurrencySettings_Store");

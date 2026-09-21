@@ -1,21 +1,28 @@
 using System.Collections.ObjectModel;
 using System.Globalization;
 using System.Windows;
+using System.Windows.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.DependencyInjection;
 using POS.Application.Abstractions;
 using POS.Application.Models;
+using POS.Core.Enums;
+using POS.Wpf.Localization;
 using POS.Wpf.Windows;
 
 namespace POS.Wpf.ViewModels;
 
 public partial class MainViewModel : ObservableObject
 {
+    private const int NoteDebounceMilliseconds = 450;
+
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly IServiceProvider     _services;
     private readonly IReceiptPrinter      _printer;
     private readonly ICurrentSession      _session;
+    private readonly DispatcherTimer      _noteTimer;
+    private bool _suppressNoteChange;
 
     public MainViewModel(
         IServiceScopeFactory scopeFactory,
@@ -27,6 +34,9 @@ public partial class MainViewModel : ObservableObject
         _services     = services;
         _printer      = printer;
         _session      = session;
+
+        _noteTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(NoteDebounceMilliseconds) };
+        _noteTimer.Tick += (_, _) => { _noteTimer.Stop(); _ = CommitInvoiceNoteAsync(); };
     }
 
     // ── Tabs ────────────────────────────────────────────────────────────────
@@ -39,6 +49,7 @@ public partial class MainViewModel : ObservableObject
     /// <summary>Called whenever the user switches tabs (or a new tab becomes active).</summary>
     partial void OnActiveTabChanged(InvoiceTab? value)
     {
+        _noteTimer.Stop();
         foreach (var t in InvoiceTabs)
             t.IsActive = t == value;
 
@@ -47,7 +58,6 @@ public partial class MainViewModel : ObservableObject
         OnPropertyChanged(nameof(InvoiceStatusLabel));
         OnPropertyChanged(nameof(ActiveTabIsHeld));
         OnPropertyChanged(nameof(HoldResumeLabel));
-        OnPropertyChanged(nameof(HeldTabCount));
         _ = RefreshCartAsync();
     }
 
@@ -62,8 +72,34 @@ public partial class MainViewModel : ObservableObject
     [ObservableProperty] decimal _taxPercent;
     [ObservableProperty] decimal _taxAmount;
     [ObservableProperty] decimal _total;
+    /// <summary>When true, product prices already include VAT — the cart shows an informational "VAT Included" row instead of an editable tax rate, and no tax is added on top of the subtotal.</summary>
+    [ObservableProperty] bool _pricesIncludeVat;
     /// <summary>The cart line the bottom calculator currently types into; null means the calculator's own QTY/PRICE fields.</summary>
     [ObservableProperty] CartLineItem? _activeCalcLine;
+    /// <summary>Free-text note attached to the current invoice; printed on the receipt. Auto-saves after a short pause in typing.</summary>
+    [ObservableProperty] string _invoiceNoteText = "";
+
+    partial void OnInvoiceNoteTextChanged(string value)
+    {
+        if (_suppressNoteChange) return;
+        _noteTimer.Stop();
+        _noteTimer.Start();
+    }
+
+    private async Task CommitInvoiceNoteAsync()
+    {
+        if (CurrentInvoiceId is null) return;
+        await using var scope = _scopeFactory.CreateAsyncScope();
+        var sales = scope.ServiceProvider.GetRequiredService<ISaleService>();
+        try
+        {
+            await sales.SetInvoiceNoteAsync(CurrentInvoiceId.Value, InvoiceNoteText);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(ex.Message, AppTitle, MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+    }
 
     // ── Misc UI state ───────────────────────────────────────────────────────
     [ObservableProperty] string _statusText         = "";
@@ -74,9 +110,11 @@ public partial class MainViewModel : ObservableObject
     [ObservableProperty] bool   _customerDisplayOpen;
     [ObservableProperty] bool   _isDarkMode;
     [ObservableProperty] bool   _isFullscreen;
-    [ObservableProperty] bool   _showNumpad;
+    [ObservableProperty] bool   _isCalculatorVisible; // bottom calculator/keypad is optional — collapsed by default
     [ObservableProperty] string _selectedPage       = "Cashier";
     [ObservableProperty] string _uiLanguage         = "en";
+    /// <summary>Arabic-only opt-in (Settings page): shows Eastern Arabic-Indic digits (٠١٢٣) instead of the default Western digits.</summary>
+    [ObservableProperty] bool   _useArabicIndicDigits;
 
     private CustomerDisplayWindow? _customerDisplay;
 
@@ -107,10 +145,11 @@ public partial class MainViewModel : ObservableObject
     public bool IsQtyFieldActive   => ActiveCalcLine is null && ActiveCalcField != "Price";
     public bool IsPriceFieldActive => ActiveCalcLine is null && ActiveCalcField == "Price";
 
-    public int    HeldTabCount    => InvoiceTabs.Count(t => t.IsHeld);
     public string DarkModeIcon    => IsDarkMode ? "☀" : "🌙";
     public string FullscreenIcon  => IsFullscreen ? "🗗" : "⛶";
-    public string NumpadIcon      => ShowNumpad ? "⌨ Hide Numpad" : "⌨ Numpad";
+    public string CalculatorToggleToolTip => IsCalculatorVisible
+        ? T("Hide Calculator", "إخفاء الآلة الحاسبة", "הסתר מחשבון")
+        : T("Show Calculator", "إظهار الآلة الحاسبة", "הצג מחשבון");
     public FlowDirection UiFlowDirection => IsRtlLanguage(UiLanguage) ? FlowDirection.RightToLeft : FlowDirection.LeftToRight;
     public bool IsUiLanguageArabic => string.Equals(UiLanguage, "ar", StringComparison.OrdinalIgnoreCase);
     public bool IsUiLanguageEnglish => string.Equals(UiLanguage, "en", StringComparison.OrdinalIgnoreCase);
@@ -122,16 +161,22 @@ public partial class MainViewModel : ObservableObject
     public string NavProductsLabel => T("Products", "المنتجات", "מוצרים");
     public string NavReportsLabel => T("Reports", "التقارير", "דוחות");
     public string NavAuditLabel => T("Audit", "التدقيق", "ביקורת");
+    public string NavUsersLabel => T("Users", "المستخدمون", "משתמשים");
+    public string NavDevicesLabel => T("Devices", "الأجهزة", "מכשירים");
     public string NavSettingsLabel => T("Settings", "الإعدادات", "הגדרות");
     public string NavLogoutLabel => T("Logout", "تسجيل الخروج", "התנתקות");
     public string OnlineLabel => T("Online", "متصل", "מחובר");
-    public string HoldOrdersLabel => T("Hold Orders", "فواتير معلقة", "הזמנות מושהות");
     public string NewInvoiceLabel => T("+ New Invoice", "+ فاتورة جديدة", "+ חשבונית חדשה");
     public string ScanLabel => T("Scan", "مسح", "סריקה");
+    public string SearchPlaceholder => T("Search for a product. Scan barcode or Type.", "ابحث عن منتج. امسح الباركود أو اكتب.", "חפש מוצר. סרוק ברקוד או הקלד.");
     public string LowStockLabel => T("Low", "منخفض", "נמוך");
     public string WalkInCustomerLabel => T("Walk-in Customer", "عميل مباشر", "לקוח מזדמן");
     public string EmptyCartLabel => T("Cart is empty", "السلة فارغة", "העגלה ריקה");
     public string QtyLabel => T("QTY", "الكمية", "כמות");
+    public string CartHeaderProductLabel => T("Product", "المنتج", "מוצר");
+    public string CartHeaderQtyLabel => T("Qty", "الكمية", "כמות");
+    public string CartHeaderDiscountLabel => T("Dis", "خصم", "הנחה");
+    public string CartHeaderSumLabel => T("Sum", "الإجمالي", "סכום");
     public string EachLabel => T("each", "للوحدة", "ליחידה");
     public string AddNoteLabel => T("Add note to invoice", "إضافة ملاحظة للفاتورة", "הוסף הערה לחשבונית");
     public string RefundLabel => T("Refund", "استرجاع", "החזר");
@@ -143,6 +188,7 @@ public partial class MainViewModel : ObservableObject
     public string CustomItemDefaultName => T("Custom Item", "صنف مخصص", "פריט מותאם");
     public string SubtotalLabel => T("Subtotal", "المجموع الفرعي", "סכום ביניים");
     public string TaxLabelPrefix => T("VAT (", "ضريبة (", "מע\"מ (");
+    public string VatIncludedLabel => T("VAT Included", "شامل الضريبة", "כולל מע\"מ");
     public string TotalLabel => T("Total", "الإجمالي", "סה\"כ");
     public string ProceedLabel => T("Proceed", "متابعة", "המשך");
     public string HoldOrderLabel => T("Hold Order", "تعليق الطلب", "השהה הזמנה");
@@ -155,7 +201,6 @@ public partial class MainViewModel : ObservableObject
     public string ScanToolTip => T("Price Check / Scan (F2)", "فحص السعر / مسح (F2)", "בדיקת מחיר / סריקה (F2)");
     public string ToggleImagesToolTip => T("Toggle Product Images", "إظهار/إخفاء صور المنتجات", "הצג/הסתר תמונות מוצרים");
     public string ToggleDarkModeToolTip => T("Toggle Dark Mode", "تبديل الوضع الداكن", "החלף מצב כהה");
-    public string HoldOrdersToolTip => T("Hold / Resume current invoice (F3)", "تعليق / استئناف الفاتورة الحالية (F3)", "השהה / המשך חשבונית נוכחית (F3)");
     public string AppTitle => T("POS", "نقطة البيع", "קופה");
 
     /// <summary>Store base currency for display (symbol when available, else ISO code).</summary>
@@ -164,9 +209,9 @@ public partial class MainViewModel : ObservableObject
             ? _session.BaseCurrencyCode
             : _session.CurrencySymbol!;
 
-    public string FormattedSubtotal => $"{Subtotal:N2} {CurrencySuffix}";
-    public string FormattedTaxAmount => $"{TaxAmount:N2} {CurrencySuffix}";
-    public string FormattedTotal => $"{Total:N2} {CurrencySuffix}";
+    public string FormattedSubtotal => Locale.ToDisplayDigits($"{Subtotal.ToString("N2", CultureInfo.InvariantCulture)} {CurrencySuffix}");
+    public string FormattedTaxAmount => Locale.ToDisplayDigits($"{TaxAmount.ToString("N2", CultureInfo.InvariantCulture)} {CurrencySuffix}");
+    public string FormattedTotal => Locale.ToDisplayDigits($"{Total.ToString("N2", CultureInfo.InvariantCulture)} {CurrencySuffix}");
 
     partial void OnSubtotalChanged(decimal value) =>
         OnPropertyChanged(nameof(FormattedSubtotal));
@@ -180,6 +225,12 @@ public partial class MainViewModel : ObservableObject
     // ── Computed props ──────────────────────────────────────────────────────
     public bool IsCartEmpty    => CartLines.Count == 0;
     public bool IsCartNotEmpty => CartLines.Count > 0;
+
+    /// <summary>True when tax is added on top of the subtotal — shows the editable VAT-rate row.</summary>
+    public bool IsVatExclusive => !PricesIncludeVat;
+
+    partial void OnPricesIncludeVatChanged(bool value) =>
+        OnPropertyChanged(nameof(IsVatExclusive));
 
     public bool   ActiveTabIsHeld  => ActiveTab?.IsHeld ?? false;
     public string HoldResumeLabel  => ActiveTabIsHeld ? "▶  Resume Invoice" : "⏸  Hold Invoice";
@@ -196,8 +247,12 @@ public partial class MainViewModel : ObservableObject
 
     public string UserName  => _session.Username;
     public string RoleName  => _session.RoleName;
-    public bool   IsAdmin   => string.Equals(_session.RoleName, "Admin",   StringComparison.OrdinalIgnoreCase)
-                            || string.Equals(_session.RoleName, "Manager", StringComparison.OrdinalIgnoreCase);
+    public bool CanManageProducts => _session.HasPermission(Permission.ManageProducts);
+    public bool CanViewReports    => _session.HasPermission(Permission.ViewReports);
+    public bool CanViewAudit      => _session.HasPermission(Permission.ViewAudit);
+    public bool CanManageUsers    => _session.HasPermission(Permission.ManageUsers);
+    public bool CanManageSettings => _session.HasPermission(Permission.ManageSettings);
+    public bool CanProcessRefunds => _session.HasPermission(Permission.ProcessRefunds);
     public string UserBadge =>
         string.IsNullOrWhiteSpace(_session.Username)
             ? "?"
@@ -219,10 +274,20 @@ public partial class MainViewModel : ObservableObject
 
     public async Task OnLoadedAsync()
     {
+        await LoadDigitPreferenceAsync();
         ApplyUiLanguage(UiLanguage);
         await NewSaleAsync();          // creates the first tab
         await LoadCategoriesAsync();
         await SearchAsync();
+    }
+
+    /// <summary>Loads the "Indian numerals" preference from store settings.</summary>
+    private async Task LoadDigitPreferenceAsync()
+    {
+        await using var scope = _scopeFactory.CreateAsyncScope();
+        var settingsService = scope.ServiceProvider.GetRequiredService<ISettingsService>();
+        var settings = await settingsService.GetStoreSettingsAsync();
+        UseArabicIndicDigits = settings.UseArabicIndicDigits;
     }
 
     partial void OnUiLanguageChanged(string value)
@@ -236,6 +301,8 @@ public partial class MainViewModel : ObservableObject
 
         ApplyUiLanguage(normalized);
     }
+
+    partial void OnUseArabicIndicDigitsChanged(bool value) => ApplyUiLanguage(UiLanguage);
 
     private async Task LoadCategoriesAsync()
     {
@@ -262,7 +329,17 @@ public partial class MainViewModel : ObservableObject
     {
         await using var scope = _scopeFactory.CreateAsyncScope();
         var sales = scope.ServiceProvider.GetRequiredService<ISaleService>();
-        var id = await sales.StartNewSaleAsync();
+
+        Guid id;
+        try
+        {
+            id = await sales.StartNewSaleAsync();
+        }
+        catch (DeviceNotAuthorizedException ex)
+        {
+            MessageBox.Show(ex.Message, Locale.Get("App_TitleShort"), MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
 
         var tab = new InvoiceTab
         {
@@ -310,7 +387,6 @@ public partial class MainViewModel : ObservableObject
         OnPropertyChanged(nameof(HoldResumeLabel));
         OnPropertyChanged(nameof(HoldResumeActionLabel));
         OnPropertyChanged(nameof(InvoiceStatusLabel));
-        OnPropertyChanged(nameof(HeldTabCount));
     }
 
     /// <summary>Removes a tab; cancels its invoice in the DB.</summary>
@@ -385,10 +461,10 @@ public partial class MainViewModel : ObservableObject
     }
 
     [RelayCommand]
-    private void ToggleNumpad()
+    private void ToggleCalculator()
     {
-        ShowNumpad = !ShowNumpad;
-        OnPropertyChanged(nameof(NumpadIcon));
+        IsCalculatorVisible = !IsCalculatorVisible;
+        OnPropertyChanged(nameof(CalculatorToggleToolTip));
     }
 
     [RelayCommand]
@@ -425,41 +501,75 @@ public partial class MainViewModel : ObservableObject
         SelectedPage = "Cashier";
     }
 
-    /// <summary>Sidebar: Products → opens catalog (Admin only).</summary>
+    /// <summary>Checks the given permission, setting a "no permission" status message if it's missing. Returns whether the caller should proceed.</summary>
+    private bool EnsurePermission(Permission permission)
+    {
+        if (_session.HasPermission(permission))
+            return true;
+
+        StatusText = T("You don't have permission for this.", "ليس لديك صلاحية لهذا الإجراء.", "אין לך הרשאה לפעולה זו.");
+        return false;
+    }
+
+    /// <summary>Sidebar: Products → opens catalog (requires ManageProducts).</summary>
     [RelayCommand]
     private async Task GoProductsAsync()
     {
-        if (!IsAdmin) { StatusText = T("Admin access required.", "صلاحية المدير مطلوبة.", "נדרשת הרשאת מנהל."); return; }
+        if (!EnsurePermission(Permission.ManageProducts)) return;
         SelectedPage = "Products";
         await ManageProductsAsync();
         SelectedPage = "Cashier";
     }
 
-    /// <summary>Sidebar: Reports → opens reports window (Admin only).</summary>
+    /// <summary>Sidebar: Reports → opens reports window (requires ViewReports).</summary>
     [RelayCommand]
     private void GoReports()
     {
-        if (!IsAdmin) { StatusText = T("Admin access required.", "صلاحية المدير مطلوبة.", "נדרשת הרשאת מנהל."); return; }
+        if (!EnsurePermission(Permission.ViewReports)) return;
         SelectedPage = "Reports";
         OpenReports();
         SelectedPage = "Cashier";
     }
 
-    /// <summary>Sidebar: Audit → opens audit log window (Admin only).</summary>
+    /// <summary>Sidebar: Audit → opens audit log window (requires ViewAudit).</summary>
     [RelayCommand]
     private void GoAudit()
     {
-        if (!IsAdmin) { StatusText = T("Admin access required.", "صلاحية المدير مطلوبة.", "נדרשת הרשאת מנהל."); return; }
+        if (!EnsurePermission(Permission.ViewAudit)) return;
         SelectedPage = "Audit";
         OpenAudit();
         SelectedPage = "Cashier";
     }
 
-    /// <summary>Sidebar: Settings → opens store settings (Admin only).</summary>
+    /// <summary>Sidebar: Users → opens the user/role management window (requires ManageUsers).</summary>
+    [RelayCommand]
+    private void GoUsers()
+    {
+        if (!EnsurePermission(Permission.ManageUsers)) return;
+        SelectedPage = "Users";
+        var window = _services.GetRequiredService<UserManagementWindow>();
+        window.Owner = System.Windows.Application.Current.MainWindow;
+        window.ShowDialog();
+        SelectedPage = "Cashier";
+    }
+
+    /// <summary>Sidebar: Devices → opens the Box provisioning/enrollment/revocation window (requires ManageSettings).</summary>
+    [RelayCommand]
+    private void GoDevices()
+    {
+        if (!EnsurePermission(Permission.ManageSettings)) return;
+        SelectedPage = "Devices";
+        var window = _services.GetRequiredService<DeviceManagementWindow>();
+        window.Owner = System.Windows.Application.Current.MainWindow;
+        window.ShowDialog();
+        SelectedPage = "Cashier";
+    }
+
+    /// <summary>Sidebar: Settings → opens store settings (requires ManageSettings).</summary>
     [RelayCommand]
     private async Task GoSettingsAsync()
     {
-        if (!IsAdmin) { StatusText = T("Admin access required.", "صلاحية المدير مطلوبة.", "נדרשת הרשאת מנהל."); return; }
+        if (!EnsurePermission(Permission.ManageSettings)) return;
         SelectedPage = "Settings";
 
         var window = _services.GetRequiredService<CurrencySettingsWindow>();
@@ -467,12 +577,28 @@ public partial class MainViewModel : ObservableObject
         if (window.ShowDialog() == true)
         {
             RefreshCurrencyPresentation();
+            await LoadDigitPreferenceAsync();
             await SearchAsync();
             await RefreshCartAsync();
+            RefreshDigitDisplayNow();
             StatusText = T("Store settings updated.", "تم تحديث إعدادات المتجر.", "הגדרות החנות עודכנו.");
         }
 
         SelectedPage = "Cashier";
+    }
+
+    /// <summary>
+    /// A plain re-notify of the digit-bound properties isn't enough to refresh every already-rendered
+    /// binding on the page after the "Indian numerals" setting changes (some templated/virtualized
+    /// elements only re-materialize on an actual layout pass). Briefly bouncing the UI language —
+    /// exactly what manually switching away and back already does — forces that full refresh. Both
+    /// calls run synchronously with no UI dispatch in between, so nothing flashes on screen.
+    /// </summary>
+    private void RefreshDigitDisplayNow()
+    {
+        var current = UiLanguage;
+        ApplyUiLanguage(current == "ar" ? "en" : "ar");
+        ApplyUiLanguage(current);
     }
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -516,8 +642,8 @@ public partial class MainViewModel : ObservableObject
         _printer.Print(result.Receipt);
         MessageBox.Show(
             $"{T("Sale complete!", "تمت عملية البيع!", "המכירה הושלמה!")}\n" +
-            $"{TotalLabel}:   {result.Receipt.Total:N2} {CurrencySuffix}\n" +
-            $"{T("Change", "الباقي", "עודף")}: {result.Receipt.Change:N2} {CurrencySuffix}",
+            $"{TotalLabel}:   {Locale.ToDisplayDigits(result.Receipt.Total.ToString("N2", CultureInfo.InvariantCulture))} {CurrencySuffix}\n" +
+            $"{T("Change", "الباقي", "עודף")}: {Locale.ToDisplayDigits(result.Receipt.Change.ToString("N2", CultureInfo.InvariantCulture))} {CurrencySuffix}",
             AppTitle, MessageBoxButton.OK, MessageBoxImage.Information);
 
         // Close this tab and open a fresh one
@@ -700,30 +826,6 @@ public partial class MainViewModel : ObservableObject
         }
     }
 
-    /// <summary>Sets the invoice-level VAT / tax rate.</summary>
-    [RelayCommand]
-    private async Task SetInvoiceTaxAsync(string? taxInput)
-    {
-        if (CurrentInvoiceId is null) return;
-        if (!decimal.TryParse(taxInput ?? TaxPercent.ToString(),
-                System.Globalization.NumberStyles.Any,
-                System.Globalization.CultureInfo.InvariantCulture, out var pct))
-            pct = 0m;
-
-        await using var scope = _scopeFactory.CreateAsyncScope();
-        var sales = scope.ServiceProvider.GetRequiredService<ISaleService>();
-        try
-        {
-            await sales.SetInvoiceTaxAsync(CurrentInvoiceId.Value, pct);
-            await RefreshCartAsync(scope);
-            StatusText = $"{T("Tax rate set to", "تم ضبط الضريبة إلى", "שיעור המע\"מ הוגדר ל")} {pct:N0}%.";
-        }
-        catch (Exception ex)
-        {
-            MessageBox.Show(ex.Message, AppTitle, MessageBoxButton.OK, MessageBoxImage.Warning);
-        }
-    }
-
     // ═══════════════════════════════════════════════════════════════════════
     // Numpad — routes into whichever field is "active": the bottom calculator's
     // own QTY/PRICE display, or (when set) a specific cart line's Qty/Disc box.
@@ -875,6 +977,8 @@ public partial class MainViewModel : ObservableObject
     [RelayCommand]
     private async Task RefundSaleAsync()
     {
+        if (!EnsurePermission(Permission.ProcessRefunds)) return;
+
         var w = new RefundWindow(_scopeFactory)
         {
             Owner = System.Windows.Application.Current.MainWindow
@@ -926,7 +1030,7 @@ public partial class MainViewModel : ObservableObject
         _customerDisplay.Show();
         CustomerDisplayOpen = true;
         StatusText          = T("Customer display opened.", "تم فتح شاشة العميل.", "צג הלקוח נפתח.");
-        _customerDisplay.Update(CartLines.Select(l => l.ToDto()).ToList(), Total, CurrencySuffix);
+        _customerDisplay.Update(CartLines.Select(l => l.ToDto()).ToList(), Subtotal, TaxPercent, TaxAmount, Total, PricesIncludeVat, CurrencySuffix);
     }
 
     [RelayCommand]
@@ -964,7 +1068,7 @@ public partial class MainViewModel : ObservableObject
         OnPropertyChanged(nameof(FormattedSubtotal));
         OnPropertyChanged(nameof(FormattedTaxAmount));
         OnPropertyChanged(nameof(FormattedTotal));
-        _customerDisplay?.Update(CartLines.Select(l => l.ToDto()).ToList(), Total, CurrencySuffix);
+        _customerDisplay?.Update(CartLines.Select(l => l.ToDto()).ToList(), Subtotal, TaxPercent, TaxAmount, Total, PricesIncludeVat, CurrencySuffix);
     }
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -984,7 +1088,10 @@ public partial class MainViewModel : ObservableObject
             CartLines     = new ObservableCollection<CartLineItem>();
             ActiveCalcLine = null;
             Subtotal   = 0; TaxPercent = 0; TaxAmount = 0; Total = 0;
-            _customerDisplay?.Update([], 0, CurrencySuffix);
+            _suppressNoteChange = true;
+            InvoiceNoteText = "";
+            _suppressNoteChange = false;
+            _customerDisplay?.Update([], 0, 0, 0, 0, PricesIncludeVat, CurrencySuffix);
             return;
         }
 
@@ -998,11 +1105,15 @@ public partial class MainViewModel : ObservableObject
                 : null;
             SyncLineCalcHighlight();
             var summary = await sales.GetInvoiceSummaryAsync(CurrentInvoiceId.Value);
-            Subtotal   = summary.Subtotal;
-            TaxPercent = summary.TaxPercent;
-            TaxAmount  = summary.TaxAmount;
-            Total      = summary.Total;
-            _customerDisplay?.Update(CartLines.Select(l => l.ToDto()).ToList(), Total, CurrencySuffix);
+            Subtotal          = summary.Subtotal;
+            TaxPercent        = summary.TaxPercent;
+            TaxAmount         = summary.TaxAmount;
+            Total             = summary.Total;
+            PricesIncludeVat  = summary.PricesIncludeVat;
+            _suppressNoteChange = true;
+            InvoiceNoteText = summary.Notes ?? "";
+            _suppressNoteChange = false;
+            _customerDisplay?.Update(CartLines.Select(l => l.ToDto()).ToList(), Subtotal, TaxPercent, TaxAmount, Total, PricesIncludeVat, CurrencySuffix);
         }
 
         if (existingScope is not null)
@@ -1017,7 +1128,16 @@ public partial class MainViewModel : ObservableObject
 
     private void ApplyUiLanguage(string code)
     {
-        var culture = new CultureInfo(code);
+        // useUserOverride:false avoids inheriting the OS's Regional Settings digit-substitution
+        // override — historically the source of "he-IL renders Eastern-Arabic digits" bugs on
+        // Windows. Digit shapes are then fully controlled below via NumberFormat/Locale, not the OS.
+        var specificCode = code switch { "ar" => "ar-SA", "he" => "he-IL", _ => "en-US" };
+        var culture = new CultureInfo(specificCode, useUserOverride: false);
+
+        var useEasternDigits = code == "ar" && UseArabicIndicDigits;
+        culture.NumberFormat.DigitSubstitution = useEasternDigits ? DigitShapes.NativeNational : DigitShapes.None;
+        Locale.UseEasternArabicDigits = useEasternDigits;
+
         CultureInfo.CurrentCulture = culture;
         CultureInfo.CurrentUICulture = culture;
         System.Threading.Thread.CurrentThread.CurrentCulture = culture;
@@ -1034,6 +1154,19 @@ public partial class MainViewModel : ObservableObject
 
     private void NotifyLocalizationChanged()
     {
+        OnPropertyChanged(nameof(FormattedSubtotal));
+        OnPropertyChanged(nameof(FormattedTaxAmount));
+        OnPropertyChanged(nameof(FormattedTotal));
+        // These are bound directly (with the Digits converter) rather than through a Formatted* wrapper,
+        // so the digit-mode toggle needs an explicit re-notify even though the underlying value is unchanged.
+        OnPropertyChanged(nameof(TaxAmount));
+        OnPropertyChanged(nameof(QtyInput));
+        OnPropertyChanged(nameof(PriceInput));
+        foreach (var line in CartLines)
+            line.NotifyDigitDisplayChanged();
+        // Product grid rows carry their own Price binding through the same converter; force a full
+        // rebind so already-rendered cards pick up the new digit mode without needing a fresh search.
+        SearchResults = new ObservableCollection<ProductListItemDto>(SearchResults);
         OnPropertyChanged(nameof(UiFlowDirection));
         OnPropertyChanged(nameof(IsUiLanguageArabic));
         OnPropertyChanged(nameof(IsUiLanguageEnglish));
@@ -1045,16 +1178,21 @@ public partial class MainViewModel : ObservableObject
         OnPropertyChanged(nameof(NavProductsLabel));
         OnPropertyChanged(nameof(NavReportsLabel));
         OnPropertyChanged(nameof(NavAuditLabel));
+        OnPropertyChanged(nameof(NavUsersLabel));
+        OnPropertyChanged(nameof(NavDevicesLabel));
         OnPropertyChanged(nameof(NavSettingsLabel));
         OnPropertyChanged(nameof(NavLogoutLabel));
         OnPropertyChanged(nameof(OnlineLabel));
-        OnPropertyChanged(nameof(HoldOrdersLabel));
         OnPropertyChanged(nameof(NewInvoiceLabel));
         OnPropertyChanged(nameof(ScanLabel));
         OnPropertyChanged(nameof(LowStockLabel));
         OnPropertyChanged(nameof(WalkInCustomerLabel));
         OnPropertyChanged(nameof(EmptyCartLabel));
         OnPropertyChanged(nameof(QtyLabel));
+        OnPropertyChanged(nameof(CartHeaderProductLabel));
+        OnPropertyChanged(nameof(CartHeaderQtyLabel));
+        OnPropertyChanged(nameof(CartHeaderDiscountLabel));
+        OnPropertyChanged(nameof(CartHeaderSumLabel));
         OnPropertyChanged(nameof(EachLabel));
         OnPropertyChanged(nameof(AddNoteLabel));
         OnPropertyChanged(nameof(RefundLabel));
@@ -1066,6 +1204,7 @@ public partial class MainViewModel : ObservableObject
         OnPropertyChanged(nameof(CustomItemDefaultName));
         OnPropertyChanged(nameof(SubtotalLabel));
         OnPropertyChanged(nameof(TaxLabelPrefix));
+        OnPropertyChanged(nameof(VatIncludedLabel));
         OnPropertyChanged(nameof(TotalLabel));
         OnPropertyChanged(nameof(ProceedLabel));
         OnPropertyChanged(nameof(HoldOrderLabel));
@@ -1078,7 +1217,6 @@ public partial class MainViewModel : ObservableObject
         OnPropertyChanged(nameof(ScanToolTip));
         OnPropertyChanged(nameof(ToggleImagesToolTip));
         OnPropertyChanged(nameof(ToggleDarkModeToolTip));
-        OnPropertyChanged(nameof(HoldOrdersToolTip));
         OnPropertyChanged(nameof(AppTitle));
         OnPropertyChanged(nameof(InvoiceLabel));
         OnPropertyChanged(nameof(InvoiceStatusLabel));

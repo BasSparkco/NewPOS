@@ -36,10 +36,10 @@ public sealed class AccountController : Controller
         if (!ModelState.IsValid)
             return View(model);
 
-        var result = await _authService.LoginAsync(model.Username, cancellationToken);
+        var result = await _authService.LoginAsync(model.Username, model.Password, model.TenantSlug, cancellationToken);
         if (!result.Success || !_session.IsAuthenticated)
         {
-            ModelState.AddModelError(string.Empty, result.ErrorMessage ?? "Invalid username.");
+            ModelState.AddModelError(string.Empty, result.ErrorMessage ?? "Invalid username or password.");
             return View(model);
         }
 
@@ -55,6 +55,7 @@ public sealed class AccountController : Controller
             new(ClaimTypes.NameIdentifier, _session.UserId.ToString()),
             new(ClaimTypes.Name, _session.Username),
             new(ClaimTypes.Role, _session.RoleName),
+            new(WebClaimTypes.TenantId, _session.TenantId.ToString()),
             new(WebClaimTypes.StoreId, _session.StoreId.ToString()),
             new(WebClaimTypes.CurrencyCode, _session.BaseCurrencyCode)
         };

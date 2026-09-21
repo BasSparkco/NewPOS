@@ -1079,6 +1079,7 @@ public class WebIntegrationTests
             BuildFormContent(loginHtml, new Dictionary<string, string>
             {
                 ["Username"] = "admin",
+                ["Password"] = POS.Infrastructure.Data.DatabaseSeeder.DemoAdminPassword,
                 ["RememberMe"] = "true"
             }));
     }

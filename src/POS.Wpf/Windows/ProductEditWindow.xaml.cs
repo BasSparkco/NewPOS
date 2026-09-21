@@ -12,14 +12,16 @@ namespace POS.Wpf.Windows;
 public partial class ProductEditWindow : Window
 {
     private readonly ProductEditDto _model;
+    private readonly bool _isNew;
     private static readonly FilePathToImageConverter _imgConverter = new();
 
     public ProductEditWindow(ProductEditDto model, IReadOnlyList<CategoryDto> categories)
     {
         InitializeComponent();
         _model = model;
+        _isNew = model.Id == Guid.Empty;
         ApplyLocalization();
-        Title = model.Id == Guid.Empty ? Locale.Get("Product_AddTitle") : Locale.Get("Product_EditTitle");
+        Title = _isNew ? Locale.Get("Product_AddTitle") : Locale.Get("Product_EditTitle");
 
         // Bind simple fields
         NameBox.Text    = model.Name;
@@ -27,32 +29,36 @@ public partial class ProductEditWindow : Window
         PriceBox.Text   = model.Price.ToString("N2", CultureInfo.InvariantCulture);
         CostBox.Text    = model.Cost.ToString("N2", CultureInfo.InvariantCulture);
         StockBox.Text   = model.InitialStock.ToString("N2", CultureInfo.InvariantCulture);
-        ActiveCheck.IsChecked = model.IsActive;
+        ActiveToggle.IsChecked = model.IsActive;
 
         // Categories
         CategoryBox.ItemsSource    = categories;
         CategoryBox.SelectedValue  = model.CategoryId;
 
         // Image
-        if (!string.IsNullOrWhiteSpace(model.ImagePath) && File.Exists(model.ImagePath))
-            ProductImagePreview.Source =
-                (BitmapImage?)_imgConverter.Convert(model.ImagePath, typeof(BitmapImage), null, CultureInfo.CurrentCulture);
+        UpdateImagePreview(model.ImagePath);
     }
 
     private void ApplyLocalization()
     {
         Locale.ApplyFlowDirection(this);
+        DialogSubtitleTb.Text  = Locale.Get("Product_Subtitle");
+        SectionBasicTb.Text    = Locale.Get("Product_SectionBasicInfo");
+        SectionPricingTb.Text  = Locale.Get("Product_SectionPricing");
+        SectionInventoryTb.Text = Locale.Get("Product_SectionInventory");
+        SectionStatusTb.Text   = Locale.Get("Product_SectionStatus");
         PeNameLbl.Text     = Locale.Get("Product_NameLabel");
         PeBarcodeLbl.Text  = Locale.Get("Product_BarcodeLabel");
         PeCategoryLbl.Text = Locale.Get("Product_CategoryLabel");
         PePriceLbl.Text    = Locale.Get("Product_SellingPrice");
         PeCostLbl.Text     = Locale.Get("Product_CostPrice");
-        PeStockLbl.Text    = Locale.Get("Product_InitialStock");
+        PeStockLbl.Text    = _isNew ? Locale.Get("Product_InitialStock") : Locale.Get("Product_CurrentStock");
         PeImageLbl.Text    = Locale.Get("Product_ImageLabel");
         PeNoImageTb.Text   = Locale.Get("Product_NoImage");
         PeBrowseBtn.Content = Locale.Get("Product_Browse");
         PeClearBtn.Content  = Locale.Get("Product_Clear");
         PeActiveLbl.Text    = Locale.Get("Product_ActiveLabel");
+        PeActiveHelpTb.Text = Locale.Get("Product_ActiveHelp");
         PeCancelBtn.Content = Locale.Get("Product_Cancel");
         PeSaveBtn.Content   = Locale.Get("Product_Save");
     }
@@ -89,7 +95,7 @@ public partial class ProductEditWindow : Window
             Cost         = cost,
             InitialStock = stock < 0 ? 0 : stock,
             ImagePath    = _model.ImagePath,
-            IsActive     = ActiveCheck.IsChecked == true
+            IsActive     = ActiveToggle.IsChecked == true
         };
         DialogResult = true;
     }
@@ -107,13 +113,21 @@ public partial class ProductEditWindow : Window
         if (dlg.ShowDialog() != true) return;
 
         _model.ImagePath = dlg.FileName;
-        ProductImagePreview.Source =
-            (BitmapImage?)_imgConverter.Convert(dlg.FileName, typeof(BitmapImage), null, CultureInfo.CurrentCulture);
+        UpdateImagePreview(dlg.FileName);
     }
 
     private void ClearImage_Click(object sender, RoutedEventArgs e)
     {
         _model.ImagePath = null;
-        ProductImagePreview.Source = null;
+        UpdateImagePreview(null);
+    }
+
+    private void UpdateImagePreview(string? path)
+    {
+        var hasImage = !string.IsNullOrWhiteSpace(path) && File.Exists(path);
+        ProductImagePreview.Source = hasImage
+            ? (BitmapImage?)_imgConverter.Convert(path, typeof(BitmapImage), null, CultureInfo.CurrentCulture)
+            : null;
+        NoImagePlaceholder.Visibility = hasImage ? Visibility.Collapsed : Visibility.Visible;
     }
 }

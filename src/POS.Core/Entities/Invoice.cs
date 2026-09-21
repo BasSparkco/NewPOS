@@ -5,8 +5,10 @@ namespace POS.Core.Entities;
 public class Invoice
 {
     public Guid Id { get; set; }
+    public Guid TenantId { get; set; }
     public Guid StoreId { get; set; }
-    public Guid? DeviceId { get; set; }
+    /// <summary>The Box (register/terminal) this sale was rung up on. Required — every invoice is keyed by tenant + branch (StoreId) + box (DeviceId) + user.</summary>
+    public Guid DeviceId { get; set; }
     public Guid UserId { get; set; }
     public Guid? CustomerId { get; set; }
     public InvoiceStatus Status { get; set; }
@@ -21,6 +23,7 @@ public class Invoice
     public DateTime UpdatedAt { get; set; }
     public bool IsDeleted { get; set; }
 
+    public Tenant? Tenant { get; set; }
     public Device? Device { get; set; }
     public Store? Store { get; set; }
     public User? User { get; set; }

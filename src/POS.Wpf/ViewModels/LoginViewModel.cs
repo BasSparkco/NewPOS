@@ -19,6 +19,9 @@ public partial class LoginViewModel : ObservableObject
     [ObservableProperty]
     private string _username = "";
 
+    [ObservableProperty]
+    private string _password = "";
+
     public Window? Owner { get; set; }
 
     [RelayCommand]
@@ -26,7 +29,7 @@ public partial class LoginViewModel : ObservableObject
     {
         await using var scope = _scopeFactory.CreateAsyncScope();
         var auth = scope.ServiceProvider.GetRequiredService<IAuthService>();
-        var result = await auth.LoginAsync(Username);
+        var result = await auth.LoginAsync(Username, Password);
         if (!result.Success)
         {
             MessageBox.Show(result.ErrorMessage ?? Locale.Get("Login_Failed"), Locale.Get("Login_FailedTitle"), MessageBoxButton.OK, MessageBoxImage.Warning);

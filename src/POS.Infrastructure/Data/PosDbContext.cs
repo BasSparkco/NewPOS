@@ -13,13 +13,16 @@ public class PosDbContext : DbContext
     {
     }
 
+    public DbSet<Tenant> Tenants => Set<Tenant>();
     public DbSet<Store> Stores => Set<Store>();
     public DbSet<Device> Devices => Set<Device>();
     public DbSet<Currency> Currencies => Set<Currency>();
+    public DbSet<TenantCurrencyRate> TenantCurrencyRates => Set<TenantCurrencyRate>();
     public DbSet<Category> Categories => Set<Category>();
     public DbSet<Product> Products => Set<Product>();
     public DbSet<Role> Roles => Set<Role>();
     public DbSet<User> Users => Set<User>();
+    public DbSet<UserStoreAccess> UserStoreAccesses => Set<UserStoreAccess>();
     public DbSet<Setting> Settings => Set<Setting>();
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
     public DbSet<SyncChange> SyncChanges => Set<SyncChange>();
@@ -68,39 +71,39 @@ public class PosDbContext : DbContext
             switch (entry.Entity)
             {
                 case AuditLog auditLog:
-                    pending.Add(new PendingSyncChange(auditLog.StoreId, SyncAggregateTypes.AuditLog, auditLog.Id, null));
+                    pending.Add(new PendingSyncChange(auditLog.TenantId, auditLog.StoreId, SyncAggregateTypes.AuditLog, auditLog.Id, null));
                     break;
 
                 case Category category:
-                    pending.Add(new PendingSyncChange(null, SyncAggregateTypes.Category, category.Id, null));
+                    pending.Add(new PendingSyncChange(category.TenantId, null, SyncAggregateTypes.Category, category.Id, null));
                     break;
 
-                case Currency:
-                    pending.Add(new PendingSyncChange(null, SyncAggregateTypes.CurrencyPolicy, null, null));
+                case TenantCurrencyRate rate:
+                    pending.Add(new PendingSyncChange(rate.TenantId, null, SyncAggregateTypes.CurrencyPolicy, null, null));
                     break;
 
                 case Device device:
-                    pending.Add(new PendingSyncChange(device.StoreId, SyncAggregateTypes.Device, device.Id, null));
+                    pending.Add(new PendingSyncChange(device.TenantId, device.StoreId, SyncAggregateTypes.Device, device.Id, null));
                     break;
 
                 case Invoice invoice:
-                    pending.Add(new PendingSyncChange(invoice.StoreId, SyncAggregateTypes.Invoice, invoice.Id, null));
+                    pending.Add(new PendingSyncChange(invoice.TenantId, invoice.StoreId, SyncAggregateTypes.Invoice, invoice.Id, null));
                     break;
 
                 case Product product:
-                    pending.Add(new PendingSyncChange(null, SyncAggregateTypes.Product, product.Id, null));
+                    pending.Add(new PendingSyncChange(product.TenantId, null, SyncAggregateTypes.Product, product.Id, null));
                     break;
 
                 case User user:
-                    pending.Add(new PendingSyncChange(user.StoreId, SyncAggregateTypes.User, user.Id, null));
+                    pending.Add(new PendingSyncChange(user.TenantId, user.StoreId, SyncAggregateTypes.User, user.Id, null));
                     break;
 
                 case Setting setting when !setting.Key.StartsWith("Sync.", StringComparison.OrdinalIgnoreCase):
-                    pending.Add(new PendingSyncChange(setting.StoreId, SyncAggregateTypes.Setting, null, setting.Key));
+                    pending.Add(new PendingSyncChange(setting.TenantId, setting.StoreId, SyncAggregateTypes.Setting, null, setting.Key));
                     break;
 
                 case Store store when entry.State == EntityState.Added || entry.Property(nameof(Store.BaseCurrencyId)).IsModified:
-                    pending.Add(new PendingSyncChange(store.Id, SyncAggregateTypes.CurrencyPolicy, store.Id, null));
+                    pending.Add(new PendingSyncChange(store.TenantId, store.Id, SyncAggregateTypes.CurrencyPolicy, store.Id, null));
                     break;
             }
         }
@@ -119,6 +122,7 @@ public class PosDbContext : DbContext
             var changedAt = DateTime.UtcNow;
             SyncChanges.AddRange(pendingSyncChanges.Select(change => new SyncChange
             {
+                TenantId = change.TenantId,
                 StoreId = change.StoreId,
                 AggregateType = change.AggregateType,
                 EntityId = change.EntityId,
@@ -147,6 +151,7 @@ public class PosDbContext : DbContext
             var changedAt = DateTime.UtcNow;
             SyncChanges.AddRange(pendingSyncChanges.Select(change => new SyncChange
             {
+                TenantId = change.TenantId,
                 StoreId = change.StoreId,
                 AggregateType = change.AggregateType,
                 EntityId = change.EntityId,
@@ -162,6 +167,7 @@ public class PosDbContext : DbContext
     }
 
     private sealed record PendingSyncChange(
+        Guid TenantId,
         Guid? StoreId,
         string AggregateType,
         Guid? EntityId,

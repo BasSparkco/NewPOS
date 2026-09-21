@@ -19,6 +19,8 @@ public interface ISaleService
     Task SetLineDiscountAsync(Guid invoiceId, Guid lineId, decimal discountPercent, CancellationToken cancellationToken = default);
     /// <summary>Sets the invoice-level tax rate (e.g. 17 for 17% VAT).</summary>
     Task SetInvoiceTaxAsync(Guid invoiceId, decimal taxPercent, CancellationToken cancellationToken = default);
+    /// <summary>Sets a free-text note on the invoice, printed on the receipt.</summary>
+    Task SetInvoiceNoteAsync(Guid invoiceId, string? note, CancellationToken cancellationToken = default);
     /// <summary>Returns the full totals breakdown (subtotal, tax, total) for display.</summary>
     Task<InvoiceSummaryDto> GetInvoiceSummaryAsync(Guid invoiceId, CancellationToken cancellationToken = default);
     Task<SaleCompletionResult> CompleteCashSaleAsync(Guid invoiceId, decimal cashTendered, CancellationToken cancellationToken = default);

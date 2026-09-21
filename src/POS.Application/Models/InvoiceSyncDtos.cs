@@ -66,7 +66,9 @@ public sealed record UserSyncDto(
     bool IsActive,
     DateTime CreatedAt,
     DateTime UpdatedAt,
-    bool IsDeleted);
+    bool IsDeleted,
+    int RolePermissionsMask = 0,
+    DateTime RoleUpdatedAt = default);
 
 public sealed record UserSyncPullResultDto(
     IReadOnlyList<UserSyncDto> Users,
@@ -118,7 +120,11 @@ public sealed record DeviceSyncDto(
     int SyncVersion,
     DateTime CreatedAt,
     DateTime UpdatedAt,
-    bool IsDeleted);
+    bool IsDeleted,
+    string? EnrollmentCodeHash = null,
+    DateTime? EnrolledAt = null,
+    bool IsRevoked = false,
+    DateTime? RevokedAt = null);
 
 public sealed record DeviceSyncPullResultDto(
     IReadOnlyList<DeviceSyncDto> Devices,

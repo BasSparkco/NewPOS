@@ -46,8 +46,8 @@ Track completed **stages** and **steps** against [ROADMAP.md](ROADMAP.md). Updat
 | Step | Status | Notes |
 |------|--------|-------|
 | 2.1 Multi-invoice tabs + hold/resume | [x] | Tabs, concurrent invoices, Hold/Resume (F3), orange dot on held tabs, guard on pay |
-| 2.2 Users & roles + RBAC | [x] | Catalog button hidden for Cashier; role shown in user badge; IsAdmin gate in ViewModel |
-| 2.3 Refund / cancel + stock movements | [x] | RefundInvoiceAsync restores stock; RefundWindow lists recent paid invoices; Admin-only |
+| 2.2 Users & roles + RBAC | [x] | Real granular RBAC: `Role.PermissionsMask` (`[Flags] Permission`: ManageProducts/ViewReports/ViewAudit/ManageUsers/ManageSettings/ProcessRefunds) replaces the old binary `IsAdmin` gate in the WPF app; the "Users" screen (sidebar) edits a role's permissions directly, and permission edits sync between devices via the existing offline sync engine. Admin role always keeps ManageUsers (server-enforced) to prevent lockout. `POS.Web` dashboard gating and `POS.Api` JWT claims are unchanged (still coarse Admin/Manager-only) — tracked as the remaining follow-up in [ROADMAP.md](ROADMAP.md) |
+| 2.3 Refund / cancel + stock movements | [x] | RefundInvoiceAsync restores stock; RefundWindow lists recent paid invoices; gated by the ProcessRefunds permission (previously undocumented as ungated — any signed-in user could open Refund until this pass) |
 | 2.4 Quick price check + low-stock alerts | [x] | Price check window (F2), low-stock badge on cards + detail view |
 | 2.5 Local reports (daily sales, basic metrics) | [x] | ReportsWindow: revenue, invoices, items sold, avg, top products, per-invoice list; date picker |
 | 2.6 Customer display window | [x] | CustomerDisplayWindow: live cart + total, clock, idle screen; toggle via header button |
@@ -108,6 +108,66 @@ Track completed **stages** and **steps** against [ROADMAP.md](ROADMAP.md). Updat
 
 ---
 
+## Stage 4T — Multi-tenant SaaS foundation
+
+Detailed plan: [tenant.md](tenant.md). Production-readiness prerequisite for Stage 5.1 and Stage 5.2 (multi-branch reporting).
+
+| Step | Status |
+|------|--------|
+| T0 Repository audit and migration map | [x] |
+| T1 Tenant schema, store access, verified data migration | [~] |
+| T2 Trusted identity and server authorization | [~] |
+| T3 Tenant-safe WPF and offline profiles | [ ] |
+| T4 Scoped synchronization and stock reconciliation | [ ] |
+| T5 Tenant-aware administration and branch access | [ ] |
+| T6 Isolation and resilience release gate | [ ] |
+| T7 Recovery rehearsal and controlled pilot | [ ] |
+
+**2026-09-21 planning note:** Confirmed the tenancy model in `tenant.md`: true multi-tenant SaaS (shared DB), `Store` remains the branch/location entity (no separate `Branch` table), and `Device` is promoted to be the formal "Box" (register/terminal) a cashier logs into rather than a pure sync-identity row. Every invoice is now keyed by tenant + branch (`StoreId`) + box (`DeviceId`) + user (`UserId`).
+
+**T0 complete:** Full repository audit recorded in [docs/TENANT_T0_AUDIT.md](docs/TENANT_T0_AUDIT.md) — entity ownership inventory, pre-existing gaps (unauthenticated login, unenforced device identity, global role-name matching in sync), and the old-to-new ownership map. Confirmed the database is demonstrably single-business, so one bootstrap tenant unambiguously owns every existing row. Baseline before this work: `dotnet build` clean, `dotnet test` 77/77 passing.
+
+**T1 in progress:** Added `Tenant`, `TenantCurrencyRate` (splits per-tenant exchange rates off the now-global-reference-only `Currency` row so one tenant's base-currency change can never corrupt another tenant's rates), and `UserStoreAccess` entities. Added `TenantId` to Store, User, Role, Product, Category, Device, Inventory, StockMovement, Setting, AuditLog, Invoice, and SyncChange, plus `User.NormalizedUsername` and tenant-scoped uniqueness on `(TenantId, NormalizedUsername)` and `(TenantId, Name)` for Roles. `Invoice.DeviceId` is now required at the application/entity level (every write path always populates it; a one-time migration backfill covers any legacy row that predates `DeviceId`). Single migration `AddTenantFoundation` implements the full expand+backfill+constrain in one pass (no separate phases needed) using `AddColumn` with a uniform bootstrap-tenant default instead of `AlterColumn`, since EF Core's SQLite provider does not support `AlterColumnOperation` at all. Every application service, sync push/pull handler (both `POS.Api/Program.cs` and the WPF-side `InvoiceSyncService.cs` mirror), and the `POS.Web` user-management postback now stamps `TenantId` correctly; full `POS.Tests` suite (77/77) passes against the real migrated SQLite schema via `Database.Migrate()`, not just `EnsureCreated`.
+
+**Known T1 gaps carried forward:**
+- Only validated against SQLite so far — the same migration has not yet been rehearsed against PostgreSQL (production provider). Postgres supports `AlterColumn` natively so should behave differently there; needs its own rehearsal before a Postgres rollout.
+- `Invoices.DeviceId` and `AuditLogs.StoreId` keep their pre-migration nullability at the **database** level (SQLite can't `AlterColumn` an existing table at all) — enforced at the entity/application level instead. Revisit when a real table-rebuild or Postgres-only tightening is worth the risk.
+- `POST /api/sync/categories/push` still has no auth context to derive a tenant from (pre-existing gap, documented in the T0 audit) — falls back to the sole bootstrap tenant; needs a real fix in T4.
+- Read-side sync/query scoping by tenant (not just correct writes) is explicitly T4 scope, not done here.
+- A hard-coded uppercase-GUID-literal gotcha was hit and fixed during T1: `Microsoft.Data.Sqlite` binds `Guid` parameters as uppercase text while `Guid.ToString()` is lowercase, so raw-SQL-seeded GUIDs (this migration's bootstrap tenant, and the pre-existing `Currencies.Id` seed data) must be uppercased or every future EF-written FK reference to them silently fails. Worth remembering for any future hand-authored migration in this codebase.
+
+**T2 in progress — real password authentication landed (2026-09-21):** `AuthService.LoginAsync` previously matched on username only and never checked `PasswordHash` at all (T0 audit finding — this was a genuine unauthenticated-login gap, not just "weak auth"). Fixed:
+- `IAuthService.LoginAsync(username, password, ...)` now verifies the password with `BCrypt.Net.BCrypt.Verify` against the stored hash; a bad username, inactive account, or wrong password all return the same generic "Invalid username or password." (no enumeration).
+- WPF `LoginWindow` has a real `PasswordBox` now (was username-only); `POS.Api`'s `LoginRequest` and `POS.Web`'s `AccountController`/`Login.cshtml` both take a password.
+- Seeded demo users (`admin`/`cashier`) now get randomly generated passwords instead of the trivial `"admin"`/`"cashier"` literals — see `DatabaseSeeder.DemoAdminPassword`/`DemoCashierPassword` and [start.md](start.md) for the actual values.
+- New users created via the WPF Users screen (`UserManagementService.CreateUserAsync`) or the web dashboard's Management page (`ManagementController.CreateUser`) — both previously set `PasswordHash = string.Empty`, meaning no one could ever have logged in as a newly created user even before this pass — now get a random temporary password (`RandomPasswordGenerator`, `POS.Application/Support`) shown once at creation time (`Users_TemporaryPasswordFormat` message box in WPF; `TempData["ManagementSuccess"]` in Web). There is no forced-password-change-on-first-login flow yet.
+- Full `POS.Tests` suite (77/77) passes with real password checks exercised end-to-end (API JWT login, Web cookie login, WPF `AuthService` unit-level paths).
+
+**T2 in progress — device (Box) enrollment landed (2026-09-21, same day, follow-up turn):** T0 audit finding #5 ("Device identity is fully unauthenticated and auto-provisioned") fixed as an opt-in feature:
+- `Device` gained `EnrollmentCodeHash`, `EnrolledAt`, `IsRevoked`, `RevokedAt` (migration `AddDeviceEnrollment` — plain `AddColumn`s only, no `AlterColumn`, so it's SQLite-safe by construction this time).
+- New `IDeviceManagementService`/`DeviceManagementService`: `ProvisionDeviceAsync` (admin creates a not-yet-enrolled device row + one-time enrollment code, shown once — only its BCrypt hash is stored), `EnrollCurrentMachineAsync` (redeems the code and rebinds that device row's `Name` to the current machine, consuming the code), `RevokeDeviceAsync`, `GetDevicesAsync`.
+- New WPF "Devices" screen (`DeviceManagementWindow`/`ViewModel`, sidebar entry gated on `Permission.ManageSettings`) to provision, revoke, and self-enroll from the same screen.
+- `SaleService.GetOrCreateCurrentDeviceAsync` now throws `DeviceNotAuthorizedException` (caught and shown as a friendly warning in `MainViewModel.NewSaleAsync`) when: the matched device `IsRevoked` (**always enforced, unconditionally** — this part needed no opt-in), or when `Sync:RequireDeviceEnrollment=true` and the device is either missing entirely or provisioned-but-not-yet-enrolled. That config key is **not** set anywhere by default (absent = `false` everywhere, including `POS.Wpf/appsettings.json`), so the existing lenient auto-create-and-trust behavior is completely unchanged out of the box — a store opts into strict enrollment by adding the key to its own `appsettings.json`. This was deliberate: flipping the default now would have broken the demo quick-start flow in `start.md` (no device is pre-provisioned/enrolled for the seeded demo data).
+- Enrollment state syncs like any other `Device` field (`DeviceSyncDto` extended, both `UpsertDeviceSnapshotAsync` copies updated) — but revocation is deliberately **sticky** in that sync path: an incoming snapshot can only ever flip `IsRevoked` from false→true, never back, so a stale/compromised client pushing an out-of-date "not revoked" snapshot can't un-revoke itself.
+- 6 new tests (`DeviceManagementServiceTests`) cover provisioning, wrong-code rejection, successful enrollment + one-time-code consumption, sale blocked when enrollment is required and the machine isn't provisioned, sale succeeds after enrollment, and revocation blocking sales even in the default lenient mode. Full `POS.Tests` suite: 83/83 passing.
+
+**Important gap surfaced by this work, relevant to the original "multiple Boxes per branch" request:** enrollment only helps a *second physical machine that already has a correctly-configured local database for the same store*. A genuinely fresh WPF install today has no bootstrap flow to "join an existing store" at all — `DatabaseSeeder` unconditionally seeds a **brand-new independent tenant** on first run if none exists locally, so a second real cash register can't yet just be installed and pointed at the same store; that bootstrap flow is T3 scope ("Tenant-safe WPF and offline profiles" — tenant.md explicitly calls out "a separate enrolled data profile/bootstrap" for this). Device enrollment as built here is the right foundation for that later flow, but does not by itself solve "add a second real register."
+
+**Bug found and fixed the same day (2026-09-21):** the password-authentication pass above shipped `NormalizeBrokenDemoPasswordHashes`, a startup fixup that only re-hashes *broken* (empty/plaintext/malformed) demo-user password hashes — it deliberately left any *valid* BCrypt hash alone, including a hash for a different password, on the theory that a real user might have changed it. That safety check backfired for every pre-existing local dev database: `pos.db` files seeded before this feature existed (back in Stage 1) hold a **valid** BCrypt hash for the old literal password `"admin"`/`"cashier"`, so those installs silently kept rejecting the new documented demo passwords in [start.md](start.md) forever, with no way to self-heal short of deleting the database file. Fixed in `DatabaseSeeder.NormalizeBrokenDemoPasswordHashes`: the two seeded demo accounts now also get upgraded when their hash verifies against the specific pre-9/21 literal username-as-password value, while a hash matching neither the current nor that legacy literal password is still left untouched (so an intentionally-changed password is still never clobbered). Verified directly against the reporter's actual local `pos.db` (hash matched `"admin"`, not the new password) before and after the fix.
+
+**T2 in progress — tenant-scoped login landed (2026-09-21, same day, follow-up turn):** `AuthService.LoginAsync` resolved its username lookup with no `TenantId` filter at all (`db.Users.FirstOrDefaultAsync(u => u.Username.ToLower() == nameLower ...)`), so the tenant.md T2 exit criterion "same username works independently in two tenants" did not actually hold — with two tenants both containing an `admin` user, login would silently authenticate against whichever tenant's row EF returned first, regardless of which tenant's password was supplied. Not yet exploitable in practice (every current deployment seeds exactly one bootstrap tenant and there is still no tenant-provisioning flow), but a live latent cross-tenant auth bug once T5 adds real tenant onboarding. Fixed:
+- `IAuthService.LoginAsync` gained an optional `tenantSlug` parameter. An explicit slug must match an active, non-deleted `Tenant.NormalizedSlug`. With no slug, the service auto-resolves only when exactly one active tenant exists system-wide (true for every desktop SQLite profile and today's single-bootstrap-tenant server) — the moment a second tenant exists, an omitted slug fails closed instead of guessing. A suspended tenant can never authenticate, slug or not.
+- The user lookup itself is now scoped by the resolved `TenantId`, so two tenants can safely share the same username with independent passwords.
+- `ICurrentSession` gained a `TenantId` member; `Set(...)` now takes it as its first parameter. All three implementations (`CurrentSession` in WPF, `ApiCurrentSession`, `WebCurrentSession`) plus the `TestCurrentSession` test fake were updated. `POS.Api` issues a `tenant_id` JWT claim on login and rehydrates it into `ApiCurrentSession` per request; `POS.Web` does the same as a cookie claim through `WebClaimTypes.TenantId`.
+- `POS.Api`'s `LoginRequest` and `POS.Web`'s `LoginViewModel`/`Login.cshtml` gained an optional `TenantSlug`/"Business" field ("leave blank for a single-business deployment"). WPF's `LoginWindow` was deliberately left unchanged — a local WPF install only ever holds one tenant by construction (T3 scope will formalize per-install tenant binding), so the existing username/password-only flow keeps working via auto-resolution.
+- 5 new tests (`AuthServiceTests`) cover: same username authenticating independently in two tenants, the right password rejected against the wrong tenant's slug, an omitted slug failing once a second tenant exists, an unknown slug being rejected, and a suspended tenant being blocked. Full `POS.Tests` suite: 88/88 passing.
+
+**Remaining T2 scope (not done in this pass):** rate limiting, offline authorization expiry window (24h was the agreed policy — not implemented yet), granular permission enforcement on `POS.Api`/`POS.Web` beyond the existing coarse Admin/Manager check, a real "change password" / "reset password" flow, minimal authenticated tenant/store/first-admin provisioning (there is still no way to create a *second* tenant at all — T2's tenant-slug login has nothing to resolve against until T5-era provisioning exists), and a per-request device credential for the sync protocol itself (today's enrollment code is a one-time setup gate, not a per-call credential — `POS.Api`'s sync endpoints still trust whichever `DeviceId`/`DeviceName` a JWT-authenticated user's client sends in the payload).
+
+**Stage 4T complete:** [ ]
+
+---
+
 ## Stage 5 — Web dashboard & beyond
 
 | Step | Status |
@@ -130,6 +190,7 @@ Track completed **stages** and **steps** against [ROADMAP.md](ROADMAP.md). Updat
 | 2 | Operations & UX | Yes |
 | 3 | Commercial depth | Yes |
 | 4 | API & sync | Yes |
+| 4T | Multi-tenant SaaS foundation | No |
 | 5 | Web & beyond | No |
 
 **Reference note:** The external reference project reviewed during planning was moved out of this repo to `C:\projects\pos_q`. If we need another comparison pass later, use that location instead of expecting `pos_q/` under this repository root.

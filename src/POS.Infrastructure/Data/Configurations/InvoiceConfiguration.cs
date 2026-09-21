@@ -19,6 +19,10 @@ internal sealed class InvoiceConfiguration : IEntityTypeConfiguration<Invoice>
         builder.Property(e => e.Status).HasConversion<int>();
         builder.HasIndex(e => new { e.StoreId, e.Status });
         builder.HasIndex(e => new { e.StoreId, e.IsSynced });
+        builder.HasOne(e => e.Tenant)
+            .WithMany()
+            .HasForeignKey(e => e.TenantId)
+            .OnDelete(DeleteBehavior.Restrict);
         builder.HasOne(e => e.Store)
             .WithMany()
             .HasForeignKey(e => e.StoreId)

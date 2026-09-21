@@ -92,6 +92,10 @@ public partial class App : System.Windows.Application
                 services.AddTransient<ProductManagementWindow>();
                 services.AddTransient<CurrencySettingsViewModel>();
                 services.AddTransient<CurrencySettingsWindow>();
+                services.AddTransient<UserManagementViewModel>();
+                services.AddTransient<UserManagementWindow>();
+                services.AddTransient<DeviceManagementViewModel>();
+                services.AddTransient<DeviceManagementWindow>();
             })
             .Build();
 

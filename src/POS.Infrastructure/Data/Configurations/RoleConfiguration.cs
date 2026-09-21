@@ -11,6 +11,10 @@ internal sealed class RoleConfiguration : IEntityTypeConfiguration<Role>
         builder.ToTable("Roles");
         builder.HasKey(e => e.Id);
         builder.Property(e => e.Name).HasMaxLength(100).IsRequired();
-        builder.HasIndex(e => e.Name).IsUnique();
+        builder.HasIndex(e => new { e.TenantId, e.Name }).IsUnique();
+        builder.HasOne(e => e.Tenant)
+            .WithMany()
+            .HasForeignKey(e => e.TenantId)
+            .OnDelete(DeleteBehavior.Restrict);
     }
 }

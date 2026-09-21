@@ -70,23 +70,27 @@ app.Use(async (context, next) =>
         var user = context.User;
         if (user.Identity?.IsAuthenticated == true)
         {
+            var tenantId = TryParseGuid(user.FindFirstValue(WebClaimTypes.TenantId));
             var userId = TryParseGuid(user.FindFirstValue(ClaimTypes.NameIdentifier));
             var storeId = TryParseGuid(user.FindFirstValue(WebClaimTypes.StoreId));
             var username = user.FindFirstValue(ClaimTypes.Name);
             var roleName = user.FindFirstValue(ClaimTypes.Role);
             var baseCurrencyCode = user.FindFirstValue(WebClaimTypes.CurrencyCode);
 
-            if (userId.HasValue
+            if (tenantId.HasValue
+                && userId.HasValue
                 && storeId.HasValue
                 && !string.IsNullOrWhiteSpace(username)
                 && !string.IsNullOrWhiteSpace(roleName)
                 && !string.IsNullOrWhiteSpace(baseCurrencyCode))
             {
                 session.Set(
+                    tenantId.Value,
                     userId.Value,
                     storeId.Value,
                     username,
                     roleName,
+                    0, // Permission enforcement is not wired up for the web dashboard's cookie auth yet — sync-only for now.
                     baseCurrencyCode,
                     user.FindFirstValue(WebClaimTypes.CurrencySymbol));
             }

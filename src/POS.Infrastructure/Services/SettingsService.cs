@@ -13,12 +13,16 @@ internal sealed class SettingsService : ISettingsService
     private const string LowStockThresholdKey = "LowStockThreshold";
     private const string DefaultTaxPercentKey = "DefaultTaxPercent";
     private const string ReceiptFooterTextKey = "ReceiptFooterText";
+    private const string UseArabicIndicDigitsKey = "UseArabicIndicDigits";
+    private const string PricesIncludeVatKey = "PricesIncludeVat";
 
     private static readonly StoreSettingsDto DefaultSettings = new(
         AllowNegativeStock: false,
         LowStockThreshold: 5m,
         DefaultTaxPercent: 0m,
-        ReceiptFooterText: null);
+        ReceiptFooterText: null,
+        UseArabicIndicDigits: false,
+        PricesIncludeVat: false);
 
     private readonly IDbContextFactory<PosDbContext> _dbFactory;
     private readonly ICurrentSession _session;
@@ -42,7 +46,9 @@ internal sealed class SettingsService : ISettingsService
             AllowNegativeStock: ParseBool(entries, AllowNegativeStockKey, DefaultSettings.AllowNegativeStock),
             LowStockThreshold: ParseDecimal(entries, LowStockThresholdKey, DefaultSettings.LowStockThreshold),
             DefaultTaxPercent: ParseDecimal(entries, DefaultTaxPercentKey, DefaultSettings.DefaultTaxPercent),
-            ReceiptFooterText: ParseString(entries, ReceiptFooterTextKey, DefaultSettings.ReceiptFooterText));
+            ReceiptFooterText: ParseString(entries, ReceiptFooterTextKey, DefaultSettings.ReceiptFooterText),
+            UseArabicIndicDigits: ParseBool(entries, UseArabicIndicDigitsKey, DefaultSettings.UseArabicIndicDigits),
+            PricesIncludeVat: ParseBool(entries, PricesIncludeVatKey, DefaultSettings.PricesIncludeVat));
     }
 
     public async Task UpdateStoreSettingsAsync(StoreSettingsDto settings, CancellationToken cancellationToken = default)
@@ -56,17 +62,25 @@ internal sealed class SettingsService : ISettingsService
         await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken);
 
         var storeId = _session.StoreId;
-        var keys = new[] { AllowNegativeStockKey, LowStockThresholdKey, DefaultTaxPercentKey, ReceiptFooterTextKey };
+        var tenantId = await db.Stores
+            .AsNoTracking()
+            .Where(s => s.Id == storeId && !s.IsDeleted)
+            .Select(s => (Guid?)s.TenantId)
+            .FirstOrDefaultAsync(cancellationToken)
+            ?? throw new InvalidOperationException("Store not found.");
+        var keys = new[] { AllowNegativeStockKey, LowStockThresholdKey, DefaultTaxPercentKey, ReceiptFooterTextKey, UseArabicIndicDigitsKey, PricesIncludeVatKey };
         var existing = await db.Settings
             .Where(s => s.StoreId == storeId && keys.Contains(s.Key) && !s.IsDeleted)
             .ToDictionaryAsync(s => s.Key, cancellationToken);
 
         var now = DateTime.UtcNow;
 
-        Upsert(existing, db, storeId, AllowNegativeStockKey, settings.AllowNegativeStock ? "true" : "false", now);
-        Upsert(existing, db, storeId, LowStockThresholdKey, settings.LowStockThreshold.ToString(CultureInfo.InvariantCulture), now);
-        Upsert(existing, db, storeId, DefaultTaxPercentKey, settings.DefaultTaxPercent.ToString(CultureInfo.InvariantCulture), now);
-        Upsert(existing, db, storeId, ReceiptFooterTextKey, (settings.ReceiptFooterText ?? string.Empty).Trim(), now);
+        Upsert(existing, db, tenantId, storeId, AllowNegativeStockKey, settings.AllowNegativeStock ? "true" : "false", now);
+        Upsert(existing, db, tenantId, storeId, LowStockThresholdKey, settings.LowStockThreshold.ToString(CultureInfo.InvariantCulture), now);
+        Upsert(existing, db, tenantId, storeId, DefaultTaxPercentKey, settings.DefaultTaxPercent.ToString(CultureInfo.InvariantCulture), now);
+        Upsert(existing, db, tenantId, storeId, ReceiptFooterTextKey, (settings.ReceiptFooterText ?? string.Empty).Trim(), now);
+        Upsert(existing, db, tenantId, storeId, UseArabicIndicDigitsKey, settings.UseArabicIndicDigits ? "true" : "false", now);
+        Upsert(existing, db, tenantId, storeId, PricesIncludeVatKey, settings.PricesIncludeVat ? "true" : "false", now);
 
         await db.SaveChangesAsync(cancellationToken);
     }
@@ -74,6 +88,7 @@ internal sealed class SettingsService : ISettingsService
     private static void Upsert(
         IReadOnlyDictionary<string, Setting> existing,
         PosDbContext db,
+        Guid tenantId,
         Guid storeId,
         string key,
         string value,
@@ -89,6 +104,7 @@ internal sealed class SettingsService : ISettingsService
         db.Settings.Add(new Setting
         {
             Id = Guid.NewGuid(),
+            TenantId = tenantId,
             StoreId = storeId,
             Key = key,
             Value = value,

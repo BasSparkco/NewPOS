@@ -37,9 +37,16 @@ internal sealed class AuditLogService : IAuditLogService
         await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken);
         var now = DateTime.UtcNow;
 
+        var tenantId = await db.Stores
+            .AsNoTracking()
+            .Where(s => s.Id == _session.StoreId && !s.IsDeleted)
+            .Select(s => (Guid?)s.TenantId)
+            .FirstOrDefaultAsync(cancellationToken) ?? Guid.Empty;
+
         db.AuditLogs.Add(new AuditLog
         {
             Id = Guid.NewGuid(),
+            TenantId = tenantId,
             StoreId = _session.StoreId,
             UserId = _session.UserId == Guid.Empty ? null : _session.UserId,
             Action = Truncate(action.Trim(), ActionMaxLength),
@@ -93,7 +100,7 @@ internal sealed class AuditLogService : IAuditLogService
             .Take(take)
             .Select(x => new AuditLogDto(
                 x.Id,
-                x.StoreId,
+                x.StoreId ?? Guid.Empty,
                 x.UserId,
                 x.User != null ? x.User.Username : null,
                 x.Action,

@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using POS.Application.Abstractions;
 using POS.Application.Models;
+using POS.Application.Support;
 using POS.Core.Entities;
 using POS.Core.Enums;
 using POS.Infrastructure.Data;
@@ -121,7 +122,8 @@ public sealed class ManagementController : Controller
                 form.AllowNegativeStock,
                 form.LowStockThreshold,
                 form.DefaultTaxPercent,
-                NormalizeOptional(form.ReceiptFooterText)),
+                NormalizeOptional(form.ReceiptFooterText),
+                PricesIncludeVat: form.PricesIncludeVat),
             cancellationToken);
 
         TempData["ManagementSuccess"] = "Operational settings updated.";
@@ -183,12 +185,22 @@ public sealed class ManagementController : Controller
             return RedirectToAction(nameof(Index));
         }
 
+        var tenantId = await db.Stores
+            .AsNoTracking()
+            .Where(s => s.Id == _session.StoreId && !s.IsDeleted)
+            .Select(s => (Guid?)s.TenantId)
+            .FirstOrDefaultAsync(cancellationToken)
+            ?? throw new InvalidOperationException("Store not found.");
+
+        var generatedPassword = RandomPasswordGenerator.Generate();
         var now = DateTime.UtcNow;
         var user = new User
         {
             Id = Guid.NewGuid(),
+            TenantId = tenantId,
             Username = username,
-            PasswordHash = string.Empty,
+            NormalizedUsername = normalizedUsername.ToUpperInvariant(),
+            PasswordHash = BCrypt.Net.BCrypt.HashPassword(generatedPassword),
             RoleId = role.Id,
             StoreId = _session.StoreId,
             IsActive = form.IsActive,
@@ -198,6 +210,15 @@ public sealed class ManagementController : Controller
         };
 
         db.Users.Add(user);
+        db.UserStoreAccesses.Add(new UserStoreAccess
+        {
+            Id = Guid.NewGuid(),
+            TenantId = tenantId,
+            UserId = user.Id,
+            StoreId = _session.StoreId,
+            CreatedAt = now,
+            UpdatedAt = now
+        });
         await db.SaveChangesAsync(cancellationToken);
         await TryWriteAuditAsync(
             "UserCreated",
@@ -206,7 +227,7 @@ public sealed class ManagementController : Controller
             $"Username={user.Username}; Role={role.Name}; Active={user.IsActive}",
             cancellationToken);
 
-        TempData["ManagementSuccess"] = $"User '{user.Username}' created.";
+        TempData["ManagementSuccess"] = $"User '{user.Username}' created. Temporary password: {generatedPassword} — share this securely; it will not be shown again.";
         return RedirectToAction(nameof(Index));
     }
 
@@ -356,6 +377,7 @@ public sealed class ManagementController : Controller
         var oldDetails = $"Username={user.Username}; RoleId={user.RoleId}; Active={user.IsActive}";
 
         user.Username = username;
+        user.NormalizedUsername = normalizedUsername.ToUpperInvariant();
         user.RoleId = role.Id;
         user.IsActive = form.IsActive;
         user.UpdatedAt = DateTime.UtcNow;
@@ -586,6 +608,7 @@ public sealed class ManagementController : Controller
                 AllowNegativeStock = settings.AllowNegativeStock,
                 LowStockThreshold = settings.LowStockThreshold,
                 DefaultTaxPercent = settings.DefaultTaxPercent,
+                PricesIncludeVat = settings.PricesIncludeVat,
                 ReceiptFooterText = settings.ReceiptFooterText
             },
             CurrencyPolicy = new CurrencyPolicyFormViewModel

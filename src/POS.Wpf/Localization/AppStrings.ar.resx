@@ -7,9 +7,10 @@
   <data name="App_TitleShort" xml:space="preserve"><value>نقطة البيع</value></data>
   <data name="Login_Title" xml:space="preserve"><value>نقطة البيع — تسجيل الدخول</value></data>
   <data name="Login_Username" xml:space="preserve"><value>اسم المستخدم</value></data>
+  <data name="Login_Password" xml:space="preserve"><value>كلمة المرور</value></data>
   <data name="Login_SignIn" xml:space="preserve"><value>دخول</value></data>
   <data name="Login_FailedTitle" xml:space="preserve"><value>نقطة البيع</value></data>
-  <data name="Login_Failed" xml:space="preserve"><value>اسم المستخدم غير صالح.</value></data>
+  <data name="Login_Failed" xml:space="preserve"><value>اسم المستخدم أو كلمة المرور غير صحيحة.</value></data>
   <data name="CurrencySettings_Title" xml:space="preserve"><value>إعدادات المتجر</value></data>
   <data name="CurrencySettings_Header" xml:space="preserve"><value>إعدادات المتجر</value></data>
   <data name="CurrencySettings_Subtitle" xml:space="preserve"><value>إدارة قواعد التشغيل ونص تذييل الإيصال وسياسة العملة المستخدمة في نقطة البيع.</value></data>
@@ -18,7 +19,9 @@
   <data name="CurrencySettings_AllowNegativeStock" xml:space="preserve"><value>السماح بالبيع بعد نفاد المخزون المتاح</value></data>
   <data name="CurrencySettings_LowStockThreshold" xml:space="preserve"><value>حد المخزون المنخفض</value></data>
   <data name="CurrencySettings_DefaultTaxPercent" xml:space="preserve"><value>نسبة الضريبة الافتراضية</value></data>
+  <data name="CurrencySettings_PricesIncludeVat" xml:space="preserve"><value>أسعار المنتجات شاملة الضريبة (لا تُضاف ضريبة عند الدفع)</value></data>
   <data name="CurrencySettings_ReceiptFooter" xml:space="preserve"><value>نص تذييل الإيصال</value></data>
+  <data name="CurrencySettings_UseArabicIndicDigits" xml:space="preserve"><value>استخدام الأرقام الهندية (٠١٢٣) في واجهة اللغة العربية</value></data>
   <data name="CurrencySettings_ExchangeRatesHeader" xml:space="preserve"><value>العملة وأسعار الصرف</value></data>
   <data name="CurrencySettings_Store" xml:space="preserve"><value>المتجر:</value></data>
   <data name="CurrencySettings_BaseCurrency" xml:space="preserve"><value>العملة الأساسية:</value></data>
@@ -98,6 +101,70 @@
   <data name="Audit_ColDetails" xml:space="preserve"><value>التفاصيل</value></data>
   <data name="Audit_CountFormat" xml:space="preserve"><value>يتم عرض {0} سجل تدقيق.</value></data>
   <data name="Audit_InvalidDateRange" xml:space="preserve"><value>يجب أن يكون تاريخ البداية في نفس يوم تاريخ النهاية أو قبله.</value></data>
+  <data name="Users_Title" xml:space="preserve"><value>المستخدمون</value></data>
+  <data name="Users_Header" xml:space="preserve"><value>المستخدمون</value></data>
+  <data name="Users_Subtitle" xml:space="preserve"><value>أضف المستخدمين وعدّلهم، وحدد أدوارهم، وأنشئ أنواع مستخدمين جديدة لهذا المتجر.</value></data>
+  <data name="Users_FormHeader" xml:space="preserve"><value>إضافة / تعديل مستخدم</value></data>
+  <data name="Users_Username" xml:space="preserve"><value>اسم المستخدم</value></data>
+  <data name="Users_Role" xml:space="preserve"><value>الدور</value></data>
+  <data name="Users_Active" xml:space="preserve"><value>نشط</value></data>
+  <data name="Users_Save" xml:space="preserve"><value>حفظ</value></data>
+  <data name="Users_New" xml:space="preserve"><value>مستخدم جديد</value></data>
+  <data name="Users_NewRoleHeader" xml:space="preserve"><value>إضافة نوع مستخدم</value></data>
+  <data name="Users_NewRoleHint" xml:space="preserve"><value>ينشئ دورًا جديدًا (مثل مشرف) يمكن تعيينه أعلاه.</value></data>
+  <data name="Users_AddRole" xml:space="preserve"><value>إضافة دور</value></data>
+  <data name="Users_Close" xml:space="preserve"><value>إغلاق</value></data>
+  <data name="Users_ColUsername" xml:space="preserve"><value>اسم المستخدم</value></data>
+  <data name="Users_ColRole" xml:space="preserve"><value>الدور</value></data>
+  <data name="Users_ColActive" xml:space="preserve"><value>نشط</value></data>
+  <data name="Users_UsernameRequired" xml:space="preserve"><value>اسم المستخدم مطلوب.</value></data>
+  <data name="Users_RoleRequired" xml:space="preserve"><value>يرجى اختيار دور.</value></data>
+  <data name="Users_CreatedFormat" xml:space="preserve"><value>تم إنشاء المستخدم '{0}'.</value></data>
+  <data name="Users_TemporaryPasswordFormat" xml:space="preserve"><value>كلمة المرور المؤقتة للمستخدم '{0}': {1}
+
+شارك هذه الكلمة بأمان مع المستخدم — لن تظهر مرة أخرى.</value></data>
+  <data name="Users_UpdatedFormat" xml:space="preserve"><value>تم تحديث المستخدم '{0}'.</value></data>
+  <data name="Users_RoleNameRequired" xml:space="preserve"><value>اسم الدور مطلوب.</value></data>
+  <data name="Users_RoleCreatedFormat" xml:space="preserve"><value>تم إنشاء الدور '{0}'.</value></data>
+  <data name="Users_PermissionsHeader" xml:space="preserve"><value>صلاحيات الدور</value></data>
+  <data name="Users_PermissionsHint" xml:space="preserve"><value>اختر دورًا، ثم حدد ما يُسمح له بفعله. تنطبق التغييرات على كل مستخدم يملك هذا الدور.</value></data>
+  <data name="Users_PermManageProducts" xml:space="preserve"><value>إدارة المنتجات والفئات</value></data>
+  <data name="Users_PermViewReports" xml:space="preserve"><value>عرض التقارير</value></data>
+  <data name="Users_PermViewAudit" xml:space="preserve"><value>عرض سجل التدقيق</value></data>
+  <data name="Users_PermManageUsers" xml:space="preserve"><value>إدارة المستخدمين والأدوار</value></data>
+  <data name="Users_PermManageSettings" xml:space="preserve"><value>إدارة الإعدادات</value></data>
+  <data name="Users_PermProcessRefunds" xml:space="preserve"><value>معالجة الاسترجاعات</value></data>
+  <data name="Users_SavePermissions" xml:space="preserve"><value>حفظ الصلاحيات</value></data>
+  <data name="Users_SelectRoleForPermissions" xml:space="preserve"><value>يرجى اختيار دور للتعديل.</value></data>
+  <data name="Users_PermissionsSavedFormat" xml:space="preserve"><value>تم حفظ صلاحيات '{0}'.</value></data>
+  <data name="Devices_Title" xml:space="preserve"><value>الأجهزة</value></data>
+  <data name="Devices_Header" xml:space="preserve"><value>الأجهزة (نقاط البيع)</value></data>
+  <data name="Devices_Subtitle" xml:space="preserve"><value>قم بتزويد أجهزة جديدة، وتفعيل هذا الجهاز، وإلغاء الثقة بالأجهزة التي لم تعد موثوقة.</value></data>
+  <data name="Devices_ProvisionHeader" xml:space="preserve"><value>تزويد جهاز جديد</value></data>
+  <data name="Devices_ProvisionHint" xml:space="preserve"><value>ينشئ سجل جهاز ورمز تفعيل لمرة واحدة. أعط الرمز لمن سيقوم بإعداد الجهاز الجديد.</value></data>
+  <data name="Devices_NameLabel" xml:space="preserve"><value>الاسم (مثال: "الكاونتر الأمامي")</value></data>
+  <data name="Devices_ProvisionButton" xml:space="preserve"><value>تزويد وإنشاء رمز</value></data>
+  <data name="Devices_RevokeHeader" xml:space="preserve"><value>إلغاء ثقة جهاز</value></data>
+  <data name="Devices_RevokeHint" xml:space="preserve"><value>اختر جهازًا من القائمة، ثم ألغِ الثقة به. لا يمكن التراجع عن هذا الإجراء — قم بتزويد جهاز جديد بدلاً من ذلك.</value></data>
+  <data name="Devices_RevokeButton" xml:space="preserve"><value>إلغاء ثقة الجهاز المحدد</value></data>
+  <data name="Devices_EnrollHeader" xml:space="preserve"><value>تفعيل هذا الجهاز</value></data>
+  <data name="Devices_EnrollHint" xml:space="preserve"><value>أدخل رمز التفعيل الذي أعطاك إياه المسؤول لتفويض هذا الجهاز.</value></data>
+  <data name="Devices_EnrollButton" xml:space="preserve"><value>تفعيل هذا الجهاز</value></data>
+  <data name="Devices_Close" xml:space="preserve"><value>إغلاق</value></data>
+  <data name="Devices_ColName" xml:space="preserve"><value>الاسم</value></data>
+  <data name="Devices_ColEnrolled" xml:space="preserve"><value>مفعّل</value></data>
+  <data name="Devices_ColRevoked" xml:space="preserve"><value>مُلغى</value></data>
+  <data name="Devices_ColThisMachine" xml:space="preserve"><value>هذا الجهاز</value></data>
+  <data name="Devices_NameRequired" xml:space="preserve"><value>الاسم مطلوب للجهاز الجديد.</value></data>
+  <data name="Devices_EnrollmentCodeFormat" xml:space="preserve"><value>رمز التفعيل لـ '{0}': {1}
+
+شارك هذا الرمز مع من سيقوم بإعداد ذلك الجهاز — لن يظهر مرة أخرى.</value></data>
+  <data name="Devices_ProvisionedFormat" xml:space="preserve"><value>تم تزويد الجهاز '{0}'.</value></data>
+  <data name="Devices_SelectToRevoke" xml:space="preserve"><value>الرجاء اختيار جهاز لإلغاء الثقة به.</value></data>
+  <data name="Devices_ConfirmRevokeFormat" xml:space="preserve"><value>هل تريد إلغاء الثقة بـ '{0}'؟ لن يتمكن بعد ذلك من تسجيل الدخول أو المزامنة. لا يمكن التراجع عن هذا.</value></data>
+  <data name="Devices_RevokedFormat" xml:space="preserve"><value>تم إلغاء الثقة بالجهاز '{0}'.</value></data>
+  <data name="Devices_CodeRequired" xml:space="preserve"><value>رمز التفعيل مطلوب.</value></data>
+  <data name="Devices_EnrolledThisMachine" xml:space="preserve"><value>تم تفعيل هذا الجهاز الآن.</value></data>
   <data name="ProductMgmt_Title" xml:space="preserve"><value>المنتجات والفئات</value></data>
   <data name="ProductMgmt_NewCategory" xml:space="preserve"><value>فئة جديدة:</value></data>
   <data name="ProductMgmt_AddCategory" xml:space="preserve"><value>إضافة فئة</value></data>
@@ -110,6 +177,22 @@
   <data name="ProductMgmt_RefreshHistory" xml:space="preserve"><value>تحديث</value></data>
   <data name="ProductMgmt_StockHistoryAllFormat" xml:space="preserve"><value>يتم عرض {0} من أحدث حركات المخزون على مستوى المتجر.</value></data>
   <data name="ProductMgmt_StockHistoryFilteredFormat" xml:space="preserve"><value>يتم عرض {1} حركة للمنتج {0}.</value></data>
+  <data name="ProductMgmt_AllProducts" xml:space="preserve"><value>كل المنتجات</value></data>
+  <data name="ProductMgmt_SubtitleFormat" xml:space="preserve"><value>{0} منتج ضمن {1} فئة</value></data>
+  <data name="ProductMgmt_CountAllFormat" xml:space="preserve"><value>{0} منتج</value></data>
+  <data name="ProductMgmt_CountFilteredFormat" xml:space="preserve"><value>{0} من أصل {1} منتج</value></data>
+  <data name="ProductMgmt_SearchPlaceholder" xml:space="preserve"><value>ابحث بالاسم أو الباركود…</value></data>
+  <data name="ProductMgmt_CategoriesHeader" xml:space="preserve"><value>الفئات</value></data>
+  <data name="ProductMgmt_EmptyTitle" xml:space="preserve"><value>لا توجد منتجات</value></data>
+  <data name="ProductMgmt_EmptySubtitle" xml:space="preserve"><value>جرّب بحثًا أو فئة مختلفة، أو أضف منتجًا جديدًا.</value></data>
+  <data name="ProductMgmt_NoSelectionHint" xml:space="preserve"><value>اختر منتجًا لعرض تفاصيله والإجراءات السريعة.</value></data>
+  <data name="ProductMgmt_ActivityHeader" xml:space="preserve"><value>النشاط الأخير</value></data>
+  <data name="ProductMgmt_NoActivity" xml:space="preserve"><value>لا يوجد نشاط مخزون بعد.</value></data>
+  <data name="ProductMgmt_Activate" xml:space="preserve"><value>تفعيل</value></data>
+  <data name="ProductMgmt_Deactivate" xml:space="preserve"><value>إلغاء التفعيل</value></data>
+  <data name="ProductMgmt_StatusActive" xml:space="preserve"><value>نشط</value></data>
+  <data name="ProductMgmt_StatusInactive" xml:space="preserve"><value>غير نشط</value></data>
+  <data name="ProductMgmt_StockLabel" xml:space="preserve"><value>المخزون</value></data>
   <data name="Col_Name" xml:space="preserve"><value>الاسم</value></data>
   <data name="Col_Barcode" xml:space="preserve"><value>الباركود</value></data>
   <data name="Col_Price" xml:space="preserve"><value>السعر</value></data>
@@ -135,11 +218,18 @@
   <data name="Product_SellingPrice" xml:space="preserve"><value>سعر البيع *</value></data>
   <data name="Product_CostPrice" xml:space="preserve"><value>سعر التكلفة</value></data>
   <data name="Product_InitialStock" xml:space="preserve"><value>المخزون الابتدائي</value></data>
+  <data name="Product_CurrentStock" xml:space="preserve"><value>المخزون الحالي</value></data>
+  <data name="Product_Subtitle" xml:space="preserve"><value>أدخل التفاصيل أدناه</value></data>
+  <data name="Product_SectionBasicInfo" xml:space="preserve"><value>معلومات أساسية</value></data>
+  <data name="Product_SectionPricing" xml:space="preserve"><value>التسعير</value></data>
+  <data name="Product_SectionInventory" xml:space="preserve"><value>المخزون</value></data>
+  <data name="Product_SectionStatus" xml:space="preserve"><value>الحالة</value></data>
+  <data name="Product_ActiveHelp" xml:space="preserve"><value>المنتجات غير النشطة تكون مخفية عن نقطة البيع.</value></data>
   <data name="Product_ImageLabel" xml:space="preserve"><value>صورة المنتج</value></data>
   <data name="Product_NoImage" xml:space="preserve"><value>لم تُحدد صورة</value></data>
   <data name="Product_Browse" xml:space="preserve"><value>استعراض…</value></data>
   <data name="Product_Clear" xml:space="preserve"><value>مسح</value></data>
-  <data name="Product_ActiveLabel" xml:space="preserve"><value>المنتج نشط (يظهر في نقطة البيع)</value></data>
+  <data name="Product_ActiveLabel" xml:space="preserve"><value>نشط</value></data>
   <data name="Product_Cancel" xml:space="preserve"><value>إلغاء</value></data>
   <data name="Product_Save" xml:space="preserve"><value>حفظ</value></data>
   <data name="Product_ImageDialogTitle" xml:space="preserve"><value>اختر صورة المنتج</value></data>
@@ -147,6 +237,12 @@
   <data name="CustomerDisplay_Welcome" xml:space="preserve"><value>مرحبًا!</value></data>
   <data name="CustomerDisplay_Subtitle" xml:space="preserve"><value>ستظهر مشترياتك هنا</value></data>
   <data name="CustomerDisplay_Total" xml:space="preserve"><value>الإجمالي</value></data>
+  <data name="CustomerDisplay_Subtotal" xml:space="preserve"><value>المجموع الفرعي</value></data>
+  <data name="CustomerDisplay_VatPrefix" xml:space="preserve"><value>ضريبة (</value></data>
+  <data name="CustomerDisplay_HeaderProduct" xml:space="preserve"><value>المنتج</value></data>
+  <data name="CustomerDisplay_HeaderPrice" xml:space="preserve"><value>السعر</value></data>
+  <data name="CustomerDisplay_HeaderQty" xml:space="preserve"><value>الكمية</value></data>
+  <data name="CustomerDisplay_HeaderSum" xml:space="preserve"><value>الإجمالي</value></data>
   <data name="Msg_CreateCategoryFirst" xml:space="preserve"><value>أنشئ فئة أولاً.</value></data>
   <data name="Msg_ProductNotFound" xml:space="preserve"><value>المنتج غير موجود.</value></data>
   <data name="Msg_DeleteConfirmFormat" xml:space="preserve"><value>حذف '{0}'؟</value></data>

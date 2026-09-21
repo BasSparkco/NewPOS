@@ -5,12 +5,13 @@
         WindowStyle="None"
         ResizeMode="NoResize"
         Background="#111827"
-        Width="480" Height="320"
+        Width="480" Height="360"
         Topmost="True"
         ShowInTaskbar="False">
 
     <Grid>
         <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
             <RowDefinition Height="Auto"/>
@@ -34,8 +35,37 @@
             </DockPanel>
         </Border>
 
+        <!-- Column header — mirrors the row grid below: Product/Price/Qty/Sum, always visible -->
+        <Border Grid.Row="1"
+                Background="#1F2937"
+                BorderBrush="#374151"
+                BorderThickness="0,0,0,0.5"
+                Padding="20,8">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="64"/>
+                    <ColumnDefinition Width="6"/>
+                    <ColumnDefinition Width="46"/>
+                    <ColumnDefinition Width="6"/>
+                    <ColumnDefinition Width="70"/>
+                </Grid.ColumnDefinitions>
+                <TextBlock Grid.Column="0" x:Name="HeaderProductTb"
+                           FontSize="10" FontWeight="SemiBold" Foreground="#6B7280"/>
+                <TextBlock Grid.Column="1" x:Name="HeaderPriceTb"
+                           FontSize="10" FontWeight="SemiBold" Foreground="#6B7280"
+                           HorizontalAlignment="Right"/>
+                <TextBlock Grid.Column="3" x:Name="HeaderQtyTb"
+                           FontSize="10" FontWeight="SemiBold" Foreground="#6B7280"
+                           HorizontalAlignment="Center"/>
+                <TextBlock Grid.Column="5" x:Name="HeaderSumTb"
+                           FontSize="10" FontWeight="SemiBold" Foreground="#6B7280"
+                           HorizontalAlignment="Right"/>
+            </Grid>
+        </Border>
+
         <!-- Cart area -->
-        <Grid Grid.Row="1">
+        <Grid Grid.Row="2">
 
             <!-- Idle / no items -->
             <StackPanel x:Name="IdlePanel"
@@ -68,26 +98,46 @@
                     <DataTemplate>
                         <Border BorderBrush="#374151"
                                 BorderThickness="0,0,0,0.5"
-                                Padding="20,10">
-                            <DockPanel LastChildFill="False">
-                                <TextBlock DockPanel.Dock="Left"
-                                           Text="{Binding Name}"
-                                           FontSize="13"
+                                Padding="20,12">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="64"/>
+                                    <ColumnDefinition Width="6"/>
+                                    <ColumnDefinition Width="46"/>
+                                    <ColumnDefinition Width="6"/>
+                                    <ColumnDefinition Width="70"/>
+                                </Grid.ColumnDefinitions>
+
+                                <!-- Name only — no secondary line, so the eye lands on Price/Qty/Sum -->
+                                <TextBlock Grid.Column="0" Text="{Binding Name}"
+                                           FontSize="15"
                                            Foreground="White"
+                                           TextTrimming="CharacterEllipsis"
                                            VerticalAlignment="Center"
-                                           MaxWidth="260"
-                                           TextTrimming="CharacterEllipsis"/>
-                                <TextBlock DockPanel.Dock="Left"
-                                           Text="{Binding Quantity, StringFormat=  × {0:N0}}"
-                                           FontSize="12"
-                                           Foreground="#6B7280"
+                                           Margin="0,0,8,0"/>
+
+                                <!-- Unit price actually charged (already net of any discount) -->
+                                <TextBlock Grid.Column="1" Text="{Binding PriceText}"
+                                           FontSize="15"
+                                           Foreground="#D1D5DB"
+                                           HorizontalAlignment="Right"
                                            VerticalAlignment="Center"/>
-                                <TextBlock DockPanel.Dock="Right"
-                                           Text="{Binding LineTotal, StringFormat={}{0:N2}}"
-                                           FontSize="13" FontWeight="SemiBold"
+
+                                <!-- Qty value only — no +/- controls, those are cashier-only -->
+                                <TextBlock Grid.Column="3" Text="{Binding QtyText}"
+                                           FontSize="15"
+                                           Foreground="White"
+                                           HorizontalAlignment="Center"
+                                           VerticalAlignment="Center"/>
+
+                                <!-- Line total -->
+                                <TextBlock Grid.Column="5" Text="{Binding SumText}"
+                                           FontSize="15" FontWeight="SemiBold"
                                            Foreground="#10B981"
+                                           HorizontalAlignment="Right"
                                            VerticalAlignment="Center"/>
-                            </DockPanel>
+                            </Grid>
                         </Border>
                     </DataTemplate>
                 </ItemsControl.ItemTemplate>
@@ -95,22 +145,45 @@
 
         </Grid>
 
-        <!-- Total footer -->
-        <Border Grid.Row="2"
+        <!-- Totals footer: Subtotal/VAT rows only appear when VAT is added on top of the
+             subtotal (PricesIncludeVat = false) — otherwise the customer sees just the Total. -->
+        <Border Grid.Row="3"
                 Background="#1F2937"
-                Padding="20,14">
-            <DockPanel LastChildFill="False">
-                <TextBlock x:Name="CdTotalLabelTb"
-                           DockPanel.Dock="Left"
-                           FontSize="13" FontWeight="Bold"
-                           Foreground="#9CA3AF"
-                           VerticalAlignment="Center"/>
-                <TextBlock DockPanel.Dock="Right"
-                           x:Name="TotalText"
-                           Text="0.00"
-                           FontSize="28" FontWeight="Bold"
-                           Foreground="#10B981"/>
-            </DockPanel>
+                Padding="20,12">
+            <StackPanel>
+                <DockPanel x:Name="SubtotalRow" LastChildFill="False" Margin="0,0,0,4">
+                    <TextBlock x:Name="CdSubtotalLabelTb"
+                               DockPanel.Dock="Left"
+                               FontSize="12"
+                               Foreground="#9CA3AF"/>
+                    <TextBlock x:Name="SubtotalText"
+                               DockPanel.Dock="Right"
+                               FontSize="12"
+                               Foreground="#D1D5DB"/>
+                </DockPanel>
+                <DockPanel x:Name="VatRow" LastChildFill="False" Margin="0,0,0,8">
+                    <TextBlock x:Name="CdVatLabelTb"
+                               DockPanel.Dock="Left"
+                               FontSize="12"
+                               Foreground="#9CA3AF"/>
+                    <TextBlock x:Name="VatText"
+                               DockPanel.Dock="Right"
+                               FontSize="12"
+                               Foreground="#D1D5DB"/>
+                </DockPanel>
+                <DockPanel LastChildFill="False">
+                    <TextBlock x:Name="CdTotalLabelTb"
+                               DockPanel.Dock="Left"
+                               FontSize="14" FontWeight="Bold"
+                               Foreground="#9CA3AF"
+                               VerticalAlignment="Center"/>
+                    <TextBlock DockPanel.Dock="Right"
+                               x:Name="TotalText"
+                               Text="0.00"
+                               FontSize="30" FontWeight="Bold"
+                               Foreground="#10B981"/>
+                </DockPanel>
+            </StackPanel>
         </Border>
 
     </Grid>

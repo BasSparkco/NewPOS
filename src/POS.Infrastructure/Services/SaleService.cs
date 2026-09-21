@@ -1,5 +1,6 @@
 using System.Globalization;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using POS.Application.Abstractions;
 using POS.Application.Models;
 using POS.Core.Entities;
@@ -12,6 +13,7 @@ internal sealed class SaleService : ISaleService
 {
     private const string AllowNegativeStockKey = "AllowNegativeStock";
     private const string DefaultTaxPercentKey = "DefaultTaxPercent";
+    private const string PricesIncludeVatKey = "PricesIncludeVat";
     private const string CustomItemCategoryName = "Custom Items";
     private const decimal CustomItemStockBuffer = 1_000_000m;
 
@@ -19,17 +21,20 @@ internal sealed class SaleService : ISaleService
     private readonly IAuditLogService _auditLogService;
     private readonly ICurrentDevice _currentDevice;
     private readonly ICurrentSession _session;
+    private readonly IConfiguration _configuration;
 
     public SaleService(
         IDbContextFactory<PosDbContext> dbFactory,
         ICurrentSession session,
         IAuditLogService auditLogService,
-        ICurrentDevice currentDevice)
+        ICurrentDevice currentDevice,
+        IConfiguration configuration)
     {
         _dbFactory = dbFactory;
         _auditLogService = auditLogService;
         _currentDevice = currentDevice;
         _session = session;
+        _configuration = configuration;
     }
 
     public async Task<Guid> StartNewSaleAsync(CancellationToken cancellationToken = default)
@@ -40,10 +45,12 @@ internal sealed class SaleService : ISaleService
         var settings = await GetOperationalSettingsAsync(db, cancellationToken);
 
         var now = DateTime.UtcNow;
-        var device = await GetOrCreateCurrentDeviceAsync(db, storeId, now, cancellationToken);
+        var tenantId = await GetTenantIdAsync(db, storeId, cancellationToken);
+        var device = await GetOrCreateCurrentDeviceAsync(db, tenantId, storeId, now, cancellationToken);
         var invoice = new Invoice
         {
             Id          = Guid.NewGuid(),
+            TenantId    = tenantId,
             StoreId     = storeId,
             DeviceId    = device.Id,
             UserId      = userId,
@@ -183,7 +190,7 @@ internal sealed class SaleService : ISaleService
             existing.UpdatedAt = now;
         }
 
-        RecalculateInvoiceTotal(invoice);
+        RecalculateInvoiceTotal(invoice, settings.PricesIncludeVat);
         await db.SaveChangesAsync(cancellationToken);
     }
 
@@ -215,11 +222,13 @@ internal sealed class SaleService : ISaleService
             throw new InvalidOperationException("Invoice belongs to another user.");
 
         var now = DateTime.UtcNow;
-        var categoryId = await GetOrCreateCustomItemCategoryIdAsync(db, cancellationToken);
+        var tenantId = await GetTenantIdAsync(db, storeId, cancellationToken);
+        var categoryId = await GetOrCreateCustomItemCategoryIdAsync(db, tenantId, cancellationToken);
 
         var product = new Product
         {
             Id         = Guid.NewGuid(),
+            TenantId   = tenantId,
             Name       = string.IsNullOrWhiteSpace(name) ? "Custom Item" : name.Trim(),
             Price      = unitPrice,
             Cost       = 0m,
@@ -234,6 +243,7 @@ internal sealed class SaleService : ISaleService
         db.Inventories.Add(new Inventory
         {
             Id         = Guid.NewGuid(),
+            TenantId   = tenantId,
             ProductId  = product.Id,
             StoreId    = storeId,
             Quantity   = CustomItemStockBuffer,
@@ -255,7 +265,8 @@ internal sealed class SaleService : ISaleService
         };
         db.InvoiceItems.Add(line);
 
-        RecalculateInvoiceTotal(invoice);
+        var settings = await GetOperationalSettingsAsync(db, cancellationToken);
+        RecalculateInvoiceTotal(invoice, settings.PricesIncludeVat);
         await db.SaveChangesAsync(cancellationToken);
 
         await TryWriteAuditAsync(
@@ -266,17 +277,17 @@ internal sealed class SaleService : ISaleService
             cancellationToken);
     }
 
-    private static async Task<Guid> GetOrCreateCustomItemCategoryIdAsync(PosDbContext db, CancellationToken cancellationToken)
+    private static async Task<Guid> GetOrCreateCustomItemCategoryIdAsync(PosDbContext db, Guid tenantId, CancellationToken cancellationToken)
     {
         var existingId = await db.Categories
-            .Where(c => !c.IsDeleted && c.Name == CustomItemCategoryName)
+            .Where(c => c.TenantId == tenantId && !c.IsDeleted && c.Name == CustomItemCategoryName)
             .Select(c => c.Id)
             .FirstOrDefaultAsync(cancellationToken);
         if (existingId != Guid.Empty)
             return existingId;
 
         var now = DateTime.UtcNow;
-        var category = new Category { Id = Guid.NewGuid(), Name = CustomItemCategoryName, CreatedAt = now, UpdatedAt = now };
+        var category = new Category { Id = Guid.NewGuid(), TenantId = tenantId, Name = CustomItemCategoryName, CreatedAt = now, UpdatedAt = now };
         db.Categories.Add(category);
         return category.Id;
     }
@@ -301,6 +312,8 @@ internal sealed class SaleService : ISaleService
         var line = invoice.Items.FirstOrDefault(l => l.Id == lineId && !l.IsDeleted)
             ?? throw new InvalidOperationException("Line not found.");
 
+        var settings = await GetOperationalSettingsAsync(db, cancellationToken);
+
         if (quantity == 0)
         {
             line.IsDeleted = true;
@@ -311,8 +324,6 @@ internal sealed class SaleService : ISaleService
             var inventory = await db.Inventories
                 .FirstOrDefaultAsync(i => i.ProductId == line.ProductId && i.StoreId == storeId && !i.IsDeleted, cancellationToken);
 
-            var settings = await GetOperationalSettingsAsync(db, cancellationToken);
-
             if (!settings.AllowNegativeStock && inventory is not null && quantity > inventory.Quantity)
                 throw new InvalidOperationException($"Only {inventory.Quantity:N2} units in stock.");
 
@@ -321,7 +332,7 @@ internal sealed class SaleService : ISaleService
             line.UpdatedAt = DateTime.UtcNow;
         }
 
-        RecalculateInvoiceTotal(invoice);
+        RecalculateInvoiceTotal(invoice, settings.PricesIncludeVat);
         await db.SaveChangesAsync(cancellationToken);
     }
 
@@ -344,7 +355,8 @@ internal sealed class SaleService : ISaleService
 
         line.IsDeleted = true;
         line.UpdatedAt = DateTime.UtcNow;
-        RecalculateInvoiceTotal(invoice);
+        var settings = await GetOperationalSettingsAsync(db, cancellationToken);
+        RecalculateInvoiceTotal(invoice, settings.PricesIncludeVat);
         await db.SaveChangesAsync(cancellationToken);
     }
 
@@ -371,7 +383,8 @@ internal sealed class SaleService : ISaleService
             .OrderBy(x => x.p.Name)
             .Select(x => new CartLineDto(
                 x.l.Id, x.l.ProductId, x.p.Name,
-                x.l.Quantity, x.l.UnitPrice, x.l.DiscountPercent, x.l.LineTotal))
+                x.l.Quantity, x.l.UnitPrice, x.l.DiscountPercent, x.l.LineTotal,
+                x.p.ImagePath))
             .ToListAsync(cancellationToken);
         return lines;
     }
@@ -396,7 +409,8 @@ internal sealed class SaleService : ISaleService
         line.LineTotal = CalcLineTotal(line.Quantity, line.UnitPrice, discountPercent);
         line.UpdatedAt = DateTime.UtcNow;
 
-        RecalculateInvoiceTotal(invoice);
+        var settings = await GetOperationalSettingsAsync(db, cancellationToken);
+        RecalculateInvoiceTotal(invoice, settings.PricesIncludeVat);
         await db.SaveChangesAsync(cancellationToken);
     }
 
@@ -414,7 +428,24 @@ internal sealed class SaleService : ISaleService
             throw new InvalidOperationException("Invoice is not open.");
 
         invoice.TaxPercent = taxPercent;
-        RecalculateInvoiceTotal(invoice);
+        var settings = await GetOperationalSettingsAsync(db, cancellationToken);
+        RecalculateInvoiceTotal(invoice, settings.PricesIncludeVat);
+        await db.SaveChangesAsync(cancellationToken);
+    }
+
+    public async Task SetInvoiceNoteAsync(Guid invoiceId, string? note, CancellationToken cancellationToken = default)
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken);
+
+        var invoice = await db.Invoices
+            .FirstOrDefaultAsync(i => i.Id == invoiceId && !i.IsDeleted, cancellationToken)
+            ?? throw new InvalidOperationException("Invoice not found.");
+
+        if (invoice.Status != InvoiceStatus.Open)
+            throw new InvalidOperationException("Invoice is not open.");
+
+        invoice.Notes = string.IsNullOrWhiteSpace(note) ? null : note.Trim();
+        invoice.UpdatedAt = DateTime.UtcNow;
         await db.SaveChangesAsync(cancellationToken);
     }
 
@@ -427,9 +458,10 @@ internal sealed class SaleService : ISaleService
             .FirstOrDefaultAsync(i => i.Id == invoiceId && !i.IsDeleted, cancellationToken)
             ?? throw new InvalidOperationException("Invoice not found.");
 
-        var subtotal  = invoice.Items.Where(l => !l.IsDeleted).Sum(l => l.LineTotal);
-        var taxAmount = Math.Round(subtotal * invoice.TaxPercent / 100m, 2, MidpointRounding.AwayFromZero);
-        return new InvoiceSummaryDto(subtotal, invoice.TaxPercent, taxAmount, subtotal + taxAmount);
+        var settings = await GetOperationalSettingsAsync(db, cancellationToken);
+        var subtotal = invoice.Items.Where(l => !l.IsDeleted).Sum(l => l.LineTotal);
+        var (taxAmount, total) = CalcTaxAndTotal(subtotal, invoice.TaxPercent, settings.PricesIncludeVat);
+        return new InvoiceSummaryDto(subtotal, invoice.TaxPercent, taxAmount, total, settings.PricesIncludeVat, invoice.Notes);
     }
 
     public async Task<SaleCompletionResult> CompleteCashSaleAsync(Guid invoiceId, decimal cashTendered, CancellationToken cancellationToken = default)
@@ -458,13 +490,14 @@ internal sealed class SaleService : ISaleService
         if (lines.Count == 0)
             return new SaleCompletionResult(false, "Cart is empty.", null);
 
-        var total = lines.Sum(l => l.LineTotal);
+        var settings = await GetOperationalSettingsAsync(db, cancellationToken);
+        var subtotal = lines.Sum(l => l.LineTotal);
+        var (_, total) = CalcTaxAndTotal(subtotal, invoice.TaxPercent, settings.PricesIncludeVat);
         if (cashTendered + 0.001m < total)
             return new SaleCompletionResult(false, "Cash tendered is less than the total.", null);
 
         var storeId = invoice.StoreId;
         var now = DateTime.UtcNow;
-        var settings = await GetOperationalSettingsAsync(db, cancellationToken);
 
         foreach (var line in lines)
         {
@@ -489,6 +522,7 @@ internal sealed class SaleService : ISaleService
             db.StockMovements.Add(new StockMovement
             {
                 Id = Guid.NewGuid(),
+                TenantId = invoice.TenantId,
                 ProductId = line.ProductId,
                 StoreId = storeId,
                 InventoryId = inv.Id,
@@ -551,7 +585,8 @@ internal sealed class SaleService : ISaleService
             Total = total,
             CashTendered = cashTendered,
             Change = change,
-            Lines = receiptLines
+            Lines = receiptLines,
+            Notes = invoice.Notes
         };
 
         return new SaleCompletionResult(true, null, receipt);
@@ -588,6 +623,7 @@ internal sealed class SaleService : ISaleService
                 db.StockMovements.Add(new StockMovement
                 {
                     Id = Guid.NewGuid(),
+                    TenantId = invoice.TenantId,
                     ProductId = line.ProductId,
                     StoreId = invoice.StoreId,
                     InventoryId = inv.Id,
@@ -623,12 +659,29 @@ internal sealed class SaleService : ISaleService
 
     // Calculates total from the already-loaded in-memory Items collection.
     // Must NOT query the DB here — unsaved new items would be missing from the DB at this point.
-    private static void RecalculateInvoiceTotal(Invoice invoice)
+    private static void RecalculateInvoiceTotal(Invoice invoice, bool pricesIncludeVat)
     {
-        var subtotal  = invoice.Items.Where(l => !l.IsDeleted).Sum(l => l.LineTotal);
-        var taxAmount = Math.Round(subtotal * invoice.TaxPercent / 100m, 2, MidpointRounding.AwayFromZero);
-        invoice.TotalAmount = subtotal + taxAmount;
+        var subtotal = invoice.Items.Where(l => !l.IsDeleted).Sum(l => l.LineTotal);
+        var (_, total) = CalcTaxAndTotal(subtotal, invoice.TaxPercent, pricesIncludeVat);
+        invoice.TotalAmount = total;
         MarkInvoicePendingSync(invoice);
+    }
+
+    /// <summary>
+    /// Computes the VAT amount and grand total for a subtotal. When prices already include VAT,
+    /// the returned tax amount is the VAT component embedded in the subtotal (informational only)
+    /// and is not added on top — the total equals the subtotal.
+    /// </summary>
+    private static (decimal TaxAmount, decimal Total) CalcTaxAndTotal(decimal subtotal, decimal taxPercent, bool pricesIncludeVat)
+    {
+        if (pricesIncludeVat)
+        {
+            var embeddedTax = Math.Round(subtotal - subtotal / (1m + taxPercent / 100m), 2, MidpointRounding.AwayFromZero);
+            return (embeddedTax, subtotal);
+        }
+
+        var taxAmount = Math.Round(subtotal * taxPercent / 100m, 2, MidpointRounding.AwayFromZero);
+        return (taxAmount, subtotal + taxAmount);
     }
 
     private static void MarkInvoicePendingSync(Invoice invoice, DateTime? now = null)
@@ -643,14 +696,14 @@ internal sealed class SaleService : ISaleService
 
     private static string FormatInvoiceRef(Guid invoiceId) => invoiceId.ToString("N")[..12].ToUpperInvariant();
 
-    private async Task<(bool AllowNegativeStock, decimal DefaultTaxPercent)> GetOperationalSettingsAsync(
+    private async Task<(bool AllowNegativeStock, decimal DefaultTaxPercent, bool PricesIncludeVat)> GetOperationalSettingsAsync(
         PosDbContext db,
         CancellationToken cancellationToken)
     {
         var values = await db.Settings
             .AsNoTracking()
             .Where(s => s.StoreId == _session.StoreId
-                     && (s.Key == AllowNegativeStockKey || s.Key == DefaultTaxPercentKey)
+                     && (s.Key == AllowNegativeStockKey || s.Key == DefaultTaxPercentKey || s.Key == PricesIncludeVatKey)
                      && !s.IsDeleted)
             .ToDictionaryAsync(s => s.Key, s => s.Value, cancellationToken);
 
@@ -663,7 +716,11 @@ internal sealed class SaleService : ISaleService
                 ? Math.Clamp(taxParsed, 0m, 100m)
                 : 0m;
 
-        return (allowNegativeStock, defaultTaxPercent);
+        var pricesIncludeVat = values.TryGetValue(PricesIncludeVatKey, out var vatRaw)
+            && bool.TryParse(vatRaw, out var vatParsed)
+            && vatParsed;
+
+        return (allowNegativeStock, defaultTaxPercent, pricesIncludeVat);
     }
 
     private async Task TryWriteAuditAsync(string action, string entityName, Guid? entityId, string? details, CancellationToken cancellationToken)
@@ -680,6 +737,7 @@ internal sealed class SaleService : ISaleService
 
     private async Task<Device> GetOrCreateCurrentDeviceAsync(
         PosDbContext db,
+        Guid tenantId,
         Guid storeId,
         DateTime now,
         CancellationToken cancellationToken)
@@ -692,14 +750,30 @@ internal sealed class SaleService : ISaleService
             .FirstOrDefaultAsync(d => d.StoreId == storeId && d.Name == deviceName && !d.IsDeleted, cancellationToken);
 
         if (existing is not null)
-            return existing;
+        {
+            if (existing.IsRevoked)
+                throw new DeviceNotAuthorizedException($"This Box ('{deviceName}') has been revoked. Contact an administrator.");
 
+            var requiresEnrollment = _configuration.GetValue<bool>("Sync:RequireDeviceEnrollment");
+            if (requiresEnrollment && existing.EnrolledAt is null)
+                throw new DeviceNotAuthorizedException($"This Box ('{deviceName}') is provisioned but not yet enrolled. Enter the enrollment code from the Devices screen.");
+
+            return existing;
+        }
+
+        if (_configuration.GetValue<bool>("Sync:RequireDeviceEnrollment"))
+            throw new DeviceNotAuthorizedException($"This machine ('{deviceName}') is not a recognized Box. Ask an administrator to provision it first.");
+
+        // Lenient default (API/Web hosts, or WPF with enrollment disabled): auto-create and treat as
+        // already-trusted, matching pre-enrollment behavior.
         var created = new Device
         {
             Id = Guid.NewGuid(),
+            TenantId = tenantId,
             StoreId = storeId,
             Name = deviceName,
             SyncVersion = 1,
+            EnrolledAt = now,
             CreatedAt = now,
             UpdatedAt = now
         };
@@ -707,4 +781,12 @@ internal sealed class SaleService : ISaleService
         db.Devices.Add(created);
         return created;
     }
+
+    private static async Task<Guid> GetTenantIdAsync(PosDbContext db, Guid storeId, CancellationToken cancellationToken) =>
+        await db.Stores
+            .AsNoTracking()
+            .Where(s => s.Id == storeId && !s.IsDeleted)
+            .Select(s => (Guid?)s.TenantId)
+            .FirstOrDefaultAsync(cancellationToken)
+            ?? throw new InvalidOperationException("Store not found.");
 }

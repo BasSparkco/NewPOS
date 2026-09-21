@@ -108,9 +108,9 @@ public partial class PriceCheckWindow : Window
     {
         SelectedProduct          = p;
         DetailName.Text          = p.Name;
-        DetailPrice.Text         = p.Price.ToString("N2");
+        DetailPrice.Text         = Locale.ToDisplayDigits(p.Price.ToString("N2", CultureInfo.InvariantCulture));
         DetailStock.Text = string.Format(CultureInfo.CurrentUICulture, Locale.Get("PriceCheck_StockFormat"),
-            p.QuantityOnHand.ToString("N0", CultureInfo.CurrentUICulture));
+            Locale.ToDisplayDigits(p.QuantityOnHand.ToString("N0", CultureInfo.InvariantCulture)));
         LowStockBadge.Visibility = p.IsLowStock ? Visibility.Visible : Visibility.Collapsed;
         DetailBarcode.Text = string.IsNullOrEmpty(p.Barcode)
             ? ""

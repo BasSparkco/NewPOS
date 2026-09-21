@@ -5,7 +5,10 @@
         Title="SmartPOS" Height="760" Width="1360" MinWidth="1040" MinHeight="580"
         Background="{DynamicResource BgSecondaryBrush}"
         FlowDirection="{Binding UiFlowDirection}"
-        WindowStartupLocation="CenterScreen">
+        WindowStartupLocation="CenterScreen"
+        PreviewTextInput="Window_OnPreviewTextInput"
+        PreviewKeyDown="Window_OnPreviewKeyDown"
+        LostKeyboardFocus="Window_OnLostKeyboardFocus">
 
     <Window.InputBindings>
         <KeyBinding Key="F2"  Command="{Binding PriceCheckCommand}"/>
@@ -22,6 +25,7 @@
         <conv:ImagePathToVisibilityConverter   x:Key="HasImageVis"/>
         <conv:ImagePathToVisibilityConverter   x:Key="NoImageVis" Inverted="True"/>
         <conv:LowStockToVisibilityConverter    x:Key="LowStockVis"/>
+        <conv:StringEmptyToVisibilityConverter x:Key="StringToVis"/>
         <BooleanToVisibilityConverter          x:Key="BoolToVis"/>
     </Window.Resources>
 
@@ -149,9 +153,9 @@
                         </StackPanel>
                     </Button>
 
-                    <!-- Products (Admin) -->
+                    <!-- Products -->
                     <Button Command="{Binding GoProductsCommand}"
-                            Visibility="{Binding IsAdmin, Converter={StaticResource BoolToVis}}">
+                            Visibility="{Binding CanManageProducts, Converter={StaticResource BoolToVis}}">
                         <Button.Style>
                             <Style TargetType="Button" BasedOn="{StaticResource SidebarNavButton}">
                                 <Style.Triggers>
@@ -172,9 +176,9 @@
                         </StackPanel>
                     </Button>
 
-                    <!-- Reports (Admin) -->
+                    <!-- Reports -->
                     <Button Command="{Binding GoReportsCommand}"
-                            Visibility="{Binding IsAdmin, Converter={StaticResource BoolToVis}}">
+                            Visibility="{Binding CanViewReports, Converter={StaticResource BoolToVis}}">
                         <Button.Style>
                             <Style TargetType="Button" BasedOn="{StaticResource SidebarNavButton}">
                                 <Style.Triggers>
@@ -195,9 +199,9 @@
                         </StackPanel>
                     </Button>
 
-                    <!-- Audit (Admin) -->
+                    <!-- Audit -->
                     <Button Command="{Binding GoAuditCommand}"
-                            Visibility="{Binding IsAdmin, Converter={StaticResource BoolToVis}}">
+                            Visibility="{Binding CanViewAudit, Converter={StaticResource BoolToVis}}">
                         <Button.Style>
                             <Style TargetType="Button" BasedOn="{StaticResource SidebarNavButton}">
                                 <Style.Triggers>
@@ -218,8 +222,55 @@
                         </StackPanel>
                     </Button>
 
+                    <!-- Users -->
+                    <Button Command="{Binding GoUsersCommand}"
+                            Visibility="{Binding CanManageUsers, Converter={StaticResource BoolToVis}}">
+                        <Button.Style>
+                            <Style TargetType="Button" BasedOn="{StaticResource SidebarNavButton}">
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding SelectedPage}" Value="Users">
+                                        <Setter Property="Background" Value="{DynamicResource AccentLightBrush}"/>
+                                        <Setter Property="Foreground" Value="{DynamicResource AccentBrush}"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Button.Style>
+                        <StackPanel HorizontalAlignment="Center">
+                            <Viewbox Width="18" Height="18" Margin="0,0,0,2">
+                                <Path Data="{StaticResource IconUsers}"
+                                      Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
+                                      Stretch="Fill"/>
+                            </Viewbox>
+                            <TextBlock Text="{Binding NavUsersLabel}" FontSize="9" FontWeight="Medium" HorizontalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
+
+                    <!-- Devices -->
+                    <Button Command="{Binding GoDevicesCommand}"
+                            Visibility="{Binding CanManageSettings, Converter={StaticResource BoolToVis}}">
+                        <Button.Style>
+                            <Style TargetType="Button" BasedOn="{StaticResource SidebarNavButton}">
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding SelectedPage}" Value="Devices">
+                                        <Setter Property="Background" Value="{DynamicResource AccentLightBrush}"/>
+                                        <Setter Property="Foreground" Value="{DynamicResource AccentBrush}"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Button.Style>
+                        <StackPanel HorizontalAlignment="Center">
+                            <Viewbox Width="18" Height="18" Margin="0,0,0,2">
+                                <Path Data="{StaticResource IconMonitor}"
+                                      Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
+                                      Stretch="Fill"/>
+                            </Viewbox>
+                            <TextBlock Text="{Binding NavDevicesLabel}" FontSize="9" FontWeight="Medium" HorizontalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
+
                     <!-- Settings -->
-                    <Button Command="{Binding GoSettingsCommand}">
+                    <Button Command="{Binding GoSettingsCommand}"
+                            Visibility="{Binding CanManageSettings, Converter={StaticResource BoolToVis}}">
                         <Button.Style>
                             <Style TargetType="Button" BasedOn="{StaticResource SidebarNavButton}">
                                 <Style.Triggers>
@@ -248,12 +299,16 @@
         <Grid Grid.Column="1">
             <Grid.RowDefinitions>
                 <RowDefinition Height="56"/>    <!-- Topbar -->
-                <RowDefinition Height="38"/>    <!-- Invoice tabs -->
+                <RowDefinition Height="38"/>    <!-- Invoice tabs (products side only) -->
                 <RowDefinition Height="*"/>     <!-- Content -->
             </Grid.RowDefinitions>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>    <!-- Products -->
+                <ColumnDefinition Width="490"/>  <!-- Cart -->
+            </Grid.ColumnDefinitions>
 
             <!-- ─── TOPBAR ─── -->
-            <Border Grid.Row="0"
+            <Border Grid.Row="0" Grid.ColumnSpan="2"
                     Background="{DynamicResource BgPrimaryBrush}"
                     BorderBrush="{DynamicResource PanelBorderBrush}"
                     BorderThickness="0,0,0,0.5">
@@ -378,70 +433,6 @@
                             </StackPanel>
                         </Border>
 
-                        <!-- Hold Orders button -->
-                        <Button Height="36" Margin="0,0,10,0"
-                                Command="{Binding HoldResumeCommand}"
-                                ToolTip="{Binding HoldOrdersToolTip}">
-                            <Button.Style>
-                                <Style TargetType="Button" BasedOn="{StaticResource PosButtonBase}">
-                                    <Setter Property="Background"       Value="Transparent"/>
-                                    <Setter Property="Foreground"       Value="{DynamicResource TextPrimaryBrush}"/>
-                                    <Setter Property="BorderBrush"      Value="{DynamicResource InputBorderBrush}"/>
-                                    <Setter Property="BorderThickness"  Value="0.5"/>
-                                    <Setter Property="Padding"          Value="12,0"/>
-                                    <Setter Property="FontWeight"       Value="Medium"/>
-                                    <Setter Property="FontSize"         Value="13"/>
-                                    <Setter Property="Template">
-                                        <Setter.Value>
-                                            <ControlTemplate TargetType="Button">
-                                                <Border x:Name="Bdr"
-                                                        Background="{TemplateBinding Background}"
-                                                        BorderBrush="{TemplateBinding BorderBrush}"
-                                                        BorderThickness="{TemplateBinding BorderThickness}"
-                                                        CornerRadius="6"
-                                                        Padding="{TemplateBinding Padding}">
-                                                    <Grid>
-                                                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                                            <Viewbox Width="14" Height="14" Margin="0,0,6,0">
-                                                                <Path Data="{StaticResource IconPause}"
-                                                                      Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
-                                                                      Stretch="Fill"/>
-                                                            </Viewbox>
-                                                            <TextBlock Text="{Binding DataContext.HoldOrdersLabel, RelativeSource={RelativeSource AncestorType=Window}}"
-                                                                       Foreground="{TemplateBinding Foreground}"
-                                                                       FontSize="{TemplateBinding FontSize}"
-                                                                       FontWeight="{TemplateBinding FontWeight}"
-                                                                       VerticalAlignment="Center"/>
-                                                        </StackPanel>
-                                                        <!-- Held count badge -->
-                                                        <Border HorizontalAlignment="Right"
-                                                                VerticalAlignment="Top"
-                                                                Margin="0,-7,-7,0"
-                                                                Width="18" Height="18"
-                                                                CornerRadius="9"
-                                                                Background="{DynamicResource AccentBrush}"
-                                                                Visibility="{Binding HeldTabCount,
-                                                                    Converter={StaticResource BoolToVis}}">
-                                                            <TextBlock Text="{Binding HeldTabCount}"
-                                                                       FontSize="9" FontWeight="SemiBold"
-                                                                       Foreground="White"
-                                                                       HorizontalAlignment="Center"
-                                                                       VerticalAlignment="Center"/>
-                                                        </Border>
-                                                    </Grid>
-                                                </Border>
-                                                <ControlTemplate.Triggers>
-                                                    <Trigger Property="IsMouseOver" Value="True">
-                                                        <Setter TargetName="Bdr" Property="Background" Value="{DynamicResource BgSecondaryBrush}"/>
-                                                    </Trigger>
-                                                </ControlTemplate.Triggers>
-                                            </ControlTemplate>
-                                        </Setter.Value>
-                                    </Setter>
-                                </Style>
-                            </Button.Style>
-                        </Button>
-
                         <!-- User profile chip -->
                         <Border Height="40"
                                 Background="{DynamicResource BgPrimaryBrush}"
@@ -476,20 +467,54 @@
                 </Grid>
             </Border>
 
-            <!-- ─── INVOICE TABS BAR ─── -->
-            <Border Grid.Row="1"
+            <!-- ─── INVOICE TABS BAR (products column only) ─── -->
+            <Border Grid.Row="1" Grid.Column="0"
                     Background="{DynamicResource BgPrimaryBrush}"
                     BorderBrush="{DynamicResource PanelBorderBrush}"
                     BorderThickness="0,0,0,0.5">
-                <Grid Margin="10,0,10,0">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="Auto"/>
-                    </Grid.ColumnDefinitions>
+                    <DockPanel Margin="10,0,10,0" LastChildFill="True">
+                        <!-- + New Invoice (aligned above the Scan button in the search bar below) -->
+                        <Button DockPanel.Dock="Right" Height="28"
+                                Margin="0,0,10,0"
+                                Padding="10,0"
+                                Cursor="Hand" FocusVisualStyle="{x:Null}"
+                                Command="{Binding NewSaleCommand}"
+                                ToolTip="{Binding NewInvoiceLabel}">
+                            <Button.Style>
+                                <Style TargetType="Button" BasedOn="{StaticResource PosButtonBase}">
+                                    <Setter Property="Background"       Value="Transparent"/>
+                                    <Setter Property="Foreground"       Value="{DynamicResource AccentBrush}"/>
+                                    <Setter Property="BorderBrush"      Value="{DynamicResource InputBorderBrush}"/>
+                                    <Setter Property="BorderThickness"  Value="0.5"/>
+                                    <Setter Property="Template">
+                                        <Setter.Value>
+                                            <ControlTemplate TargetType="Button">
+                                                <Border x:Name="Bdr"
+                                                        Background="{TemplateBinding Background}"
+                                                        BorderBrush="{TemplateBinding BorderBrush}"
+                                                        BorderThickness="{TemplateBinding BorderThickness}"
+                                                        CornerRadius="6"
+                                                        Padding="{TemplateBinding Padding}">
+                                                    <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                </Border>
+                                                <ControlTemplate.Triggers>
+                                                    <Trigger Property="IsMouseOver" Value="True">
+                                                        <Setter TargetName="Bdr" Property="Background" Value="{DynamicResource AccentLightBrush}"/>
+                                                        <Setter TargetName="Bdr" Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
+                                                    </Trigger>
+                                                </ControlTemplate.Triggers>
+                                            </ControlTemplate>
+                                        </Setter.Value>
+                                    </Setter>
+                                </Style>
+                            </Button.Style>
+                            <TextBlock Text="{Binding NewInvoiceLabel}" FontSize="12" FontWeight="SemiBold"
+                                       Foreground="{DynamicResource AccentBrush}"/>
+                        </Button>
 
-                    <!-- Scrollable tab strip -->
-                    <ScrollViewer HorizontalScrollBarVisibility="Auto"
-                                  VerticalScrollBarVisibility="Hidden">
+                        <!-- Scrollable tab strip -->
+                        <ScrollViewer HorizontalScrollBarVisibility="Auto"
+                                      VerticalScrollBarVisibility="Hidden">
                         <ItemsControl ItemsSource="{Binding InvoiceTabs}">
                             <ItemsControl.ItemsPanel>
                                 <ItemsPanelTemplate>
@@ -593,57 +618,12 @@
                                 </DataTemplate>
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>
-                    </ScrollViewer>
-
-                    <!-- + New Invoice -->
-                    <Button Grid.Column="1" Height="28"
-                            Command="{Binding NewSaleCommand}"
-                            VerticalAlignment="Center" Margin="4,0,0,0"
-                            Padding="10,0"
-                            FontSize="12" FontWeight="Medium">
-                        <Button.Style>
-                            <Style TargetType="Button" BasedOn="{StaticResource PosButtonBase}">
-                                <Setter Property="Background"       Value="Transparent"/>
-                                <Setter Property="Foreground"       Value="{DynamicResource AccentBrush}"/>
-                                <Setter Property="BorderBrush"      Value="{DynamicResource InputBorderBrush}"/>
-                                <Setter Property="BorderThickness"  Value="0.5"/>
-                                <Setter Property="Template">
-                                    <Setter.Value>
-                                                        <ControlTemplate TargetType="Button">
-                                                            <Border x:Name="Bdr"
-                                                                    Background="{TemplateBinding Background}"
-                                                                    BorderBrush="{TemplateBinding BorderBrush}"
-                                                                    BorderThickness="{TemplateBinding BorderThickness}"
-                                                                    CornerRadius="5"
-                                                                    Padding="{TemplateBinding Padding}">
-                                                                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                                            </Border>
-                                            <ControlTemplate.Triggers>
-                                                <Trigger Property="IsMouseOver" Value="True">
-                                                    <Setter TargetName="Bdr" Property="Background" Value="{DynamicResource AccentLightBrush}"/>
-                                                    <Setter TargetName="Bdr" Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
-                                                </Trigger>
-                                            </ControlTemplate.Triggers>
-                                        </ControlTemplate>
-                                    </Setter.Value>
-                                </Setter>
-                            </Style>
-                        </Button.Style>
-                        <TextBlock Text="{Binding NewInvoiceLabel}" FontSize="12" FontWeight="Medium"
-                                   Foreground="{DynamicResource AccentBrush}"/>
-                    </Button>
-                </Grid>
+                        </ScrollViewer>
+                    </DockPanel>
             </Border>
 
-            <!-- ─── CONTENT ROW: Products | Cart ─── -->
-            <Grid Grid.Row="2">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="460"/>
-                </Grid.ColumnDefinitions>
-
                 <!-- ════ PRODUCTS PANEL ════ -->
-                <Grid Grid.Column="0" Background="{DynamicResource BgSecondaryBrush}">
+                <Grid Grid.Row="2" Grid.Column="0" Background="{DynamicResource BgSecondaryBrush}">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>   <!-- Search -->
                         <RowDefinition Height="Auto"/>   <!-- Categories -->
@@ -673,6 +653,14 @@
                                     <Path Data="{StaticResource IconSearch}"
                                           Fill="{DynamicResource TextTertiaryBrush}" Stretch="Fill"/>
                                 </Viewbox>
+                                <!-- Search placeholder -->
+                                <TextBlock Grid.Column="1"
+                                           Text="{Binding SearchPlaceholder}"
+                                           FontSize="13"
+                                           Foreground="{DynamicResource TextTertiaryBrush}"
+                                           VerticalAlignment="Center"
+                                           IsHitTestVisible="False"
+                                           Visibility="{Binding SearchQuery, Converter={StaticResource StringToVis}}"/>
                                 <!-- Search input -->
                                 <TextBox x:Name="SearchBox"
                                          Grid.Column="1"
@@ -684,10 +672,7 @@
                                          BorderThickness="0"
                                          Padding="0"
                                          VerticalContentAlignment="Center"
-                                         FontFamily="Segoe UI"
-                                         PreviewTextInput="SearchBox_OnPreviewTextInput"
-                                         PreviewKeyDown="SearchBox_OnPreviewKeyDown"
-                                         LostKeyboardFocus="SearchBox_OnLostKeyboardFocus">
+                                         FontFamily="Segoe UI">
                                     <TextBox.Style>
                                         <Style TargetType="TextBox">
                                             <Setter Property="Template">
@@ -877,12 +862,27 @@
                                                                                FontSize="12" FontWeight="Medium"
                                                                                Foreground="{DynamicResource TextPrimaryBrush}"
                                                                                TextWrapping="Wrap"
+                                                                               TextAlignment="Center"
+                                                                               HorizontalAlignment="Center"
                                                                                MaxHeight="34"
                                                                                TextTrimming="CharacterEllipsis"/>
-                                                                    <TextBlock Text="{Binding Price, StringFormat={}{0:N2}}"
-                                                                               FontSize="13" FontWeight="SemiBold"
-                                                                               Foreground="{DynamicResource AccentBrush}"
-                                                                               Margin="0,4,0,0"/>
+                                                                    <Grid Margin="0,4,0,0">
+                                                                        <Grid.ColumnDefinitions>
+                                                                            <ColumnDefinition Width="*"/>
+                                                                            <ColumnDefinition Width="Auto"/>
+                                                                        </Grid.ColumnDefinitions>
+                                                                        <TextBlock Grid.Column="0"
+                                                                                   Text="{Binding Price, Converter={StaticResource Digits}, ConverterParameter=N2}"
+                                                                                   FontSize="13" FontWeight="SemiBold"
+                                                                                   Foreground="{DynamicResource AccentBrush}"
+                                                                                   HorizontalAlignment="Left"/>
+                                                                        <TextBlock Grid.Column="1"
+                                                                                   Text="{Binding DataContext.CurrencySuffix, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                                                   FontSize="13" FontWeight="SemiBold"
+                                                                                   Foreground="{DynamicResource AccentBrush}"
+                                                                                   Margin="6,0,0,0"
+                                                                                   HorizontalAlignment="Right"/>
+                                                                    </Grid>
                                                                 </StackPanel>
                                                             </StackPanel>
                                                         </Border>
@@ -917,8 +917,8 @@
 
                 </Grid>
 
-                <!-- ════ CART PANEL ════ -->
-                <Border Grid.Column="1"
+                <!-- ════ CART PANEL (spans the Invoice Tabs row too, so it starts right under the topbar) ════ -->
+                <Border Grid.Row="1" Grid.RowSpan="2" Grid.Column="1"
                         Background="{DynamicResource BgPrimaryBrush}"
                         BorderBrush="{DynamicResource PanelBorderBrush}"
                         BorderThickness="0.5,0,0,0">
@@ -931,12 +931,12 @@
                             <RowDefinition Height="Auto"/>   <!-- Calculator + actions -->
                         </Grid.RowDefinitions>
 
-                        <!-- Customer row -->
+                        <!-- Customer row + column header (both sit above the separator line) -->
                         <Border Grid.Row="0"
                                 BorderBrush="{DynamicResource PanelBorderBrush}"
-                                BorderThickness="0,0,0,0.5"
-                                Padding="14,10">
-                            <Grid>
+                                BorderThickness="0,0,0,0.5">
+                            <StackPanel>
+                            <Grid Margin="14,10,14,8">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*"/>
                                     <ColumnDefinition Width="Auto"/>
@@ -987,6 +987,35 @@
                                     </Grid>
                                 </Border>
                             </Grid>
+
+                            <!-- Column header (Product | Qty | Dis | Sum) — always visible, above the separator line -->
+                            <Grid Margin="12,0,12,10">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="90"/>
+                                    <ColumnDefinition Width="8"/>
+                                    <ColumnDefinition Width="50"/>
+                                    <ColumnDefinition Width="8"/>
+                                    <ColumnDefinition Width="55"/>
+                                    <ColumnDefinition Width="30"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0" Text="{Binding CartHeaderProductLabel}"
+                                           FontSize="10" FontWeight="SemiBold"
+                                           Foreground="{DynamicResource TextTertiaryBrush}"/>
+                                <TextBlock Grid.Column="1" Text="{Binding CartHeaderQtyLabel}"
+                                           FontSize="10" FontWeight="SemiBold"
+                                           Foreground="{DynamicResource TextTertiaryBrush}"
+                                           HorizontalAlignment="Center"/>
+                                <TextBlock Grid.Column="3" Text="{Binding CartHeaderDiscountLabel}"
+                                           FontSize="10" FontWeight="SemiBold"
+                                           Foreground="{DynamicResource TextTertiaryBrush}"
+                                           HorizontalAlignment="Center"/>
+                                <TextBlock Grid.Column="5" Text="{Binding CartHeaderSumLabel}"
+                                           FontSize="10" FontWeight="SemiBold"
+                                           Foreground="{DynamicResource TextTertiaryBrush}"
+                                           HorizontalAlignment="Right"/>
+                            </Grid>
+                            </StackPanel>
                         </Border>
 
                         <!-- Cart items (expandable rows) -->
@@ -1029,14 +1058,39 @@
                                         <Border BorderBrush="{DynamicResource PanelBorderBrush}"
                                                 BorderThickness="0,0,0,0.5"
                                                 Padding="12,8">
-                                            <StackPanel>
-                                                <!-- Name + unit price + remove -->
-                                                <Grid Margin="0,0,0,6">
-                                                    <Grid.ColumnDefinitions>
-                                                        <ColumnDefinition Width="*"/>
-                                                        <ColumnDefinition Width="Auto"/>
-                                                    </Grid.ColumnDefinitions>
-                                                    <StackPanel Grid.Column="0" Margin="0,0,8,0">
+                                            <!-- Product | Qty | Discount | Sum | Remove — all on one line, columns match the header above -->
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="90"/>
+                                                    <ColumnDefinition Width="8"/>
+                                                    <ColumnDefinition Width="50"/>
+                                                    <ColumnDefinition Width="8"/>
+                                                    <ColumnDefinition Width="55"/>
+                                                    <ColumnDefinition Width="30"/>
+                                                </Grid.ColumnDefinitions>
+
+                                                <!-- Thumbnail + name + unit price -->
+                                                <DockPanel Grid.Column="0" Margin="0,0,8,0" LastChildFill="True">
+                                                    <Border DockPanel.Dock="Left"
+                                                            Width="30" Height="30"
+                                                            CornerRadius="4"
+                                                            Background="{DynamicResource AccentLightBrush}"
+                                                            Margin="0,0,8,0"
+                                                            ClipToBounds="True">
+                                                        <Grid>
+                                                            <TextBlock Text="{Binding Name, Converter={StaticResource ToInitials}}"
+                                                                       FontSize="12" FontWeight="Bold"
+                                                                       Foreground="{DynamicResource AccentBrush}"
+                                                                       HorizontalAlignment="Center"
+                                                                       VerticalAlignment="Center"
+                                                                       Visibility="{Binding ImagePath, Converter={StaticResource NoImageVis}}"/>
+                                                            <Image Source="{Binding ImagePath, Converter={StaticResource FileToImg}}"
+                                                                   Stretch="UniformToFill"
+                                                                   Visibility="{Binding ImagePath, Converter={StaticResource HasImageVis}}"/>
+                                                        </Grid>
+                                                    </Border>
+                                                    <StackPanel VerticalAlignment="Center">
                                                         <TextBlock Text="{Binding Name}"
                                                                    FontSize="12" FontWeight="Medium"
                                                                    Foreground="{DynamicResource TextPrimaryBrush}"
@@ -1049,160 +1103,166 @@
                                                             <Run Text="{Binding DataContext.EachLabel, RelativeSource={RelativeSource AncestorType=Window}, Mode=OneWay}"/>
                                                         </TextBlock>
                                                     </StackPanel>
+                                                </DockPanel>
 
-                                                    <!-- Remove -->
-                                                    <Button Grid.Column="1" Width="22" Height="22"
-                                                            Background="Transparent" BorderThickness="0"
-                                                            Cursor="Hand" FocusVisualStyle="{x:Null}"
-                                                            VerticalAlignment="Top"
-                                                            Command="{Binding DataContext.RemoveLineCommand,
-                                                                      RelativeSource={RelativeSource AncestorType=ListBox}}"
-                                                            CommandParameter="{Binding}">
-                                                        <Button.Template>
-                                                            <ControlTemplate TargetType="Button">
-                                                                <Border x:Name="Bdr" Background="{TemplateBinding Background}"
-                                                                        CornerRadius="4">
-                                                                    <Viewbox Width="11" Height="11">
-                                                                        <Path Data="{StaticResource IconX}"
-                                                                              Fill="{DynamicResource TextTertiaryBrush}"
-                                                                              Stretch="Fill"/>
-                                                                    </Viewbox>
-                                                                </Border>
-                                                                <ControlTemplate.Triggers>
-                                                                    <Trigger Property="IsMouseOver" Value="True">
-                                                                        <Setter TargetName="Bdr" Property="Background" Value="{DynamicResource DangerBgBrush}"/>
-                                                                    </Trigger>
-                                                                </ControlTemplate.Triggers>
-                                                            </ControlTemplate>
-                                                        </Button.Template>
-                                                    </Button>
-                                                </Grid>
+                                                <!-- Qty stepper + editable box (connected to the bottom calculator) -->
+                                                <Border Grid.Column="1" CornerRadius="6" Background="{DynamicResource BgSecondaryBrush}"
+                                                        HorizontalAlignment="Center">
+                                                    <Border.Style>
+                                                        <Style TargetType="Border">
+                                                            <Setter Property="BorderThickness" Value="0.5"/>
+                                                            <Setter Property="BorderBrush" Value="{DynamicResource InputBorderBrush}"/>
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding IsQtyCalcActive}" Value="True">
+                                                                    <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
+                                                                    <Setter Property="BorderThickness" Value="1.5"/>
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </Border.Style>
+                                                    <StackPanel Orientation="Horizontal">
+                                                        <Button Content="−" Style="{StaticResource QtyButton}"
+                                                                Command="{Binding DataContext.DecreaseLineQtyCommand,
+                                                                          RelativeSource={RelativeSource AncestorType=ListBox}}"
+                                                                CommandParameter="{Binding}"/>
+                                                        <TextBox Width="32" Height="26"
+                                                                 Text="{Binding QtyText, UpdateSourceTrigger=PropertyChanged}"
+                                                                 GotFocus="CartLineQtyBox_OnGotFocus"
+                                                                 PreviewTextInput="NumericTextBox_OnPreviewTextInput"
+                                                                 DataObject.Pasting="NumericTextBox_OnPasting"
+                                                                 TextAlignment="Center"
+                                                                 FontSize="12" FontWeight="SemiBold"
+                                                                 FontFamily="Consolas"
+                                                                 Foreground="{DynamicResource TextPrimaryBrush}"
+                                                                 VerticalContentAlignment="Center"
+                                                                 BorderThickness="0"
+                                                                 Background="Transparent"/>
+                                                        <Button Content="+" Style="{StaticResource QtyButton}"
+                                                                Command="{Binding DataContext.IncreaseLineQtyCommand,
+                                                                          RelativeSource={RelativeSource AncestorType=ListBox}}"
+                                                                CommandParameter="{Binding}"/>
+                                                    </StackPanel>
+                                                </Border>
 
-                                                <!-- Qty stepper, discount, live line total — all inline, no apply button -->
-                                                <Grid>
-                                                    <Grid.ColumnDefinitions>
-                                                        <ColumnDefinition Width="Auto"/>
-                                                        <ColumnDefinition Width="6"/>
-                                                        <ColumnDefinition Width="Auto"/>
-                                                        <ColumnDefinition Width="*"/>
-                                                        <ColumnDefinition Width="Auto"/>
-                                                    </Grid.ColumnDefinitions>
+                                                <!-- spacer (Grid.Column="2") -->
 
-                                                    <!-- Qty stepper + editable box (connected to the bottom calculator) -->
-                                                    <Border Grid.Column="0" CornerRadius="6" Background="{DynamicResource BgSecondaryBrush}">
-                                                        <Border.Style>
-                                                            <Style TargetType="Border">
-                                                                <Setter Property="BorderThickness" Value="0.5"/>
-                                                                <Setter Property="BorderBrush" Value="{DynamicResource InputBorderBrush}"/>
-                                                                <Style.Triggers>
-                                                                    <DataTrigger Binding="{Binding IsQtyCalcActive}" Value="True">
-                                                                        <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
-                                                                        <Setter Property="BorderThickness" Value="1.5"/>
-                                                                    </DataTrigger>
-                                                                </Style.Triggers>
-                                                            </Style>
-                                                        </Border.Style>
-                                                        <StackPanel Orientation="Horizontal">
-                                                            <Button Content="−" Style="{StaticResource QtyButton}"
-                                                                    Command="{Binding DataContext.DecreaseLineQtyCommand,
-                                                                              RelativeSource={RelativeSource AncestorType=ListBox}}"
-                                                                    CommandParameter="{Binding}"/>
-                                                            <TextBox Width="38" Height="26"
-                                                                     Text="{Binding QtyText, UpdateSourceTrigger=PropertyChanged}"
-                                                                     GotFocus="CartLineQtyBox_OnGotFocus"
-                                                                     TextAlignment="Center"
-                                                                     FontSize="12" FontWeight="SemiBold"
-                                                                     FontFamily="Consolas"
-                                                                     Foreground="{DynamicResource TextPrimaryBrush}"
-                                                                     VerticalContentAlignment="Center"
-                                                                     BorderThickness="0"
-                                                                     Background="Transparent"/>
-                                                            <Button Content="+" Style="{StaticResource QtyButton}"
-                                                                    Command="{Binding DataContext.IncreaseLineQtyCommand,
-                                                                              RelativeSource={RelativeSource AncestorType=ListBox}}"
-                                                                    CommandParameter="{Binding}"/>
-                                                        </StackPanel>
-                                                    </Border>
+                                                <!-- Discount % (connected to the bottom calculator) -->
+                                                <Border Grid.Column="3" CornerRadius="6" Background="{DynamicResource BgSecondaryBrush}"
+                                                        HorizontalAlignment="Center">
+                                                    <Border.Style>
+                                                        <Style TargetType="Border">
+                                                            <Setter Property="BorderThickness" Value="0.5"/>
+                                                            <Setter Property="BorderBrush" Value="{DynamicResource InputBorderBrush}"/>
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding IsDiscCalcActive}" Value="True">
+                                                                    <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
+                                                                    <Setter Property="BorderThickness" Value="1.5"/>
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </Border.Style>
+                                                    <StackPanel Orientation="Horizontal" Margin="6,0,6,0">
+                                                        <TextBox Width="22" Height="26"
+                                                                 Text="{Binding DiscText, UpdateSourceTrigger=PropertyChanged}"
+                                                                 GotFocus="CartLineDiscBox_OnGotFocus"
+                                                                 PreviewTextInput="NumericTextBox_OnPreviewTextInput"
+                                                                 DataObject.Pasting="NumericTextBox_OnPasting"
+                                                                 TextAlignment="Center"
+                                                                 FontSize="12" FontFamily="Consolas"
+                                                                 Foreground="{DynamicResource TextPrimaryBrush}"
+                                                                 VerticalContentAlignment="Center"
+                                                                 BorderThickness="0"
+                                                                 Background="Transparent"/>
+                                                        <TextBlock Text="%" FontSize="11"
+                                                                   Foreground="{DynamicResource TextSecondaryBrush}"
+                                                                   VerticalAlignment="Center" Margin="1,0,0,0"/>
+                                                    </StackPanel>
+                                                </Border>
 
-                                                    <!-- Discount % (connected to the bottom calculator) -->
-                                                    <Border Grid.Column="2" CornerRadius="6" Background="{DynamicResource BgSecondaryBrush}">
-                                                        <Border.Style>
-                                                            <Style TargetType="Border">
-                                                                <Setter Property="BorderThickness" Value="0.5"/>
-                                                                <Setter Property="BorderBrush" Value="{DynamicResource InputBorderBrush}"/>
-                                                                <Style.Triggers>
-                                                                    <DataTrigger Binding="{Binding IsDiscCalcActive}" Value="True">
-                                                                        <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
-                                                                        <Setter Property="BorderThickness" Value="1.5"/>
-                                                                    </DataTrigger>
-                                                                </Style.Triggers>
-                                                            </Style>
-                                                        </Border.Style>
-                                                        <StackPanel Orientation="Horizontal" Margin="8,0,8,0">
-                                                            <TextBox Width="26" Height="26"
-                                                                     Text="{Binding DiscText, UpdateSourceTrigger=PropertyChanged}"
-                                                                     GotFocus="CartLineDiscBox_OnGotFocus"
-                                                                     TextAlignment="Center"
-                                                                     FontSize="12" FontFamily="Consolas"
-                                                                     Foreground="{DynamicResource TextPrimaryBrush}"
-                                                                     VerticalContentAlignment="Center"
-                                                                     BorderThickness="0"
-                                                                     Background="Transparent"/>
-                                                            <TextBlock Text="%" FontSize="11"
-                                                                       Foreground="{DynamicResource TextSecondaryBrush}"
-                                                                       VerticalAlignment="Center" Margin="1,0,0,0"/>
-                                                        </StackPanel>
-                                                    </Border>
+                                                <!-- Sum (this line's total: qty × unit price, less discount) -->
+                                                <TextBlock Grid.Column="5"
+                                                           Text="{Binding FormattedLineTotal}"
+                                                           FontSize="12" FontWeight="SemiBold"
+                                                           Foreground="{DynamicResource TextPrimaryBrush}"
+                                                           HorizontalAlignment="Right"
+                                                           VerticalAlignment="Center"/>
 
-                                                    <!-- Live line total -->
-                                                    <TextBlock Grid.Column="4"
-                                                               Text="{Binding FormattedLineTotal}"
-                                                               FontSize="13" FontWeight="SemiBold"
-                                                               Foreground="{DynamicResource TextPrimaryBrush}"
-                                                               VerticalAlignment="Center"/>
-                                                </Grid>
-                                            </StackPanel>
+                                                <!-- Remove -->
+                                                <Button Grid.Column="6" Width="22" Height="22" Margin="8,0,0,0"
+                                                        Background="Transparent" BorderThickness="0"
+                                                        Cursor="Hand" FocusVisualStyle="{x:Null}"
+                                                        VerticalAlignment="Center"
+                                                        Command="{Binding DataContext.RemoveLineCommand,
+                                                                  RelativeSource={RelativeSource AncestorType=ListBox}}"
+                                                        CommandParameter="{Binding}">
+                                                    <Button.Template>
+                                                        <ControlTemplate TargetType="Button">
+                                                            <Border x:Name="Bdr" Background="{TemplateBinding Background}"
+                                                                    CornerRadius="4">
+                                                                <Viewbox Width="11" Height="11">
+                                                                    <Path Data="{StaticResource IconX}"
+                                                                          Fill="{DynamicResource DangerBrush}"
+                                                                          Stretch="Fill"/>
+                                                                </Viewbox>
+                                                            </Border>
+                                                            <ControlTemplate.Triggers>
+                                                                <Trigger Property="IsMouseOver" Value="True">
+                                                                    <Setter TargetName="Bdr" Property="Background" Value="{DynamicResource DangerBgBrush}"/>
+                                                                </Trigger>
+                                                            </ControlTemplate.Triggers>
+                                                        </ControlTemplate>
+                                                    </Button.Template>
+                                                </Button>
+                                            </Grid>
                                         </Border>
                                     </DataTemplate>
                                 </ListBox.ItemTemplate>
                             </ListBox>
                         </Grid>
 
-                        <!-- Note / discount row -->
+                        <!-- Note / refund row -->
                         <Border Grid.Row="2"
                                 BorderBrush="{DynamicResource PanelBorderBrush}"
                                 BorderThickness="0,0.5,0,0"
                                 Padding="12,6">
-                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Stretch">
-                                <Button Background="Transparent" BorderThickness="0"
-                                        Cursor="Hand" FocusVisualStyle="{x:Null}"
-                                        Padding="2" FontSize="11">
-                                    <Button.Template>
-                                        <ControlTemplate TargetType="Button">
-                                            <Border Background="{TemplateBinding Background}">
-                                                <StackPanel Orientation="Horizontal">
-                                                    <Viewbox Width="12" Height="12" Margin="0,0,4,0">
-                                                        <Path Data="{StaticResource IconNote}"
-                                                              Fill="{DynamicResource TextSecondaryBrush}" Stretch="Fill"/>
-                                                    </Viewbox>
-                                                    <TextBlock Text="{Binding AddNoteLabel}"
-                                                               FontSize="11"
-                                                               Foreground="{DynamicResource TextSecondaryBrush}"/>
-                                                </StackPanel>
-                                            </Border>
-                                            <ControlTemplate.Triggers>
-                                                <Trigger Property="IsMouseOver" Value="True">
-                                                    <Setter Property="Foreground" Value="{DynamicResource AccentBrush}"/>
-                                                </Trigger>
-                                            </ControlTemplate.Triggers>
-                                        </ControlTemplate>
-                                    </Button.Template>
-                                </Button>
-                                <Border Width="0.5" Background="{DynamicResource PanelBorderBrush}"
-                                        Margin="12,2" VerticalAlignment="Stretch"/>
-                                <Button Background="Transparent" BorderThickness="0"
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+
+                                <!-- Invoice note (printed on the receipt) -->
+                                <Grid Grid.Column="0" Margin="0,0,10,0">
+                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                        <Viewbox Width="12" Height="12" Margin="0,0,4,0" VerticalAlignment="Center">
+                                            <Path Data="{StaticResource IconNote}"
+                                                  Fill="{DynamicResource TextSecondaryBrush}" Stretch="Fill"/>
+                                        </Viewbox>
+                                        <Grid>
+                                            <TextBlock Text="{Binding AddNoteLabel}"
+                                                       FontSize="11"
+                                                       Foreground="{DynamicResource TextTertiaryBrush}"
+                                                       VerticalAlignment="Center"
+                                                       IsHitTestVisible="False"
+                                                       Visibility="{Binding InvoiceNoteText, Converter={StaticResource StringToVis}}"/>
+                                            <TextBox Text="{Binding InvoiceNoteText, UpdateSourceTrigger=PropertyChanged}"
+                                                     FontSize="11"
+                                                     Foreground="{DynamicResource TextSecondaryBrush}"
+                                                     CaretBrush="{DynamicResource AccentBrush}"
+                                                     Background="Transparent"
+                                                     BorderThickness="0"
+                                                     Padding="0"
+                                                     VerticalContentAlignment="Center"/>
+                                        </Grid>
+                                    </StackPanel>
+                                </Grid>
+
+                                <!-- Refund -->
+                                <Button Grid.Column="1"
+                                        Background="Transparent" BorderThickness="0"
                                         Cursor="Hand" FocusVisualStyle="{x:Null}"
                                         Command="{Binding RefundSaleCommand}"
+                                        Visibility="{Binding CanProcessRefunds, Converter={StaticResource BoolToVis}}"
                                         Padding="2" FontSize="11">
                                     <Button.Template>
                                         <ControlTemplate TargetType="Button">
@@ -1217,10 +1277,15 @@
                                                                Foreground="{DynamicResource TextSecondaryBrush}"/>
                                                 </StackPanel>
                                             </Border>
+                                            <ControlTemplate.Triggers>
+                                                <Trigger Property="IsMouseOver" Value="True">
+                                                    <Setter Property="Foreground" Value="{DynamicResource AccentBrush}"/>
+                                                </Trigger>
+                                            </ControlTemplate.Triggers>
                                         </ControlTemplate>
                                     </Button.Template>
                                 </Button>
-                            </StackPanel>
+                            </Grid>
                         </Border>
 
                         <!-- Totals -->
@@ -1237,36 +1302,33 @@
                                                FontSize="12" HorizontalAlignment="Right"
                                                Foreground="{DynamicResource TextSecondaryBrush}"/>
                                 </Grid>
-                                <!-- VAT row — label is editable so cashier can change the rate -->
-                                <Grid Margin="0,0,0,5">
+                                <!-- VAT row (Exclusive mode) — rate is view-only; set it via Settings -->
+                                <Grid Margin="0,0,0,5"
+                                      Visibility="{Binding IsVatExclusive, Converter={StaticResource BoolToVis}}">
                                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                                         <TextBlock Text="{Binding TaxLabelPrefix}" FontSize="12"
                                                    Foreground="{DynamicResource TextSecondaryBrush}"
                                                    VerticalAlignment="Center"/>
-                                        <!-- Editable tax % field -->
-                                        <Border BorderBrush="{DynamicResource PanelBorderBrush}"
-                                                BorderThickness="0.5" CornerRadius="4"
-                                                Background="{DynamicResource BgSecondaryBrush}"
-                                                Margin="2,0">
-                                            <TextBox Width="34" Height="18"
-                                                     Text="{Binding TaxPercent, StringFormat={}{0:N0}, UpdateSourceTrigger=LostFocus}"
-                                                     FontSize="11" FontFamily="Courier New"
-                                                     TextAlignment="Center"
-                                                     BorderThickness="0" Background="Transparent"
-                                                     VerticalContentAlignment="Center"
-                                                     Foreground="{DynamicResource TextPrimaryBrush}">
-                                                <TextBox.InputBindings>
-                                                    <KeyBinding Key="Return"
-                                                                Command="{Binding SetInvoiceTaxCommand}"
-                                                                CommandParameter="{Binding RelativeSource={RelativeSource AncestorType=TextBox}, Path=Text}"/>
-                                                </TextBox.InputBindings>
-                                            </TextBox>
-                                        </Border>
+                                        <TextBlock Text="{Binding TaxPercent, StringFormat={}{0:N0}}"
+                                                   FontSize="11" FontFamily="Courier New"
+                                                   Foreground="{DynamicResource TextPrimaryBrush}"
+                                                   VerticalAlignment="Center" Margin="2,0"/>
                                         <TextBlock Text="%)" FontSize="12"
                                                    Foreground="{DynamicResource TextSecondaryBrush}"
                                                    VerticalAlignment="Center"/>
                                     </StackPanel>
-                                    <TextBlock Text="{Binding TaxAmount, StringFormat={}{0:N2}}"
+                                    <TextBlock Text="{Binding TaxAmount, Converter={StaticResource Digits}, ConverterParameter=N2}"
+                                               FontSize="12" HorizontalAlignment="Right"
+                                               Foreground="{DynamicResource TextSecondaryBrush}"
+                                               VerticalAlignment="Center"/>
+                                </Grid>
+                                <!-- VAT row (Inclusive mode) — informational only: prices already include VAT, nothing to edit or add -->
+                                <Grid Margin="0,0,0,5"
+                                      Visibility="{Binding PricesIncludeVat, Converter={StaticResource BoolToVis}}">
+                                    <TextBlock Text="{Binding VatIncludedLabel}" FontSize="12"
+                                               Foreground="{DynamicResource TextSecondaryBrush}"
+                                               VerticalAlignment="Center"/>
+                                    <TextBlock Text="{Binding TaxAmount, Converter={StaticResource Digits}, ConverterParameter=N2}"
                                                FontSize="12" HorizontalAlignment="Right"
                                                Foreground="{DynamicResource TextSecondaryBrush}"
                                                VerticalAlignment="Center"/>
@@ -1286,13 +1348,56 @@
                             </StackPanel>
                         </Border>
 
-                        <!-- Calculator: qty/price entry + keypad + quick actions -->
+                        <!-- Calculator: qty/price entry + keypad + quick actions.
+                             Kept LTR and Western-digit always, regardless of app language,
+                             so every user works the same physical keypad shape. -->
                         <Border Grid.Row="4"
+                                FlowDirection="LeftToRight"
                                 Background="{DynamicResource BgSecondaryBrush}"
                                 BorderBrush="{DynamicResource PanelBorderBrush}"
                                 BorderThickness="0,0.5,0,0"
                                 Padding="14,10,14,12">
                             <StackPanel>
+
+                                <!-- Collapsible calculator body (QTY/PRICE display + keypad) — optional, toggled via the Calculator button below.
+                                     MaxHeight/Opacity are animated (rather than plain Visibility) so the surrounding
+                                     cart layout resizes smoothly instead of snapping. -->
+                                <Border x:Name="CalculatorExpandPanel" ClipToBounds="True">
+                                    <Border.Style>
+                                        <Style TargetType="Border">
+                                            <Setter Property="MaxHeight" Value="0"/>
+                                            <Setter Property="Opacity" Value="0"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding IsCalculatorVisible}" Value="True">
+                                                    <DataTrigger.EnterActions>
+                                                        <BeginStoryboard>
+                                                            <Storyboard>
+                                                                <DoubleAnimation Storyboard.TargetProperty="MaxHeight" To="320" Duration="0:0:0.22">
+                                                                    <DoubleAnimation.EasingFunction>
+                                                                        <QuadraticEase EasingMode="EaseOut"/>
+                                                                    </DoubleAnimation.EasingFunction>
+                                                                </DoubleAnimation>
+                                                                <DoubleAnimation Storyboard.TargetProperty="Opacity" To="1" Duration="0:0:0.22"/>
+                                                            </Storyboard>
+                                                        </BeginStoryboard>
+                                                    </DataTrigger.EnterActions>
+                                                    <DataTrigger.ExitActions>
+                                                        <BeginStoryboard>
+                                                            <Storyboard>
+                                                                <DoubleAnimation Storyboard.TargetProperty="MaxHeight" To="0" Duration="0:0:0.18">
+                                                                    <DoubleAnimation.EasingFunction>
+                                                                        <QuadraticEase EasingMode="EaseIn"/>
+                                                                    </DoubleAnimation.EasingFunction>
+                                                                </DoubleAnimation>
+                                                                <DoubleAnimation Storyboard.TargetProperty="Opacity" To="0" Duration="0:0:0.18"/>
+                                                            </Storyboard>
+                                                        </BeginStoryboard>
+                                                    </DataTrigger.ExitActions>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Border.Style>
+                                <StackPanel>
 
                                 <!-- QTY / PRICE dual display — click a field to make it the numpad's target -->
                                 <Grid Margin="0,0,0,8">
@@ -1302,11 +1407,8 @@
                                         <ColumnDefinition Width="*"/>
                                     </Grid.ColumnDefinitions>
 
-                                    <Border Grid.Column="0" CornerRadius="8" Padding="10,6" Cursor="Hand"
+                                    <Border Grid.Column="0" CornerRadius="8" Padding="10,6"
                                             Background="{DynamicResource BgPrimaryBrush}">
-                                        <Border.InputBindings>
-                                            <MouseBinding MouseAction="LeftClick" Command="{Binding SelectCalcFieldCommand}" CommandParameter="Qty"/>
-                                        </Border.InputBindings>
                                         <Border.Style>
                                             <Style TargetType="Border">
                                                 <Setter Property="BorderThickness" Value="1"/>
@@ -1322,17 +1424,20 @@
                                         <StackPanel>
                                             <TextBlock Text="{Binding QtyLabel}" FontSize="9" FontWeight="SemiBold"
                                                        Foreground="{DynamicResource TextTertiaryBrush}"/>
-                                            <TextBlock Text="{Binding QtyInput}" FontSize="20" FontWeight="SemiBold"
-                                                       FontFamily="Consolas" TextAlignment="Right"
-                                                       Foreground="{DynamicResource TextPrimaryBrush}"/>
+                                            <TextBox Text="{Binding QtyInput, UpdateSourceTrigger=PropertyChanged}"
+                                                     GotFocus="CalcQtyBox_OnGotFocus"
+                                                     PreviewTextInput="NumericTextBox_OnPreviewTextInput"
+                                                     DataObject.Pasting="NumericTextBox_OnPasting"
+                                                     FontSize="20" FontWeight="SemiBold"
+                                                     FontFamily="Consolas" TextAlignment="Right"
+                                                     Foreground="{DynamicResource TextPrimaryBrush}"
+                                                     BorderThickness="0" Padding="0" Margin="0"
+                                                     Background="Transparent"/>
                                         </StackPanel>
                                     </Border>
 
-                                    <Border Grid.Column="2" CornerRadius="8" Padding="10,6" Cursor="Hand"
+                                    <Border Grid.Column="2" CornerRadius="8" Padding="10,6"
                                             Background="{DynamicResource BgPrimaryBrush}">
-                                        <Border.InputBindings>
-                                            <MouseBinding MouseAction="LeftClick" Command="{Binding SelectCalcFieldCommand}" CommandParameter="Price"/>
-                                        </Border.InputBindings>
                                         <Border.Style>
                                             <Style TargetType="Border">
                                                 <Setter Property="BorderThickness" Value="1"/>
@@ -1348,9 +1453,15 @@
                                         <StackPanel>
                                             <TextBlock Text="{Binding PriceFieldLabel}" FontSize="9" FontWeight="SemiBold"
                                                        Foreground="{DynamicResource TextTertiaryBrush}"/>
-                                            <TextBlock Text="{Binding PriceInput}" FontSize="20" FontWeight="SemiBold"
-                                                       FontFamily="Consolas" TextAlignment="Right"
-                                                       Foreground="{DynamicResource TextPrimaryBrush}"/>
+                                            <TextBox Text="{Binding PriceInput, UpdateSourceTrigger=PropertyChanged}"
+                                                     GotFocus="CalcPriceBox_OnGotFocus"
+                                                     PreviewTextInput="NumericTextBox_OnPreviewTextInput"
+                                                     DataObject.Pasting="NumericTextBox_OnPasting"
+                                                     FontSize="20" FontWeight="SemiBold"
+                                                     FontFamily="Consolas" TextAlignment="Right"
+                                                     Foreground="{DynamicResource TextPrimaryBrush}"
+                                                     BorderThickness="0" Padding="0" Margin="0"
+                                                     Background="Transparent"/>
                                         </StackPanel>
                                     </Border>
                                 </Grid>
@@ -1421,13 +1532,17 @@
                                             Command="{Binding NumpadIncrementCommand}"
                                             ToolTip="+1"/>
                                 </Grid>
+                                </StackPanel>
+                                </Border>
 
                                 <!-- Hold/Resume + Proceed -->
                                 <Grid>
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="*"/>
                                         <ColumnDefinition Width="8"/>
-                                        <ColumnDefinition Width="1.6*"/>
+                                        <ColumnDefinition Width="1.35*"/>
+                                        <ColumnDefinition Width="8"/>
+                                        <ColumnDefinition Width="46"/>
                                     </Grid.ColumnDefinitions>
 
                                     <!-- Hold/Resume -->
@@ -1479,6 +1594,36 @@
                                                        Foreground="White" VerticalAlignment="Center"/>
                                         </StackPanel>
                                     </Button>
+
+                                    <!-- Calculator toggle: shows/hides the optional keypad above. Two color states —
+                                         neutral chrome when hidden, accent fill when the calculator is showing. -->
+                                    <Button Grid.Column="4"
+                                            Height="42"
+                                            Cursor="Hand"
+                                            FocusVisualStyle="{x:Null}"
+                                            Command="{Binding ToggleCalculatorCommand}"
+                                            ToolTip="{Binding CalculatorToggleToolTip}">
+                                        <Button.Style>
+                                            <Style TargetType="Button" BasedOn="{StaticResource PosButtonBase}">
+                                                <Setter Property="Background"      Value="{DynamicResource BgPrimaryBrush}"/>
+                                                <Setter Property="BorderBrush"     Value="{DynamicResource InputBorderBrush}"/>
+                                                <Setter Property="Foreground"      Value="{DynamicResource TextSecondaryBrush}"/>
+                                                <Setter Property="BorderThickness" Value="0.5"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding IsCalculatorVisible}" Value="True">
+                                                        <Setter Property="Background"  Value="{DynamicResource AccentLightBrush}"/>
+                                                        <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
+                                                        <Setter Property="Foreground"  Value="{DynamicResource AccentBrush}"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </Button.Style>
+                                        <Viewbox Width="17" Height="17">
+                                            <Path Data="{StaticResource IconCalculator}"
+                                                  Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
+                                                  Stretch="Fill"/>
+                                        </Viewbox>
+                                    </Button>
                                 </Grid>
                             </StackPanel>
                         </Border>
@@ -1486,7 +1631,6 @@
                     </Grid>
                 </Border>
 
-            </Grid>
         </Grid>
 
     </Grid>

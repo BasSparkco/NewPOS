@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Windows.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using POS.Application.Models;
+using POS.Wpf.Localization;
 
 namespace POS.Wpf.ViewModels;
 
@@ -24,6 +25,7 @@ public sealed partial class CartLineItem : ObservableObject
     public Guid ProductId { get; }
     public string Name { get; }
     public decimal UnitPrice { get; }
+    public string? ImagePath { get; }
 
     [ObservableProperty] private string _qtyText;
     [ObservableProperty] private string _discText;
@@ -36,6 +38,7 @@ public sealed partial class CartLineItem : ObservableObject
         ProductId   = dto.ProductId;
         Name        = dto.Name;
         UnitPrice   = dto.UnitPrice;
+        ImagePath   = dto.ImagePath;
         _qtyText    = FormatNumber(dto.Quantity);
         _discText   = FormatNumber(dto.DiscountPercent);
         _onQtyCommit  = onQtyCommit;
@@ -52,8 +55,15 @@ public sealed partial class CartLineItem : ObservableObject
     public decimal DiscountPercent => Math.Clamp(ParseOrZero(DiscText), 0m, 100m);
     public decimal LineTotal       => Math.Round(Quantity * UnitPrice * (1 - DiscountPercent / 100m), 2, MidpointRounding.AwayFromZero);
 
-    public string FormattedUnitPrice => UnitPrice.ToString("N2", CultureInfo.InvariantCulture);
-    public string FormattedLineTotal => LineTotal.ToString("N2", CultureInfo.InvariantCulture);
+    public string FormattedUnitPrice => Locale.ToDisplayDigits(UnitPrice.ToString("N2", CultureInfo.InvariantCulture));
+    public string FormattedLineTotal => Locale.ToDisplayDigits(LineTotal.ToString("N2", CultureInfo.InvariantCulture));
+
+    /// <summary>Call after the global digit-display mode changes so already-rendered lines pick it up.</summary>
+    public void NotifyDigitDisplayChanged()
+    {
+        OnPropertyChanged(nameof(FormattedUnitPrice));
+        OnPropertyChanged(nameof(FormattedLineTotal));
+    }
 
     partial void OnQtyTextChanged(string value)
     {
@@ -80,7 +90,7 @@ public sealed partial class CartLineItem : ObservableObject
         _discTimer.Stop();
     }
 
-    public CartLineDto ToDto() => new(LineId, ProductId, Name, Quantity, UnitPrice, DiscountPercent, LineTotal);
+    public CartLineDto ToDto() => new(LineId, ProductId, Name, Quantity, UnitPrice, DiscountPercent, LineTotal, ImagePath);
 
     private static decimal ParseOrZero(string text) =>
         decimal.TryParse(text, NumberStyles.Any, CultureInfo.InvariantCulture, out var value) ? value : 0m;

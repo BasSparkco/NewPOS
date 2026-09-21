@@ -5,4 +5,7 @@ public sealed record InvoiceSummaryDto(
     decimal Subtotal,
     decimal TaxPercent,
     decimal TaxAmount,
-    decimal Total);
+    decimal Total,
+    // When true, TaxAmount is the VAT already embedded in Subtotal (informational only) and is not added to Total.
+    bool PricesIncludeVat = false,
+    string? Notes = null);

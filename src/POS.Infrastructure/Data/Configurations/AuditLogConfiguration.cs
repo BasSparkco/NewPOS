@@ -14,8 +14,14 @@ internal sealed class AuditLogConfiguration : IEntityTypeConfiguration<AuditLog>
         builder.Property(e => e.EntityName).HasMaxLength(100).IsRequired();
         builder.Property(e => e.Details).HasMaxLength(4000);
 
+        builder.HasIndex(e => new { e.TenantId, e.CreatedAt });
         builder.HasIndex(e => new { e.StoreId, e.CreatedAt });
         builder.HasIndex(e => new { e.StoreId, e.Action, e.EntityName, e.CreatedAt });
+
+        builder.HasOne(e => e.Tenant)
+            .WithMany()
+            .HasForeignKey(e => e.TenantId)
+            .OnDelete(DeleteBehavior.Restrict);
 
         builder.HasOne(e => e.Store)
             .WithMany()

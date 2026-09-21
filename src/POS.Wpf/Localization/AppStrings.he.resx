@@ -7,9 +7,10 @@
   <data name="App_TitleShort" xml:space="preserve"><value>קופה</value></data>
   <data name="Login_Title" xml:space="preserve"><value>קופה — כניסה</value></data>
   <data name="Login_Username" xml:space="preserve"><value>שם משתמש</value></data>
+  <data name="Login_Password" xml:space="preserve"><value>סיסמה</value></data>
   <data name="Login_SignIn" xml:space="preserve"><value>התחבר</value></data>
   <data name="Login_FailedTitle" xml:space="preserve"><value>קופה</value></data>
-  <data name="Login_Failed" xml:space="preserve"><value>שם משתמש לא תקין.</value></data>
+  <data name="Login_Failed" xml:space="preserve"><value>שם משתמש או סיסמה לא תקינים.</value></data>
   <data name="CurrencySettings_Title" xml:space="preserve"><value>הגדרות חנות</value></data>
   <data name="CurrencySettings_Header" xml:space="preserve"><value>הגדרות חנות</value></data>
   <data name="CurrencySettings_Subtitle" xml:space="preserve"><value>ניהול כללי ההפעלה, טקסט תחתית הקבלה ומדיניות המטבע שבה המערכת משתמשת.</value></data>
@@ -18,7 +19,9 @@
   <data name="CurrencySettings_AllowNegativeStock" xml:space="preserve"><value>לאפשר מכירה מעבר למלאי הזמין</value></data>
   <data name="CurrencySettings_LowStockThreshold" xml:space="preserve"><value>סף מלאי נמוך</value></data>
   <data name="CurrencySettings_DefaultTaxPercent" xml:space="preserve"><value>אחוז מס ברירת מחדל</value></data>
+  <data name="CurrencySettings_PricesIncludeVat" xml:space="preserve"><value>מחירי המוצרים כוללים מע"מ (לא יתווסף מס בקופה)</value></data>
   <data name="CurrencySettings_ReceiptFooter" xml:space="preserve"><value>טקסט תחתית קבלה</value></data>
+  <data name="CurrencySettings_UseArabicIndicDigits" xml:space="preserve"><value>להשתמש בספרות הודיות-ערביות (٠١٢٣) בממשק הערבי</value></data>
   <data name="CurrencySettings_ExchangeRatesHeader" xml:space="preserve"><value>מטבע ושערי חליפין</value></data>
   <data name="CurrencySettings_Store" xml:space="preserve"><value>חנות:</value></data>
   <data name="CurrencySettings_BaseCurrency" xml:space="preserve"><value>מטבע בסיס:</value></data>
@@ -98,6 +101,70 @@
   <data name="Audit_ColDetails" xml:space="preserve"><value>פרטים</value></data>
   <data name="Audit_CountFormat" xml:space="preserve"><value>מוצגות {0} רשומות ביקורת.</value></data>
   <data name="Audit_InvalidDateRange" xml:space="preserve"><value>תאריך ההתחלה חייב להיות באותו יום של תאריך הסיום או לפניו.</value></data>
+  <data name="Users_Title" xml:space="preserve"><value>משתמשים</value></data>
+  <data name="Users_Header" xml:space="preserve"><value>משתמשים</value></data>
+  <data name="Users_Subtitle" xml:space="preserve"><value>הוסף וערוך משתמשים, הגדר את התפקיד שלהם וצור סוגי משתמשים חדשים עבור חנות זו.</value></data>
+  <data name="Users_FormHeader" xml:space="preserve"><value>הוספה / עריכה של משתמש</value></data>
+  <data name="Users_Username" xml:space="preserve"><value>שם משתמש</value></data>
+  <data name="Users_Role" xml:space="preserve"><value>תפקיד</value></data>
+  <data name="Users_Active" xml:space="preserve"><value>פעיל</value></data>
+  <data name="Users_Save" xml:space="preserve"><value>שמירה</value></data>
+  <data name="Users_New" xml:space="preserve"><value>משתמש חדש</value></data>
+  <data name="Users_NewRoleHeader" xml:space="preserve"><value>הוספת סוג משתמש</value></data>
+  <data name="Users_NewRoleHint" xml:space="preserve"><value>יוצר תפקיד חדש (למשל מפקח) שניתן להקצות למעלה.</value></data>
+  <data name="Users_AddRole" xml:space="preserve"><value>הוספת תפקיד</value></data>
+  <data name="Users_Close" xml:space="preserve"><value>סגירה</value></data>
+  <data name="Users_ColUsername" xml:space="preserve"><value>שם משתמש</value></data>
+  <data name="Users_ColRole" xml:space="preserve"><value>תפקיד</value></data>
+  <data name="Users_ColActive" xml:space="preserve"><value>פעיל</value></data>
+  <data name="Users_UsernameRequired" xml:space="preserve"><value>שם משתמש הוא שדה חובה.</value></data>
+  <data name="Users_RoleRequired" xml:space="preserve"><value>נא לבחור תפקיד.</value></data>
+  <data name="Users_CreatedFormat" xml:space="preserve"><value>המשתמש '{0}' נוצר.</value></data>
+  <data name="Users_TemporaryPasswordFormat" xml:space="preserve"><value>סיסמה זמנית עבור '{0}': {1}
+
+שתפו אותה עם המשתמש בצורה מאובטחת — היא לא תוצג שוב.</value></data>
+  <data name="Users_UpdatedFormat" xml:space="preserve"><value>המשתמש '{0}' עודכן.</value></data>
+  <data name="Users_RoleNameRequired" xml:space="preserve"><value>שם התפקיד הוא שדה חובה.</value></data>
+  <data name="Users_RoleCreatedFormat" xml:space="preserve"><value>התפקיד '{0}' נוצר.</value></data>
+  <data name="Users_PermissionsHeader" xml:space="preserve"><value>הרשאות תפקיד</value></data>
+  <data name="Users_PermissionsHint" xml:space="preserve"><value>בחר תפקיד, ולאחר מכן קבע מה מותר לו לעשות. השינויים חלים על כל משתמש בעל תפקיד זה.</value></data>
+  <data name="Users_PermManageProducts" xml:space="preserve"><value>ניהול מוצרים וקטגוריות</value></data>
+  <data name="Users_PermViewReports" xml:space="preserve"><value>צפייה בדוחות</value></data>
+  <data name="Users_PermViewAudit" xml:space="preserve"><value>צפייה ביומן הביקורת</value></data>
+  <data name="Users_PermManageUsers" xml:space="preserve"><value>ניהול משתמשים ותפקידים</value></data>
+  <data name="Users_PermManageSettings" xml:space="preserve"><value>ניהול הגדרות</value></data>
+  <data name="Users_PermProcessRefunds" xml:space="preserve"><value>ביצוע החזרים</value></data>
+  <data name="Users_SavePermissions" xml:space="preserve"><value>שמירת הרשאות</value></data>
+  <data name="Users_SelectRoleForPermissions" xml:space="preserve"><value>נא לבחור תפקיד לעריכה.</value></data>
+  <data name="Users_PermissionsSavedFormat" xml:space="preserve"><value>ההרשאות עבור '{0}' נשמרו.</value></data>
+  <data name="Devices_Title" xml:space="preserve"><value>מכשירים</value></data>
+  <data name="Devices_Header" xml:space="preserve"><value>מכשירים (קופות)</value></data>
+  <data name="Devices_Subtitle" xml:space="preserve"><value>הקצו קופות חדשות, שייכו את המכשיר הזה, ושללו הרשאה ממכשירים שאין לסמוך עליהם עוד.</value></data>
+  <data name="Devices_ProvisionHeader" xml:space="preserve"><value>הקצאת קופה חדשה</value></data>
+  <data name="Devices_ProvisionHint" xml:space="preserve"><value>יוצר רשומת מכשיר וקוד שיוך חד-פעמי. מסרו את הקוד למי שמגדיר את הקופה החדשה.</value></data>
+  <data name="Devices_NameLabel" xml:space="preserve"><value>תווית (למשל "עמדה קדמית")</value></data>
+  <data name="Devices_ProvisionButton" xml:space="preserve"><value>הקצה וצור קוד</value></data>
+  <data name="Devices_RevokeHeader" xml:space="preserve"><value>שלילת הרשאת מכשיר</value></data>
+  <data name="Devices_RevokeHint" xml:space="preserve"><value>בחרו מכשיר מהרשימה ושללו את הרשאתו. לא ניתן לבטל פעולה זו — יש להקצות מכשיר חדש במקום.</value></data>
+  <data name="Devices_RevokeButton" xml:space="preserve"><value>שלול הרשאת מכשיר נבחר</value></data>
+  <data name="Devices_EnrollHeader" xml:space="preserve"><value>שיוך המכשיר הזה</value></data>
+  <data name="Devices_EnrollHint" xml:space="preserve"><value>הזינו את קוד השיוך שקיבלתם ממנהל המערכת כדי לאשר מכשיר זה כקופה.</value></data>
+  <data name="Devices_EnrollButton" xml:space="preserve"><value>שייך את המכשיר הזה</value></data>
+  <data name="Devices_Close" xml:space="preserve"><value>סגור</value></data>
+  <data name="Devices_ColName" xml:space="preserve"><value>שם</value></data>
+  <data name="Devices_ColEnrolled" xml:space="preserve"><value>משויך</value></data>
+  <data name="Devices_ColRevoked" xml:space="preserve"><value>נשלל</value></data>
+  <data name="Devices_ColThisMachine" xml:space="preserve"><value>המכשיר הזה</value></data>
+  <data name="Devices_NameRequired" xml:space="preserve"><value>נדרשת תווית לקופה החדשה.</value></data>
+  <data name="Devices_EnrollmentCodeFormat" xml:space="preserve"><value>קוד שיוך עבור '{0}': {1}
+
+שתפו קוד זה עם מי שמגדיר את הקופה — הוא לא יוצג שוב.</value></data>
+  <data name="Devices_ProvisionedFormat" xml:space="preserve"><value>המכשיר '{0}' הוקצה.</value></data>
+  <data name="Devices_SelectToRevoke" xml:space="preserve"><value>יש לבחור מכשיר לשלילת הרשאה.</value></data>
+  <data name="Devices_ConfirmRevokeFormat" xml:space="preserve"><value>לשלול הרשאה מ-'{0}'? הוא לא יוכל יותר להתחבר או להסתנכרן. לא ניתן לבטל פעולה זו.</value></data>
+  <data name="Devices_RevokedFormat" xml:space="preserve"><value>הוסרה הרשאת המכשיר '{0}'.</value></data>
+  <data name="Devices_CodeRequired" xml:space="preserve"><value>נדרש קוד שיוך.</value></data>
+  <data name="Devices_EnrolledThisMachine" xml:space="preserve"><value>המכשיר הזה משויך כעת.</value></data>
   <data name="ProductMgmt_Title" xml:space="preserve"><value>מוצרים וקטגוריות</value></data>
   <data name="ProductMgmt_NewCategory" xml:space="preserve"><value>קטגוריה חדשה:</value></data>
   <data name="ProductMgmt_AddCategory" xml:space="preserve"><value>הוסף קטגוריה</value></data>
@@ -110,6 +177,22 @@
   <data name="ProductMgmt_RefreshHistory" xml:space="preserve"><value>רענון</value></data>
   <data name="ProductMgmt_StockHistoryAllFormat" xml:space="preserve"><value>מוצגות {0} תנועות המלאי האחרונות בכל החנות.</value></data>
   <data name="ProductMgmt_StockHistoryFilteredFormat" xml:space="preserve"><value>מוצגות {1} תנועות עבור {0}.</value></data>
+  <data name="ProductMgmt_AllProducts" xml:space="preserve"><value>כל המוצרים</value></data>
+  <data name="ProductMgmt_SubtitleFormat" xml:space="preserve"><value>{0} מוצרים ב-{1} קטגוריות</value></data>
+  <data name="ProductMgmt_CountAllFormat" xml:space="preserve"><value>{0} מוצרים</value></data>
+  <data name="ProductMgmt_CountFilteredFormat" xml:space="preserve"><value>{0} מתוך {1} מוצרים</value></data>
+  <data name="ProductMgmt_SearchPlaceholder" xml:space="preserve"><value>חפש לפי שם או ברקוד…</value></data>
+  <data name="ProductMgmt_CategoriesHeader" xml:space="preserve"><value>קטגוריות</value></data>
+  <data name="ProductMgmt_EmptyTitle" xml:space="preserve"><value>לא נמצאו מוצרים</value></data>
+  <data name="ProductMgmt_EmptySubtitle" xml:space="preserve"><value>נסה חיפוש או קטגוריה אחרים, או הוסף מוצר חדש.</value></data>
+  <data name="ProductMgmt_NoSelectionHint" xml:space="preserve"><value>בחר מוצר כדי לראות את פרטיו ואת הפעולות המהירות.</value></data>
+  <data name="ProductMgmt_ActivityHeader" xml:space="preserve"><value>פעילות אחרונה</value></data>
+  <data name="ProductMgmt_NoActivity" xml:space="preserve"><value>אין עדיין פעילות מלאי.</value></data>
+  <data name="ProductMgmt_Activate" xml:space="preserve"><value>הפעל</value></data>
+  <data name="ProductMgmt_Deactivate" xml:space="preserve"><value>השבת</value></data>
+  <data name="ProductMgmt_StatusActive" xml:space="preserve"><value>פעיל</value></data>
+  <data name="ProductMgmt_StatusInactive" xml:space="preserve"><value>לא פעיל</value></data>
+  <data name="ProductMgmt_StockLabel" xml:space="preserve"><value>מלאי</value></data>
   <data name="Col_Name" xml:space="preserve"><value>שם</value></data>
   <data name="Col_Barcode" xml:space="preserve"><value>ברקוד</value></data>
   <data name="Col_Price" xml:space="preserve"><value>מחיר</value></data>
@@ -135,11 +218,18 @@
   <data name="Product_SellingPrice" xml:space="preserve"><value>מחיר מכירה *</value></data>
   <data name="Product_CostPrice" xml:space="preserve"><value>מחיר עלות</value></data>
   <data name="Product_InitialStock" xml:space="preserve"><value>מלאי התחלתי</value></data>
+  <data name="Product_CurrentStock" xml:space="preserve"><value>מלאי נוכחי</value></data>
+  <data name="Product_Subtitle" xml:space="preserve"><value>מלא את הפרטים למטה</value></data>
+  <data name="Product_SectionBasicInfo" xml:space="preserve"><value>מידע בסיסי</value></data>
+  <data name="Product_SectionPricing" xml:space="preserve"><value>תמחור</value></data>
+  <data name="Product_SectionInventory" xml:space="preserve"><value>מלאי</value></data>
+  <data name="Product_SectionStatus" xml:space="preserve"><value>סטטוס</value></data>
+  <data name="Product_ActiveHelp" xml:space="preserve"><value>מוצרים לא פעילים מוסתרים מנקודת המכירה.</value></data>
   <data name="Product_ImageLabel" xml:space="preserve"><value>תמונת מוצר</value></data>
   <data name="Product_NoImage" xml:space="preserve"><value>לא נבחרה תמונה</value></data>
   <data name="Product_Browse" xml:space="preserve"><value>עיון…</value></data>
   <data name="Product_Clear" xml:space="preserve"><value>נקה</value></data>
-  <data name="Product_ActiveLabel" xml:space="preserve"><value>המוצר פעיל (מוצג בקופה)</value></data>
+  <data name="Product_ActiveLabel" xml:space="preserve"><value>פעיל</value></data>
   <data name="Product_Cancel" xml:space="preserve"><value>ביטול</value></data>
   <data name="Product_Save" xml:space="preserve"><value>שמור</value></data>
   <data name="Product_ImageDialogTitle" xml:space="preserve"><value>בחר תמונת מוצר</value></data>
@@ -147,6 +237,12 @@
   <data name="CustomerDisplay_Welcome" xml:space="preserve"><value>ברוך הבא!</value></data>
   <data name="CustomerDisplay_Subtitle" xml:space="preserve"><value>הפריטים שלך יופיעו כאן</value></data>
   <data name="CustomerDisplay_Total" xml:space="preserve"><value>סה״כ</value></data>
+  <data name="CustomerDisplay_Subtotal" xml:space="preserve"><value>סכום ביניים</value></data>
+  <data name="CustomerDisplay_VatPrefix" xml:space="preserve"><value>מע״מ (</value></data>
+  <data name="CustomerDisplay_HeaderProduct" xml:space="preserve"><value>מוצר</value></data>
+  <data name="CustomerDisplay_HeaderPrice" xml:space="preserve"><value>מחיר</value></data>
+  <data name="CustomerDisplay_HeaderQty" xml:space="preserve"><value>כמות</value></data>
+  <data name="CustomerDisplay_HeaderSum" xml:space="preserve"><value>סכום</value></data>
   <data name="Msg_CreateCategoryFirst" xml:space="preserve"><value>צור קטגוריה תחילה.</value></data>
   <data name="Msg_ProductNotFound" xml:space="preserve"><value>המוצר לא נמצא.</value></data>
   <data name="Msg_DeleteConfirmFormat" xml:space="preserve"><value>למחוק את '{0}'?</value></data>

@@ -1,0 +1,135 @@
+<Window x:Class="POS.Wpf.Windows.UserManagementWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Users"
+        Height="620" Width="900"
+        MinHeight="520" MinWidth="760"
+        ResizeMode="CanResizeWithGrip"
+        WindowStartupLocation="CenterOwner"
+        Background="{StaticResource BgTertiaryBrush}">
+
+    <Grid Margin="16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <StackPanel Grid.Row="0" Margin="0,0,0,12">
+            <TextBlock x:Name="UsersHeaderTb" FontSize="20" FontWeight="SemiBold" Foreground="{StaticResource TextPrimaryBrush}"/>
+            <TextBlock x:Name="UsersSubtitleTb" Margin="0,4,0,0" Foreground="{StaticResource TextSecondaryBrush}" TextWrapping="Wrap"/>
+        </StackPanel>
+
+        <Grid Grid.Row="1">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="16"/>
+                <ColumnDefinition Width="300"/>
+            </Grid.ColumnDefinitions>
+
+            <!-- User list -->
+            <Border Grid.Column="0"
+                    Background="{StaticResource BgPrimaryBrush}"
+                    BorderBrush="{StaticResource PanelBorderBrush}"
+                    BorderThickness="0.5"
+                    CornerRadius="8"
+                    ClipToBounds="True">
+                <DataGrid x:Name="UsersGrid"
+                          ItemsSource="{Binding Users}"
+                          SelectedItem="{Binding SelectedUser}"
+                          AutoGenerateColumns="False"
+                          IsReadOnly="True"
+                          CanUserAddRows="False"
+                          HeadersVisibility="Column"
+                          GridLinesVisibility="Horizontal"
+                          BorderThickness="0"
+                          SelectionMode="Single"
+                          Background="{StaticResource BgPrimaryBrush}"
+                          RowBackground="{StaticResource BgPrimaryBrush}"
+                          AlternatingRowBackground="{StaticResource BgSecondaryBrush}">
+                    <DataGrid.Columns>
+                        <DataGridTextColumn x:Name="UsersUsernameCol" Binding="{Binding Username}" Width="*"/>
+                        <DataGridTextColumn x:Name="UsersRoleCol" Binding="{Binding RoleName}" Width="140"/>
+                        <DataGridCheckBoxColumn x:Name="UsersActiveCol" Binding="{Binding IsActive}" Width="80"/>
+                    </DataGrid.Columns>
+                </DataGrid>
+            </Border>
+
+            <!-- Add / edit panel -->
+            <Border Grid.Column="2"
+                    Background="{StaticResource BgPrimaryBrush}"
+                    BorderBrush="{StaticResource PanelBorderBrush}"
+                    BorderThickness="0.5"
+                    CornerRadius="8"
+                    Padding="16">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                <StackPanel>
+                    <TextBlock x:Name="UsersFormHeaderTb" FontSize="14" FontWeight="SemiBold" Foreground="{StaticResource TextPrimaryBrush}"/>
+
+                    <TextBlock x:Name="UsersUsernameLbl" Margin="0,14,0,4" Foreground="{StaticResource TextSecondaryBrush}"/>
+                    <TextBox Text="{Binding EditUsername, UpdateSourceTrigger=PropertyChanged}"
+                             Style="{StaticResource PosTextBox}"/>
+
+                    <TextBlock x:Name="UsersRoleLbl" Margin="0,14,0,4" Foreground="{StaticResource TextSecondaryBrush}"/>
+                    <ComboBox ItemsSource="{Binding Roles}"
+                              SelectedItem="{Binding EditSelectedRole}"
+                              DisplayMemberPath="Name"/>
+
+                    <CheckBox x:Name="UsersActiveCheck" Margin="0,18,0,0" IsChecked="{Binding EditIsActive}"/>
+
+                    <Button x:Name="UsersSaveBtn"
+                            Margin="0,18,0,0"
+                            Style="{StaticResource AccentButton}"
+                            Command="{Binding SaveUserCommand}"/>
+                    <Button x:Name="UsersNewBtn"
+                            Margin="0,8,0,0"
+                            Style="{StaticResource GhostButton}"
+                            Command="{Binding NewUserCommand}"/>
+
+                    <Border BorderBrush="{StaticResource PanelBorderBrush}" BorderThickness="0,1,0,0" Margin="0,20,0,16"/>
+
+                    <TextBlock x:Name="UsersNewRoleHeaderTb" FontSize="13" FontWeight="SemiBold" Foreground="{StaticResource TextPrimaryBrush}"/>
+                    <TextBlock x:Name="UsersNewRoleHintTb" Margin="0,4,0,8" Foreground="{StaticResource TextTertiaryBrush}" FontSize="11" TextWrapping="Wrap"/>
+                    <TextBox Text="{Binding NewRoleNameText, UpdateSourceTrigger=PropertyChanged}"
+                             Style="{StaticResource PosTextBox}"/>
+                    <Button x:Name="UsersAddRoleBtn"
+                            Margin="0,8,0,0"
+                            Style="{StaticResource GhostButton}"
+                            Command="{Binding AddRoleCommand}"/>
+
+                    <Border BorderBrush="{StaticResource PanelBorderBrush}" BorderThickness="0,1,0,0" Margin="0,20,0,16"/>
+
+                    <TextBlock x:Name="UsersPermissionsHeaderTb" FontSize="13" FontWeight="SemiBold" Foreground="{StaticResource TextPrimaryBrush}"/>
+                    <TextBlock x:Name="UsersPermissionsHintTb" Margin="0,4,0,8" Foreground="{StaticResource TextTertiaryBrush}" FontSize="11" TextWrapping="Wrap"/>
+                    <ComboBox ItemsSource="{Binding Roles}"
+                              SelectedItem="{Binding SelectedRoleForPermissions}"
+                              DisplayMemberPath="Name"/>
+
+                    <CheckBox x:Name="UsersPermManageProductsCheck" Margin="0,14,0,0" IsChecked="{Binding PermManageProducts}"/>
+                    <CheckBox x:Name="UsersPermViewReportsCheck" Margin="0,8,0,0" IsChecked="{Binding PermViewReports}"/>
+                    <CheckBox x:Name="UsersPermViewAuditCheck" Margin="0,8,0,0" IsChecked="{Binding PermViewAudit}"/>
+                    <CheckBox x:Name="UsersPermManageUsersCheck" Margin="0,8,0,0"
+                              IsChecked="{Binding PermManageUsers}"
+                              IsEnabled="{Binding CanEditManageUsersPermission}"/>
+                    <CheckBox x:Name="UsersPermManageSettingsCheck" Margin="0,8,0,0" IsChecked="{Binding PermManageSettings}"/>
+                    <CheckBox x:Name="UsersPermProcessRefundsCheck" Margin="0,8,0,0" IsChecked="{Binding PermProcessRefunds}"/>
+
+                    <Button x:Name="UsersSavePermissionsBtn"
+                            Margin="0,14,0,0"
+                            Style="{StaticResource GhostButton}"
+                            Command="{Binding SavePermissionsCommand}"/>
+                </StackPanel>
+                </ScrollViewer>
+            </Border>
+        </Grid>
+
+        <DockPanel Grid.Row="2" Margin="0,12,0,0" LastChildFill="False">
+            <TextBlock Text="{Binding StatusText}" VerticalAlignment="Center" Foreground="{StaticResource TextSecondaryBrush}"/>
+            <Button x:Name="UsersCloseBtn"
+                    DockPanel.Dock="Right"
+                    Width="90"
+                    Style="{StaticResource GhostButton}"
+                    Click="Close_Click"/>
+        </DockPanel>
+    </Grid>
+</Window>

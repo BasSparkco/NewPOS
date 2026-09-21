@@ -3,6 +3,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using POS.Application.Abstractions;
 using POS.Core.Entities;
+using POS.Core.Enums;
 using POS.Infrastructure;
 using POS.Infrastructure.Data;
 
@@ -16,6 +17,7 @@ internal sealed class TestServiceHost : IAsyncDisposable
         ServiceProvider services,
         string databasePath,
         TestCurrentSession session,
+        Guid tenantId,
         Guid storeId,
         Guid userId,
         Guid categoryId,
@@ -25,6 +27,7 @@ internal sealed class TestServiceHost : IAsyncDisposable
         _services = services;
         DatabasePath = databasePath;
         Session = session;
+        TenantId = tenantId;
         StoreId = storeId;
         UserId = userId;
         CategoryId = categoryId;
@@ -35,6 +38,7 @@ internal sealed class TestServiceHost : IAsyncDisposable
     public IServiceProvider Services => _services;
     public string DatabasePath { get; }
     public TestCurrentSession Session { get; }
+    public Guid TenantId { get; }
     public Guid StoreId { get; }
     public Guid UserId { get; }
     public Guid CategoryId { get; }
@@ -73,6 +77,7 @@ internal sealed class TestServiceHost : IAsyncDisposable
         var provider = services.BuildServiceProvider();
         var dbFactory = provider.GetRequiredService<IDbContextFactory<PosDbContext>>();
 
+        var tenantId = Guid.NewGuid();
         var storeId = Guid.NewGuid();
         var userId = Guid.NewGuid();
         var categoryId = Guid.NewGuid();
@@ -87,6 +92,17 @@ internal sealed class TestServiceHost : IAsyncDisposable
             var now = DateTime.UtcNow;
             var roleId = Guid.NewGuid();
 
+            db.Tenants.Add(new Tenant
+            {
+                Id = tenantId,
+                Name = "Test Tenant",
+                NormalizedSlug = "test-tenant",
+                Status = TenantStatus.Active,
+                CreatedAt = now,
+                UpdatedAt = now,
+                IsDeleted = false
+            });
+
             db.Currencies.AddRange(
                 new Currency
                 {
@@ -94,7 +110,6 @@ internal sealed class TestServiceHost : IAsyncDisposable
                     Code = "USD",
                     Name = "US Dollar",
                     Symbol = "$",
-                    ExchangeRate = 1m,
                     CreatedAt = now,
                     UpdatedAt = now,
                     IsDeleted = false
@@ -105,6 +120,27 @@ internal sealed class TestServiceHost : IAsyncDisposable
                     Code = "EUR",
                     Name = "Euro",
                     Symbol = "EUR",
+                    CreatedAt = now,
+                    UpdatedAt = now,
+                    IsDeleted = false
+                });
+
+            db.TenantCurrencyRates.AddRange(
+                new TenantCurrencyRate
+                {
+                    Id = Guid.NewGuid(),
+                    TenantId = tenantId,
+                    CurrencyId = baseCurrencyId,
+                    ExchangeRate = 1m,
+                    CreatedAt = now,
+                    UpdatedAt = now,
+                    IsDeleted = false
+                },
+                new TenantCurrencyRate
+                {
+                    Id = Guid.NewGuid(),
+                    TenantId = tenantId,
+                    CurrencyId = altCurrencyId,
                     ExchangeRate = 0.9m,
                     CreatedAt = now,
                     UpdatedAt = now,
@@ -114,6 +150,7 @@ internal sealed class TestServiceHost : IAsyncDisposable
             db.Stores.Add(new Store
             {
                 Id = storeId,
+                TenantId = tenantId,
                 Name = "Test Store",
                 BaseCurrencyId = baseCurrencyId,
                 CreatedAt = now,
@@ -124,7 +161,9 @@ internal sealed class TestServiceHost : IAsyncDisposable
             db.Roles.Add(new Role
             {
                 Id = roleId,
+                TenantId = tenantId,
                 Name = "Admin",
+                PermissionsMask = (int)Permission.All,
                 CreatedAt = now,
                 UpdatedAt = now,
                 IsDeleted = false
@@ -133,7 +172,9 @@ internal sealed class TestServiceHost : IAsyncDisposable
             db.Users.Add(new User
             {
                 Id = userId,
+                TenantId = tenantId,
                 Username = "admin",
+                NormalizedUsername = "ADMIN",
                 PasswordHash = "hash",
                 RoleId = roleId,
                 StoreId = storeId,
@@ -143,9 +184,21 @@ internal sealed class TestServiceHost : IAsyncDisposable
                 IsDeleted = false
             });
 
+            db.UserStoreAccesses.Add(new UserStoreAccess
+            {
+                Id = Guid.NewGuid(),
+                TenantId = tenantId,
+                UserId = userId,
+                StoreId = storeId,
+                CreatedAt = now,
+                UpdatedAt = now,
+                IsDeleted = false
+            });
+
             db.Categories.Add(new Category
             {
                 Id = categoryId,
+                TenantId = tenantId,
                 Name = "General",
                 CreatedAt = now,
                 UpdatedAt = now,
@@ -155,9 +208,9 @@ internal sealed class TestServiceHost : IAsyncDisposable
             await db.SaveChangesAsync();
         }
 
-        session.Set(userId, storeId, "admin", "Admin", "USD", "$");
+        session.Set(tenantId, userId, storeId, "admin", "Admin", (int)Permission.All, "USD", "$");
 
-        return new TestServiceHost(provider, dbPath, session, storeId, userId, categoryId, baseCurrencyId, altCurrencyId);
+        return new TestServiceHost(provider, dbPath, session, tenantId, storeId, userId, categoryId, baseCurrencyId, altCurrencyId);
     }
 
     public async Task<T> ExecuteScopeAsync<T>(Func<IServiceProvider, Task<T>> action)
@@ -189,30 +242,36 @@ internal sealed class TestServiceHost : IAsyncDisposable
 
 internal sealed class TestCurrentSession : ICurrentSession
 {
+    public Guid TenantId { get; private set; }
     public Guid UserId { get; private set; }
     public Guid StoreId { get; private set; }
     public string Username { get; private set; } = string.Empty;
     public string RoleName { get; private set; } = string.Empty;
+    public int PermissionsMask { get; private set; }
     public string BaseCurrencyCode { get; private set; } = "USD";
     public string? CurrencySymbol { get; private set; }
     public bool IsAuthenticated => UserId != Guid.Empty && StoreId != Guid.Empty;
 
-    public void Set(Guid userId, Guid storeId, string username, string roleName, string baseCurrencyCode, string? currencySymbol)
+    public void Set(Guid tenantId, Guid userId, Guid storeId, string username, string roleName, int permissionsMask, string baseCurrencyCode, string? currencySymbol)
     {
+        TenantId = tenantId;
         UserId = userId;
         StoreId = storeId;
         Username = username;
         RoleName = roleName;
+        PermissionsMask = permissionsMask;
         BaseCurrencyCode = baseCurrencyCode;
         CurrencySymbol = currencySymbol;
     }
 
     public void Clear()
     {
+        TenantId = Guid.Empty;
         UserId = Guid.Empty;
         StoreId = Guid.Empty;
         Username = string.Empty;
         RoleName = string.Empty;
+        PermissionsMask = 0;
         BaseCurrencyCode = "USD";
         CurrencySymbol = null;
     }

@@ -13,6 +13,10 @@ internal sealed class StoreConfiguration : IEntityTypeConfiguration<Store>
         builder.Property(e => e.Name).HasMaxLength(500).IsRequired();
         builder.Property(e => e.Address).HasMaxLength(1000);
         builder.Property(e => e.Phone).HasMaxLength(50);
+        builder.HasOne(e => e.Tenant)
+            .WithMany(t => t.Stores)
+            .HasForeignKey(e => e.TenantId)
+            .OnDelete(DeleteBehavior.Restrict);
         builder.HasOne(e => e.BaseCurrency)
             .WithMany()
             .HasForeignKey(e => e.BaseCurrencyId)

@@ -34,6 +34,8 @@ public static class DependencyInjection
         services.AddScoped<ICurrencyService, CurrencyService>();
         services.AddScoped<ISettingsService, SettingsService>();
         services.AddScoped<IAuditLogService, AuditLogService>();
+        services.AddScoped<IUserManagementService, UserManagementService>();
+        services.AddScoped<IDeviceManagementService, DeviceManagementService>();
         services.AddScoped<IInvoiceSyncService, InvoiceSyncService>();
 
         return services;

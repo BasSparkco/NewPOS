@@ -343,9 +343,12 @@ public class ApiIntegrationTests
         var now = DateTime.UtcNow;
         await using (var db = await dbFactory.CreateDbContextAsync())
         {
+            var tenantId = await db.Stores.AsNoTracking().Select(s => s.TenantId).SingleAsync();
+
             db.Categories.Add(new Category
             {
                 Id = categoryId,
+                TenantId = tenantId,
                 Name = "Server Synced Category",
                 CreatedAt = now,
                 UpdatedAt = now,
@@ -386,6 +389,7 @@ public class ApiIntegrationTests
         await using (var db = await dbFactory.CreateDbContextAsync())
         {
             var storeId = await db.Stores.AsNoTracking().Select(s => s.Id).SingleAsync();
+            var tenantId = await db.Stores.AsNoTracking().Select(s => s.TenantId).SingleAsync();
             var now = DateTime.UtcNow;
             var categoryId = Guid.NewGuid();
             var productId = Guid.NewGuid();
@@ -393,6 +397,7 @@ public class ApiIntegrationTests
             db.Categories.Add(new Category
             {
                 Id = categoryId,
+                TenantId = tenantId,
                 Name = "Synced Category",
                 CreatedAt = now,
                 UpdatedAt = now,
@@ -401,6 +406,7 @@ public class ApiIntegrationTests
             db.Products.Add(new Product
             {
                 Id = productId,
+                TenantId = tenantId,
                 Name = "Server Synced Product",
                 Barcode = "30001",
                 Price = 7.5m,
@@ -416,6 +422,7 @@ public class ApiIntegrationTests
             db.Inventories.Add(new Inventory
             {
                 Id = Guid.NewGuid(),
+                TenantId = tenantId,
                 ProductId = productId,
                 StoreId = storeId,
                 Quantity = 14m,
@@ -460,11 +467,13 @@ public class ApiIntegrationTests
         await using (var db = await dbFactory.CreateDbContextAsync())
         {
             var storeId = await db.Stores.AsNoTracking().Select(s => s.Id).SingleAsync();
+            var tenantId = await db.Stores.AsNoTracking().Select(s => s.TenantId).SingleAsync();
             var now = DateTime.UtcNow;
 
             db.Settings.Add(new Setting
             {
                 Id = Guid.NewGuid(),
+                TenantId = tenantId,
                 StoreId = storeId,
                 Key = "ReceiptFooterText",
                 Value = "Synced footer",
@@ -509,12 +518,15 @@ public class ApiIntegrationTests
         await using (var db = await dbFactory.CreateDbContextAsync())
         {
             var storeId = await db.Stores.AsNoTracking().Select(s => s.Id).SingleAsync();
+            var tenantId = await db.Stores.AsNoTracking().Select(s => s.TenantId).SingleAsync();
             var cashierRoleId = await db.Roles.AsNoTracking().Where(r => r.Name == "Cashier").Select(r => r.Id).SingleAsync();
 
             db.Users.Add(new User
             {
                 Id = userId,
+                TenantId = tenantId,
                 Username = "server.user",
+                NormalizedUsername = "SERVER.USER",
                 PasswordHash = "server-hash",
                 RoleId = cashierRoleId,
                 StoreId = storeId,
@@ -560,12 +572,14 @@ public class ApiIntegrationTests
         await using (var db = await dbFactory.CreateDbContextAsync())
         {
             var storeId = await db.Stores.AsNoTracking().Select(s => s.Id).SingleAsync();
+            var tenantId = await db.Stores.AsNoTracking().Select(s => s.TenantId).SingleAsync();
             var userId = await db.Users.AsNoTracking().Where(u => u.Username == "admin").Select(u => u.Id).SingleAsync();
             var now = DateTime.UtcNow;
 
             db.AuditLogs.Add(new AuditLog
             {
                 Id = Guid.NewGuid(),
+                TenantId = tenantId,
                 StoreId = storeId,
                 UserId = userId,
                 Action = "ProductUpdated",
@@ -646,10 +660,12 @@ public class ApiIntegrationTests
         await using (var db = await dbFactory.CreateDbContextAsync())
         {
             var storeId = await db.Stores.AsNoTracking().Select(s => s.Id).SingleAsync();
+            var tenantId = await db.Stores.AsNoTracking().Select(s => s.TenantId).SingleAsync();
 
             db.Devices.Add(new Device
             {
                 Id = deviceId,
+                TenantId = tenantId,
                 StoreId = storeId,
                 Name = "Server Register",
                 CreatedAt = now.AddMinutes(-10),
@@ -787,10 +803,12 @@ public class ApiIntegrationTests
             var dbFactory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<PosDbContext>>();
             await using var db = await dbFactory.CreateDbContextAsync();
             var storeId = await db.Stores.AsNoTracking().Select(s => s.Id).SingleAsync();
+            var tenantId = await db.Stores.AsNoTracking().Select(s => s.TenantId).SingleAsync();
 
             db.Devices.Add(new Device
             {
                 Id = serverDeviceId,
+                TenantId = tenantId,
                 StoreId = storeId,
                 Name = "Shared Register",
                 CreatedAt = serverUpdatedAt.AddMinutes(-20),
@@ -901,18 +919,24 @@ public class ApiIntegrationTests
                     .SetProperty(s => s.BaseCurrencyId, nextBase.Id)
                     .SetProperty(s => s.UpdatedAt, now));
 
+            var rates = await db.TenantCurrencyRates
+                .Where(r => r.TenantId == store.TenantId)
+                .ToDictionaryAsync(r => r.CurrencyId);
+
             foreach (var currency in currencies)
             {
-                var nextRate = currency.Id == nextBase.Id ? 1m : currency.ExchangeRate + 0.25m;
-                await db.Currencies
-                    .Where(c => c.Id == currency.Id)
+                var currentRate = rates.TryGetValue(currency.Id, out var r) ? r.ExchangeRate : 1m;
+                var nextRate = currency.Id == nextBase.Id ? 1m : currentRate + 0.25m;
+                await db.TenantCurrencyRates
+                    .Where(r => r.TenantId == store.TenantId && r.CurrencyId == currency.Id)
                     .ExecuteUpdateAsync(setters => setters
-                        .SetProperty(c => c.ExchangeRate, nextRate)
-                        .SetProperty(c => c.UpdatedAt, now));
+                        .SetProperty(r => r.ExchangeRate, nextRate)
+                        .SetProperty(r => r.UpdatedAt, now));
             }
 
             db.SyncChanges.Add(new SyncChange
             {
+                TenantId = store.TenantId,
                 StoreId = store.Id,
                 AggregateType = POS.Core.SyncAggregateTypes.CurrencyPolicy,
                 EntityId = store.Id,
@@ -946,9 +970,13 @@ public class ApiIntegrationTests
 
         var store = await db.Stores.AsNoTracking().SingleAsync();
         var currencies = await db.Currencies.AsNoTracking().OrderBy(c => c.Code).ToListAsync();
+        var rates = await db.TenantCurrencyRates
+            .AsNoTracking()
+            .Where(r => r.TenantId == store.TenantId)
+            .ToDictionaryAsync(r => r.CurrencyId, r => r.ExchangeRate);
         var changedAt = DateTime.UtcNow.AddMinutes(5);
         var updatedCurrencies = currencies
-            .Select(c => new CurrencyDto(c.Id, c.Code, c.Name, c.Symbol, c.Id == store.BaseCurrencyId ? 1m : c.ExchangeRate + 0.5m))
+            .Select(c => new CurrencyDto(c.Id, c.Code, c.Name, c.Symbol, c.Id == store.BaseCurrencyId ? 1m : (rates.TryGetValue(c.Id, out var rate) ? rate : 1m) + 0.5m))
             .ToList();
 
         var response = await PostAndReadAsync<CurrencyPolicySyncPushResultDto>(client, "/api/sync/currency-policy/push", new CurrencyPolicySyncDto(
@@ -962,7 +990,7 @@ public class ApiIntegrationTests
 
     private static async Task AuthorizeAsync(HttpClient client)
     {
-        var login = await PostAndReadAsync<LoginResponse>(client, "/api/auth/login", new LoginRequest("admin"));
+        var login = await PostAndReadAsync<LoginResponse>(client, "/api/auth/login", new LoginRequest("admin", POS.Infrastructure.Data.DatabaseSeeder.DemoAdminPassword));
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", login.AccessToken);
     }
 
@@ -1007,7 +1035,7 @@ public class ApiIntegrationTests
         return Assert.IsType<T>(payload);
     }
 
-    private sealed record LoginRequest(string Username);
+    private sealed record LoginRequest(string Username, string Password);
     private sealed record LoginResponse(string AccessToken, DateTime ExpiresAtUtc, Guid UserId, Guid StoreId, string Username, string RoleName, string BaseCurrencyCode, string? CurrencySymbol);
     private sealed record CurrentUserResponse(Guid UserId, Guid StoreId, string Username, string RoleName, string BaseCurrencyCode, string? CurrencySymbol);
     private sealed record CategoryResponse(Guid Id, string Name);

@@ -55,6 +55,8 @@
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
                     </Grid.RowDefinitions>
 
                     <CheckBox x:Name="AllowNegativeStockCheck"
@@ -79,14 +81,26 @@
                         <TextBlock Text="%" VerticalAlignment="Center" Margin="8,0,0,0" />
                     </StackPanel>
 
-                    <TextBlock x:Name="ReceiptFooterLbl" Grid.Row="3" Margin="0,4,12,0" VerticalAlignment="Top" />
-                    <TextBox Grid.Row="3"
+                    <CheckBox x:Name="PricesIncludeVatCheck"
+                              Grid.Row="3"
+                              Grid.ColumnSpan="2"
+                              Margin="0,0,0,12"
+                              IsChecked="{Binding PricesIncludeVat}" />
+
+                    <TextBlock x:Name="ReceiptFooterLbl" Grid.Row="4" Margin="0,4,12,0" VerticalAlignment="Top" />
+                    <TextBox Grid.Row="4"
                              Grid.Column="1"
                              MinHeight="72"
                              AcceptsReturn="True"
                              TextWrapping="Wrap"
                              VerticalScrollBarVisibility="Auto"
                              Text="{Binding ReceiptFooterText, UpdateSourceTrigger=PropertyChanged}" />
+
+                    <CheckBox x:Name="UseArabicIndicDigitsCheck"
+                              Grid.Row="5"
+                              Grid.ColumnSpan="2"
+                              Margin="0,12,0,0"
+                              IsChecked="{Binding UseArabicIndicDigits}" />
                 </Grid>
             </StackPanel>
         </Border>

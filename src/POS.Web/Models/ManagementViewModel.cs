@@ -47,6 +47,7 @@ public sealed class OperationalSettingsFormViewModel
     public bool AllowNegativeStock { get; init; }
     public decimal LowStockThreshold { get; init; }
     public decimal DefaultTaxPercent { get; init; }
+    public bool PricesIncludeVat { get; init; }
     public string? ReceiptFooterText { get; init; }
 }
 

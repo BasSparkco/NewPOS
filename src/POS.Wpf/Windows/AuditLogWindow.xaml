@@ -102,7 +102,7 @@
                           RowBackground="{StaticResource BgPrimaryBrush}"
                           AlternatingRowBackground="{StaticResource BgSecondaryBrush}">
                     <DataGrid.Columns>
-                        <DataGridTextColumn x:Name="AuditWhenCol" Binding="{Binding WhenLocal, StringFormat={}{0:yyyy-MM-dd HH:mm}}" Width="150"/>
+                        <DataGridTextColumn x:Name="AuditWhenCol" Binding="{Binding WhenLocal, Converter={StaticResource Digits}, ConverterParameter='{}{0:yyyy-MM-dd HH:mm}'}" Width="150"/>
                         <DataGridTextColumn x:Name="AuditActorCol" Binding="{Binding Actor}" Width="120"/>
                         <DataGridTextColumn x:Name="AuditActionCol" Binding="{Binding Action}" Width="160"/>
                         <DataGridTextColumn x:Name="AuditEntityCol" Binding="{Binding Entity}" Width="200"/>

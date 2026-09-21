@@ -24,13 +24,13 @@ internal sealed class CurrencyService : ICurrencyService
     public async Task<IReadOnlyList<CurrencyDto>> GetActiveCurrenciesAsync(CancellationToken cancellationToken = default)
     {
         await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken);
-        var list = await db.Currencies
+        var tenantId = await db.Stores
             .AsNoTracking()
-            .Where(c => !c.IsDeleted)
-            .OrderBy(c => c.Code)
-            .Select(c => new CurrencyDto(c.Id, c.Code, c.Name, c.Symbol, c.ExchangeRate))
-            .ToListAsync(cancellationToken);
-        return list;
+            .Where(s => s.Id == _session.StoreId && !s.IsDeleted)
+            .Select(s => (Guid?)s.TenantId)
+            .FirstOrDefaultAsync(cancellationToken)
+            ?? throw new InvalidOperationException("Store not found.");
+        return await GetCurrenciesWithRatesAsync(db, tenantId, cancellationToken);
     }
 
     public async Task<StoreCurrencyPolicyDto> GetStoreCurrencyPolicyAsync(CancellationToken cancellationToken = default)
@@ -40,16 +40,11 @@ internal sealed class CurrencyService : ICurrencyService
         var store = await db.Stores
             .AsNoTracking()
             .Where(s => s.Id == _session.StoreId && !s.IsDeleted)
-            .Select(s => new { s.Id, s.Name, s.BaseCurrencyId })
+            .Select(s => new { s.Id, s.TenantId, s.Name, s.BaseCurrencyId })
             .FirstOrDefaultAsync(cancellationToken)
             ?? throw new InvalidOperationException("Store not found.");
 
-        var currencies = await db.Currencies
-            .AsNoTracking()
-            .Where(c => !c.IsDeleted)
-            .OrderBy(c => c.Code)
-            .Select(c => new CurrencyDto(c.Id, c.Code, c.Name, c.Symbol, c.ExchangeRate))
-            .ToListAsync(cancellationToken);
+        var currencies = await GetCurrenciesWithRatesAsync(db, store.TenantId, cancellationToken);
 
         return new StoreCurrencyPolicyDto(store.Id, store.Name, store.BaseCurrencyId, currencies);
     }
@@ -63,16 +58,14 @@ internal sealed class CurrencyService : ICurrencyService
         var code = fromCurrencyCode.Trim().ToUpperInvariant();
 
         await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken);
-        var storeCurrencyId = await db.Stores
+        var store = await db.Stores
             .AsNoTracking()
             .Where(s => s.Id == _session.StoreId && !s.IsDeleted)
-            .Select(s => (Guid?)s.BaseCurrencyId)
+            .Select(s => new { s.TenantId, s.BaseCurrencyId })
             .FirstOrDefaultAsync(cancellationToken)
             ?? throw new InvalidOperationException("Store not found.");
 
-        var baseCur = await db.Currencies
-            .AsNoTracking()
-            .FirstOrDefaultAsync(c => c.Id == storeCurrencyId && !c.IsDeleted, cancellationToken)
+        var baseRate = await GetRateOrDefaultAsync(db, store.TenantId, store.BaseCurrencyId, cancellationToken)
             ?? throw new InvalidOperationException("Store has no base currency configured.");
 
         var from = await db.Currencies
@@ -80,7 +73,9 @@ internal sealed class CurrencyService : ICurrencyService
             .FirstOrDefaultAsync(c => c.Code == code && !c.IsDeleted, cancellationToken)
             ?? throw new InvalidOperationException($"Unknown currency: {code}");
 
-        return CurrencyConversion.ToBase(amount, from.ExchangeRate, baseCur.ExchangeRate);
+        var fromRate = await GetRateOrDefaultAsync(db, store.TenantId, from.Id, cancellationToken) ?? 1m;
+
+        return CurrencyConversion.ToBase(amount, fromRate, baseRate);
     }
 
     public async Task UpdateStoreCurrencyPolicyAsync(Guid baseCurrencyId, IReadOnlyList<CurrencyRateUpdateDto> rates,
@@ -103,6 +98,8 @@ internal sealed class CurrencyService : ICurrencyService
             .FirstOrDefaultAsync(s => s.Id == _session.StoreId && !s.IsDeleted, cancellationToken)
             ?? throw new InvalidOperationException("Store not found.");
 
+        var tenantId = store.TenantId;
+
         var currencies = await db.Currencies
             .Where(c => !c.IsDeleted)
             .ToDictionaryAsync(c => c.Id, cancellationToken);
@@ -110,8 +107,14 @@ internal sealed class CurrencyService : ICurrencyService
         if (!currencies.TryGetValue(baseCurrencyId, out var newBaseCurrency))
             throw new InvalidOperationException("Selected base currency was not found.");
 
-        var oldBaseCurrency = await db.Currencies
-            .FirstOrDefaultAsync(c => c.Id == store.BaseCurrencyId && !c.IsDeleted, cancellationToken);
+        var oldBaseCurrency = currencies.TryGetValue(store.BaseCurrencyId, out var existingBase) ? existingBase : null;
+
+        var tenantRates = await db.TenantCurrencyRates
+            .Where(r => r.TenantId == tenantId && !r.IsDeleted)
+            .ToDictionaryAsync(r => r.CurrencyId, cancellationToken);
+
+        decimal GetOldRate(Guid currencyId) =>
+            tenantRates.TryGetValue(currencyId, out var r) ? r.ExchangeRate : 1m;
 
         if (oldBaseCurrency is null)
         {
@@ -131,59 +134,42 @@ internal sealed class CurrencyService : ICurrencyService
 
         var now = DateTime.UtcNow;
         var baseChanged = oldBaseCurrency.Id != baseCurrencyId;
-        var oldBaseRate = oldBaseCurrency.ExchangeRate;
-        var newBaseOldRate = newBaseCurrency.ExchangeRate;
+        var oldBaseRate = GetOldRate(oldBaseCurrency.Id);
+        var newBaseOldRate = GetOldRate(newBaseCurrency.Id);
         var oldBaseCode = oldBaseCurrency.Code;
 
         if (baseChanged)
             await ConvertStoreMonetaryDataAsync(db, oldBaseRate, newBaseOldRate, newBaseCurrency.Code, now, cancellationToken);
 
-        if (!baseChanged)
+        foreach (var rate in normalizedRates)
         {
-            foreach (var rate in normalizedRates)
-            {
-                var targetRate = rate.CurrencyId == baseCurrencyId
-                    ? 1m
-                    : Math.Round(rate.ExchangeRate, 6, MidpointRounding.AwayFromZero);
+            var targetRate = rate.CurrencyId == baseCurrencyId
+                ? 1m
+                : Math.Round(rate.ExchangeRate, 6, MidpointRounding.AwayFromZero);
 
-                await db.Currencies
-                    .Where(c => c.Id == rate.CurrencyId && !c.IsDeleted)
-                    .ExecuteUpdateAsync(updates => updates
-                        .SetProperty(c => c.ExchangeRate, targetRate)
-                        .SetProperty(c => c.UpdatedAt, now), cancellationToken);
+            if (tenantRates.TryGetValue(rate.CurrencyId, out var existingRate))
+            {
+                existingRate.ExchangeRate = targetRate;
+                existingRate.UpdatedAt = now;
             }
-
-            await db.Stores
-                .Where(s => s.Id == store.Id && !s.IsDeleted)
-                .ExecuteUpdateAsync(updates => updates
-                    .SetProperty(s => s.BaseCurrencyId, baseCurrencyId)
-                    .SetProperty(s => s.UpdatedAt, now), cancellationToken);
-
-            db.SyncChanges.Add(new SyncChange
+            else
             {
-                StoreId = store.Id,
-                AggregateType = SyncAggregateTypes.CurrencyPolicy,
-                EntityId = store.Id,
-                ChangedAt = now
-            });
-            await db.SaveChangesAsync(cancellationToken);
-        }
-        else
-        {
-            foreach (var rate in normalizedRates)
-            {
-                var currency = currencies[rate.CurrencyId];
-                currency.ExchangeRate = currency.Id == baseCurrencyId
-                    ? 1m
-                    : Math.Round(rate.ExchangeRate, 6, MidpointRounding.AwayFromZero);
-                currency.UpdatedAt = now;
+                db.TenantCurrencyRates.Add(new TenantCurrencyRate
+                {
+                    Id = Guid.NewGuid(),
+                    TenantId = tenantId,
+                    CurrencyId = rate.CurrencyId,
+                    ExchangeRate = targetRate,
+                    CreatedAt = now,
+                    UpdatedAt = now
+                });
             }
-
-            store.BaseCurrencyId = baseCurrencyId;
-            store.UpdatedAt = now;
-
-            await db.SaveChangesAsync(cancellationToken);
         }
+
+        store.BaseCurrencyId = baseCurrencyId;
+        store.UpdatedAt = now;
+
+        await db.SaveChangesAsync(cancellationToken);
 
         var rateSummary = string.Join(", ",
             normalizedRates.OrderBy(r => currencies[r.CurrencyId].Code)
@@ -196,6 +182,32 @@ internal sealed class CurrencyService : ICurrencyService
             $"Base currency {oldBaseCode} -> {newBaseCurrency.Code}; rates: {rateSummary}",
             cancellationToken);
     }
+
+    private async Task<IReadOnlyList<CurrencyDto>> GetCurrenciesWithRatesAsync(PosDbContext db, Guid tenantId, CancellationToken cancellationToken)
+    {
+        var rates = await db.TenantCurrencyRates
+            .AsNoTracking()
+            .Where(r => r.TenantId == tenantId && !r.IsDeleted)
+            .ToDictionaryAsync(r => r.CurrencyId, r => r.ExchangeRate, cancellationToken);
+
+        var currencies = await db.Currencies
+            .AsNoTracking()
+            .Where(c => !c.IsDeleted)
+            .OrderBy(c => c.Code)
+            .Select(c => new { c.Id, c.Code, c.Name, c.Symbol })
+            .ToListAsync(cancellationToken);
+
+        return currencies
+            .Select(c => new CurrencyDto(c.Id, c.Code, c.Name, c.Symbol, rates.TryGetValue(c.Id, out var rate) ? rate : 1m))
+            .ToList();
+    }
+
+    private static async Task<decimal?> GetRateOrDefaultAsync(PosDbContext db, Guid tenantId, Guid currencyId, CancellationToken cancellationToken) =>
+        await db.TenantCurrencyRates
+            .AsNoTracking()
+            .Where(r => r.TenantId == tenantId && r.CurrencyId == currencyId && !r.IsDeleted)
+            .Select(r => (decimal?)r.ExchangeRate)
+            .FirstOrDefaultAsync(cancellationToken) ?? 1m;
 
     private static async Task ConvertStoreMonetaryDataAsync(
         PosDbContext db,

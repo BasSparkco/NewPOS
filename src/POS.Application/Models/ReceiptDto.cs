@@ -10,6 +10,7 @@ public sealed class ReceiptDto
     public decimal CashTendered { get; init; }
     public decimal Change { get; init; }
     public IReadOnlyList<ReceiptLineDto> Lines { get; init; } = Array.Empty<ReceiptLineDto>();
+    public string? Notes { get; init; }
 }
 
 public sealed record ReceiptLineDto(string Name, decimal Quantity, decimal UnitPrice, decimal LineTotal);

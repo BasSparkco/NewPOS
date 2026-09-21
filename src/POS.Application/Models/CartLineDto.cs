@@ -7,7 +7,8 @@ public sealed record CartLineDto(
     decimal Quantity,
     decimal UnitPrice,
     decimal DiscountPercent,
-    decimal LineTotal)
+    decimal LineTotal,
+    string? ImagePath = null)
 {
     // Convenience: display name matches the HTML design
     public string Name => ProductName;

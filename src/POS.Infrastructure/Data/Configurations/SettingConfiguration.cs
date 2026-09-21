@@ -15,6 +15,11 @@ internal sealed class SettingConfiguration : IEntityTypeConfiguration<Setting>
 
         builder.HasIndex(e => new { e.StoreId, e.Key }).IsUnique();
 
+        builder.HasOne(e => e.Tenant)
+            .WithMany()
+            .HasForeignKey(e => e.TenantId)
+            .OnDelete(DeleteBehavior.Restrict);
+
         builder.HasOne(e => e.Store)
             .WithMany()
             .HasForeignKey(e => e.StoreId)

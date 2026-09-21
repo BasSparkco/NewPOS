@@ -7,9 +7,10 @@
   <data name="App_TitleShort" xml:space="preserve"><value>POS</value></data>
   <data name="Login_Title" xml:space="preserve"><value>POS — Sign in</value></data>
   <data name="Login_Username" xml:space="preserve"><value>Username</value></data>
+  <data name="Login_Password" xml:space="preserve"><value>Password</value></data>
   <data name="Login_SignIn" xml:space="preserve"><value>Sign in</value></data>
   <data name="Login_FailedTitle" xml:space="preserve"><value>POS</value></data>
-  <data name="Login_Failed" xml:space="preserve"><value>Invalid username.</value></data>
+  <data name="Login_Failed" xml:space="preserve"><value>Invalid username or password.</value></data>
   <data name="CurrencySettings_Title" xml:space="preserve"><value>Store Settings</value></data>
   <data name="CurrencySettings_Header" xml:space="preserve"><value>Store Settings</value></data>
   <data name="CurrencySettings_Subtitle" xml:space="preserve"><value>Manage operational rules, receipt footer text, and the currency policy used throughout the POS.</value></data>
@@ -18,7 +19,9 @@
   <data name="CurrencySettings_AllowNegativeStock" xml:space="preserve"><value>Allow selling past available stock</value></data>
   <data name="CurrencySettings_LowStockThreshold" xml:space="preserve"><value>Low-stock threshold</value></data>
   <data name="CurrencySettings_DefaultTaxPercent" xml:space="preserve"><value>Default tax percent</value></data>
+  <data name="CurrencySettings_PricesIncludeVat" xml:space="preserve"><value>Product prices already include VAT (no tax added at checkout)</value></data>
   <data name="CurrencySettings_ReceiptFooter" xml:space="preserve"><value>Receipt footer text</value></data>
+  <data name="CurrencySettings_UseArabicIndicDigits" xml:space="preserve"><value>Use Indian-Arabic numerals (٠١٢٣) in the Arabic interface</value></data>
   <data name="CurrencySettings_ExchangeRatesHeader" xml:space="preserve"><value>Currency &amp; Exchange Rates</value></data>
   <data name="CurrencySettings_Store" xml:space="preserve"><value>Store:</value></data>
   <data name="CurrencySettings_BaseCurrency" xml:space="preserve"><value>Base currency:</value></data>
@@ -98,6 +101,70 @@ Stock will be restored.</value></data>
   <data name="Audit_ColDetails" xml:space="preserve"><value>Details</value></data>
   <data name="Audit_CountFormat" xml:space="preserve"><value>Showing {0} audit entries.</value></data>
   <data name="Audit_InvalidDateRange" xml:space="preserve"><value>The start date must be on or before the end date.</value></data>
+  <data name="Users_Title" xml:space="preserve"><value>Users</value></data>
+  <data name="Users_Header" xml:space="preserve"><value>Users</value></data>
+  <data name="Users_Subtitle" xml:space="preserve"><value>Add and edit users, assign their role, and create new user types for this store.</value></data>
+  <data name="Users_FormHeader" xml:space="preserve"><value>Add / edit user</value></data>
+  <data name="Users_Username" xml:space="preserve"><value>Username</value></data>
+  <data name="Users_Role" xml:space="preserve"><value>Role</value></data>
+  <data name="Users_Active" xml:space="preserve"><value>Active</value></data>
+  <data name="Users_Save" xml:space="preserve"><value>Save</value></data>
+  <data name="Users_New" xml:space="preserve"><value>New user</value></data>
+  <data name="Users_NewRoleHeader" xml:space="preserve"><value>Add a user type</value></data>
+  <data name="Users_NewRoleHint" xml:space="preserve"><value>Creates a new role (e.g. Supervisor) that can then be assigned above.</value></data>
+  <data name="Users_AddRole" xml:space="preserve"><value>Add role</value></data>
+  <data name="Users_Close" xml:space="preserve"><value>Close</value></data>
+  <data name="Users_ColUsername" xml:space="preserve"><value>Username</value></data>
+  <data name="Users_ColRole" xml:space="preserve"><value>Role</value></data>
+  <data name="Users_ColActive" xml:space="preserve"><value>Active</value></data>
+  <data name="Users_UsernameRequired" xml:space="preserve"><value>Username is required.</value></data>
+  <data name="Users_RoleRequired" xml:space="preserve"><value>Please select a role.</value></data>
+  <data name="Users_CreatedFormat" xml:space="preserve"><value>User '{0}' created.</value></data>
+  <data name="Users_TemporaryPasswordFormat" xml:space="preserve"><value>Temporary password for '{0}': {1}
+
+Share this with the user securely — it will not be shown again.</value></data>
+  <data name="Users_UpdatedFormat" xml:space="preserve"><value>User '{0}' updated.</value></data>
+  <data name="Users_RoleNameRequired" xml:space="preserve"><value>Role name is required.</value></data>
+  <data name="Users_RoleCreatedFormat" xml:space="preserve"><value>Role '{0}' created.</value></data>
+  <data name="Users_PermissionsHeader" xml:space="preserve"><value>Role permissions</value></data>
+  <data name="Users_PermissionsHint" xml:space="preserve"><value>Pick a role, then choose what it's allowed to do. Changes apply to every user with that role.</value></data>
+  <data name="Users_PermManageProducts" xml:space="preserve"><value>Manage products &amp; catalog</value></data>
+  <data name="Users_PermViewReports" xml:space="preserve"><value>View reports</value></data>
+  <data name="Users_PermViewAudit" xml:space="preserve"><value>View audit log</value></data>
+  <data name="Users_PermManageUsers" xml:space="preserve"><value>Manage users &amp; roles</value></data>
+  <data name="Users_PermManageSettings" xml:space="preserve"><value>Manage settings</value></data>
+  <data name="Users_PermProcessRefunds" xml:space="preserve"><value>Process refunds</value></data>
+  <data name="Users_SavePermissions" xml:space="preserve"><value>Save permissions</value></data>
+  <data name="Users_SelectRoleForPermissions" xml:space="preserve"><value>Please select a role to edit.</value></data>
+  <data name="Users_PermissionsSavedFormat" xml:space="preserve"><value>Permissions for '{0}' saved.</value></data>
+  <data name="Devices_Title" xml:space="preserve"><value>Devices</value></data>
+  <data name="Devices_Header" xml:space="preserve"><value>Devices (Boxes)</value></data>
+  <data name="Devices_Subtitle" xml:space="preserve"><value>Provision new registers, enroll this machine, and revoke devices that should no longer be trusted.</value></data>
+  <data name="Devices_ProvisionHeader" xml:space="preserve"><value>Provision a new Box</value></data>
+  <data name="Devices_ProvisionHint" xml:space="preserve"><value>Creates a device row and a one-time enrollment code. Give the code to whoever sets up the new register.</value></data>
+  <data name="Devices_NameLabel" xml:space="preserve"><value>Label (e.g. "Front Counter")</value></data>
+  <data name="Devices_ProvisionButton" xml:space="preserve"><value>Provision &amp; generate code</value></data>
+  <data name="Devices_RevokeHeader" xml:space="preserve"><value>Revoke a device</value></data>
+  <data name="Devices_RevokeHint" xml:space="preserve"><value>Select a device on the left, then revoke it. This cannot be undone — provision a new device instead.</value></data>
+  <data name="Devices_RevokeButton" xml:space="preserve"><value>Revoke selected device</value></data>
+  <data name="Devices_EnrollHeader" xml:space="preserve"><value>Enroll this machine</value></data>
+  <data name="Devices_EnrollHint" xml:space="preserve"><value>Enter the enrollment code an administrator gave you to authorize this machine as a Box.</value></data>
+  <data name="Devices_EnrollButton" xml:space="preserve"><value>Enroll this machine</value></data>
+  <data name="Devices_Close" xml:space="preserve"><value>Close</value></data>
+  <data name="Devices_ColName" xml:space="preserve"><value>Name</value></data>
+  <data name="Devices_ColEnrolled" xml:space="preserve"><value>Enrolled</value></data>
+  <data name="Devices_ColRevoked" xml:space="preserve"><value>Revoked</value></data>
+  <data name="Devices_ColThisMachine" xml:space="preserve"><value>This machine</value></data>
+  <data name="Devices_NameRequired" xml:space="preserve"><value>A label for the new Box is required.</value></data>
+  <data name="Devices_EnrollmentCodeFormat" xml:space="preserve"><value>Enrollment code for '{0}': {1}
+
+Share this with whoever is setting up that register — it will not be shown again.</value></data>
+  <data name="Devices_ProvisionedFormat" xml:space="preserve"><value>Device '{0}' provisioned.</value></data>
+  <data name="Devices_SelectToRevoke" xml:space="preserve"><value>Please select a device to revoke.</value></data>
+  <data name="Devices_ConfirmRevokeFormat" xml:space="preserve"><value>Revoke '{0}'? It will no longer be able to sign in or sync. This cannot be undone.</value></data>
+  <data name="Devices_RevokedFormat" xml:space="preserve"><value>Device '{0}' revoked.</value></data>
+  <data name="Devices_CodeRequired" xml:space="preserve"><value>Enrollment code is required.</value></data>
+  <data name="Devices_EnrolledThisMachine" xml:space="preserve"><value>This machine is now enrolled.</value></data>
   <data name="ProductMgmt_Title" xml:space="preserve"><value>Products &amp; categories</value></data>
   <data name="ProductMgmt_NewCategory" xml:space="preserve"><value>New category:</value></data>
   <data name="ProductMgmt_AddCategory" xml:space="preserve"><value>Add category</value></data>
@@ -110,6 +177,22 @@ Stock will be restored.</value></data>
   <data name="ProductMgmt_RefreshHistory" xml:space="preserve"><value>Refresh</value></data>
   <data name="ProductMgmt_StockHistoryAllFormat" xml:space="preserve"><value>Showing {0} recent stock movements across the store.</value></data>
   <data name="ProductMgmt_StockHistoryFilteredFormat" xml:space="preserve"><value>Showing {1} movements for {0}.</value></data>
+  <data name="ProductMgmt_AllProducts" xml:space="preserve"><value>All products</value></data>
+  <data name="ProductMgmt_SubtitleFormat" xml:space="preserve"><value>{0} products across {1} categories</value></data>
+  <data name="ProductMgmt_CountAllFormat" xml:space="preserve"><value>{0} products</value></data>
+  <data name="ProductMgmt_CountFilteredFormat" xml:space="preserve"><value>{0} of {1} products</value></data>
+  <data name="ProductMgmt_SearchPlaceholder" xml:space="preserve"><value>Search by name or barcode…</value></data>
+  <data name="ProductMgmt_CategoriesHeader" xml:space="preserve"><value>Categories</value></data>
+  <data name="ProductMgmt_EmptyTitle" xml:space="preserve"><value>No products found</value></data>
+  <data name="ProductMgmt_EmptySubtitle" xml:space="preserve"><value>Try a different search or category, or add a new product.</value></data>
+  <data name="ProductMgmt_NoSelectionHint" xml:space="preserve"><value>Select a product to see its details and quick actions.</value></data>
+  <data name="ProductMgmt_ActivityHeader" xml:space="preserve"><value>Recent activity</value></data>
+  <data name="ProductMgmt_NoActivity" xml:space="preserve"><value>No stock activity yet.</value></data>
+  <data name="ProductMgmt_Activate" xml:space="preserve"><value>Activate</value></data>
+  <data name="ProductMgmt_Deactivate" xml:space="preserve"><value>Deactivate</value></data>
+  <data name="ProductMgmt_StatusActive" xml:space="preserve"><value>Active</value></data>
+  <data name="ProductMgmt_StatusInactive" xml:space="preserve"><value>Inactive</value></data>
+  <data name="ProductMgmt_StockLabel" xml:space="preserve"><value>Stock</value></data>
   <data name="Col_Name" xml:space="preserve"><value>Name</value></data>
   <data name="Col_Barcode" xml:space="preserve"><value>Barcode</value></data>
   <data name="Col_Price" xml:space="preserve"><value>Price</value></data>
@@ -135,11 +218,18 @@ Stock will be restored.</value></data>
   <data name="Product_SellingPrice" xml:space="preserve"><value>Selling price *</value></data>
   <data name="Product_CostPrice" xml:space="preserve"><value>Cost price</value></data>
   <data name="Product_InitialStock" xml:space="preserve"><value>Initial stock</value></data>
+  <data name="Product_CurrentStock" xml:space="preserve"><value>Current stock</value></data>
+  <data name="Product_Subtitle" xml:space="preserve"><value>Fill in the details below</value></data>
+  <data name="Product_SectionBasicInfo" xml:space="preserve"><value>BASIC INFORMATION</value></data>
+  <data name="Product_SectionPricing" xml:space="preserve"><value>PRICING</value></data>
+  <data name="Product_SectionInventory" xml:space="preserve"><value>INVENTORY</value></data>
+  <data name="Product_SectionStatus" xml:space="preserve"><value>STATUS</value></data>
+  <data name="Product_ActiveHelp" xml:space="preserve"><value>Inactive products are hidden from the point of sale.</value></data>
   <data name="Product_ImageLabel" xml:space="preserve"><value>Product image</value></data>
   <data name="Product_NoImage" xml:space="preserve"><value>No image selected</value></data>
   <data name="Product_Browse" xml:space="preserve"><value>Browse…</value></data>
   <data name="Product_Clear" xml:space="preserve"><value>Clear</value></data>
-  <data name="Product_ActiveLabel" xml:space="preserve"><value>Product is active (visible in POS)</value></data>
+  <data name="Product_ActiveLabel" xml:space="preserve"><value>Active</value></data>
   <data name="Product_Cancel" xml:space="preserve"><value>Cancel</value></data>
   <data name="Product_Save" xml:space="preserve"><value>Save</value></data>
   <data name="Product_ImageDialogTitle" xml:space="preserve"><value>Select product image</value></data>
@@ -147,6 +237,12 @@ Stock will be restored.</value></data>
   <data name="CustomerDisplay_Welcome" xml:space="preserve"><value>Welcome!</value></data>
   <data name="CustomerDisplay_Subtitle" xml:space="preserve"><value>Your items will appear here</value></data>
   <data name="CustomerDisplay_Total" xml:space="preserve"><value>TOTAL</value></data>
+  <data name="CustomerDisplay_Subtotal" xml:space="preserve"><value>Subtotal</value></data>
+  <data name="CustomerDisplay_VatPrefix" xml:space="preserve"><value>VAT (</value></data>
+  <data name="CustomerDisplay_HeaderProduct" xml:space="preserve"><value>Product</value></data>
+  <data name="CustomerDisplay_HeaderPrice" xml:space="preserve"><value>Price</value></data>
+  <data name="CustomerDisplay_HeaderQty" xml:space="preserve"><value>Qty</value></data>
+  <data name="CustomerDisplay_HeaderSum" xml:space="preserve"><value>Sum</value></data>
   <data name="Msg_CreateCategoryFirst" xml:space="preserve"><value>Create a category first.</value></data>
   <data name="Msg_ProductNotFound" xml:space="preserve"><value>Product not found.</value></data>
   <data name="Msg_DeleteConfirmFormat" xml:space="preserve"><value>Delete '{0}'?</value></data>

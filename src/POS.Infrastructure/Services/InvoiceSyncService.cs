@@ -384,7 +384,11 @@ internal sealed class InvoiceSyncService : IInvoiceSyncService
                 d.SyncVersion,
                 d.CreatedAt,
                 d.UpdatedAt,
-                d.IsDeleted))
+                d.IsDeleted,
+                d.EnrollmentCodeHash,
+                d.EnrolledAt,
+                d.IsRevoked,
+                d.RevokedAt))
             .ToListAsync(cancellationToken);
 
         var payload = OrderByGuidSequence(changes, devices, item => item.DeviceId);
@@ -467,6 +471,7 @@ internal sealed class InvoiceSyncService : IInvoiceSyncService
         {
             var applied = 0;
             var skipped = 0;
+            var tenantId = await GetTenantIdAsync(db, cancellationToken);
 
             foreach (var incoming in payload.Categories)
             {
@@ -481,7 +486,8 @@ internal sealed class InvoiceSyncService : IInvoiceSyncService
                 {
                     existing = new Category
                     {
-                        Id = incoming.CategoryId
+                        Id = incoming.CategoryId,
+                        TenantId = tenantId
                     };
                     db.Categories.Add(existing);
                 }
@@ -632,6 +638,7 @@ internal sealed class InvoiceSyncService : IInvoiceSyncService
                 db.AuditLogs.Add(new AuditLog
                 {
                     Id = incoming.Id,
+                    TenantId = await GetTenantIdAsync(db, cancellationToken),
                     StoreId = _session.StoreId,
                     UserId = userId,
                     Action = incoming.Action,
@@ -772,6 +779,7 @@ internal sealed class InvoiceSyncService : IInvoiceSyncService
         {
             var applied = 0;
             var skipped = 0;
+            var tenantId = await GetTenantIdAsync(db, cancellationToken);
 
             foreach (var incoming in payload.Invoices)
             {
@@ -790,10 +798,11 @@ internal sealed class InvoiceSyncService : IInvoiceSyncService
 
                 if (existing is null)
                 {
-                    var created = CreateInvoiceFromSync(incoming, _session.StoreId, userId, device?.Id);
+                    var created = CreateInvoiceFromSync(incoming, tenantId, _session.StoreId, userId, device.Id);
                     db.Invoices.Add(created);
                     await ReconcileInvoiceInventoryAsync(
                         db,
+                        tenantId,
                         _session.StoreId,
                         userId,
                         created.Id,
@@ -819,9 +828,10 @@ internal sealed class InvoiceSyncService : IInvoiceSyncService
                 }
 
                 var previousInventoryEffect = BuildInventoryEffect(existing.Status, existing.Items);
-                ApplyInvoiceSnapshot(existing, incoming, userId, device?.Id);
+                ApplyInvoiceSnapshot(existing, incoming, userId, device.Id);
                 await ReconcileInvoiceInventoryAsync(
                     db,
+                    tenantId,
                     _session.StoreId,
                     userId,
                     existing.Id,
@@ -1051,7 +1061,9 @@ internal sealed class InvoiceSyncService : IInvoiceSyncService
                 u.IsActive,
                 u.CreatedAt,
                 u.UpdatedAt,
-                u.IsDeleted))
+                u.IsDeleted,
+                u.Role != null ? u.Role.PermissionsMask : 0,
+                u.Role != null ? u.Role.UpdatedAt : default))
             .ToListAsync(cancellationToken);
 
         var payload = OrderByGuidSequence(changes, users, item => item.UserId);
@@ -1151,6 +1163,7 @@ internal sealed class InvoiceSyncService : IInvoiceSyncService
                     existing = new Product
                     {
                         Id = incoming.ProductId,
+                        TenantId = await GetTenantIdAsync(db, cancellationToken),
                         CreatedAt = incoming.CreatedAt
                     };
                     db.Products.Add(existing);
@@ -1241,6 +1254,7 @@ internal sealed class InvoiceSyncService : IInvoiceSyncService
                     db.Settings.Add(new Setting
                     {
                         Id = Guid.NewGuid(),
+                        TenantId = await GetTenantIdAsync(db, cancellationToken),
                         StoreId = _session.StoreId,
                         Key = incoming.Key,
                         Value = incoming.Value,
@@ -1333,19 +1347,21 @@ internal sealed class InvoiceSyncService : IInvoiceSyncService
                     continue;
                 }
 
-                var roleId = await EnsureLocalRoleAsync(db, incoming.RoleName, incoming.UpdatedAt, cancellationToken);
+                var roleId = await EnsureLocalRoleAsync(db, incoming.RoleName, incoming.RolePermissionsMask, incoming.RoleUpdatedAt, cancellationToken);
+                var tenantId = await GetTenantIdAsync(db, cancellationToken);
 
                 if (existing is null)
                 {
                     existing = new User
                     {
                         Id = incoming.UserId,
+                        TenantId = tenantId,
                         StoreId = _session.StoreId
                     };
                     db.Users.Add(existing);
                 }
 
-                ApplyUserSnapshot(existing, incoming, roleId, _session.StoreId);
+                ApplyUserSnapshot(existing, incoming, tenantId, roleId, _session.StoreId);
                 applied++;
             }
 
@@ -1447,6 +1463,7 @@ internal sealed class InvoiceSyncService : IInvoiceSyncService
             db.Settings.Add(new Setting
             {
                 Id = Guid.NewGuid(),
+                TenantId = await GetTenantIdAsync(db, cancellationToken),
                 StoreId = _session.StoreId,
                 Key = key,
                 Value = normalized,
@@ -1541,21 +1558,24 @@ internal sealed class InvoiceSyncService : IInvoiceSyncService
 
     private async Task<DateTime> GetCurrencyPolicyUpdatedAtAsync(PosDbContext db, CancellationToken cancellationToken)
     {
-        var storeUpdatedAt = await db.Stores
+        var store = await db.Stores
             .AsNoTracking()
             .Where(s => s.Id == _session.StoreId && !s.IsDeleted)
-            .Select(s => (DateTime?)s.UpdatedAt)
-            .FirstOrDefaultAsync(cancellationToken)
-            ?? DateTime.MinValue;
+            .Select(s => new { s.TenantId, s.UpdatedAt })
+            .FirstOrDefaultAsync(cancellationToken);
 
-        var currencyUpdatedAt = await db.Currencies
-            .AsNoTracking()
-            .Where(c => !c.IsDeleted)
-            .Select(c => (DateTime?)c.UpdatedAt)
-            .MaxAsync(cancellationToken)
-            ?? DateTime.MinValue;
+        var storeUpdatedAt = store?.UpdatedAt ?? DateTime.MinValue;
 
-        return storeUpdatedAt >= currencyUpdatedAt ? storeUpdatedAt : currencyUpdatedAt;
+        var rateUpdatedAt = store is null
+            ? DateTime.MinValue
+            : await db.TenantCurrencyRates
+                .AsNoTracking()
+                .Where(r => r.TenantId == store.TenantId && !r.IsDeleted)
+                .Select(r => (DateTime?)r.UpdatedAt)
+                .MaxAsync(cancellationToken)
+                ?? DateTime.MinValue;
+
+        return storeUpdatedAt >= rateUpdatedAt ? storeUpdatedAt : rateUpdatedAt;
     }
 
     private async Task<long> GetLatestSyncSequenceAsync(
@@ -1733,6 +1753,14 @@ internal sealed class InvoiceSyncService : IInvoiceSyncService
         return existingCount == productIds.Length;
     }
 
+    private async Task<Guid> GetTenantIdAsync(PosDbContext db, CancellationToken cancellationToken) =>
+        await db.Stores
+            .AsNoTracking()
+            .Where(s => s.Id == _session.StoreId)
+            .Select(s => (Guid?)s.TenantId)
+            .FirstOrDefaultAsync(cancellationToken)
+        ?? Guid.Empty;
+
     private async Task EnsureCategoryAsync(
         PosDbContext db,
         Guid categoryId,
@@ -1746,7 +1774,8 @@ internal sealed class InvoiceSyncService : IInvoiceSyncService
         {
             existing = new Category
             {
-                Id = categoryId
+                Id = categoryId,
+                TenantId = await GetTenantIdAsync(db, cancellationToken)
             };
             db.Categories.Add(existing);
         }
@@ -1793,11 +1822,13 @@ internal sealed class InvoiceSyncService : IInvoiceSyncService
             .FirstOrDefaultAsync(i => i.StoreId == _session.StoreId && i.ProductId == productId, cancellationToken);
 
         var previousQuantity = inventory?.Quantity ?? 0m;
+        var tenantId = await GetTenantIdAsync(db, cancellationToken);
         if (inventory is null)
         {
             inventory = new Inventory
             {
                 Id = Guid.NewGuid(),
+                TenantId = tenantId,
                 ProductId = productId,
                 StoreId = _session.StoreId,
                 Quantity = quantityOnHand,
@@ -1821,6 +1852,7 @@ internal sealed class InvoiceSyncService : IInvoiceSyncService
         db.StockMovements.Add(new StockMovement
         {
             Id = Guid.NewGuid(),
+            TenantId = tenantId,
             ProductId = productId,
             StoreId = _session.StoreId,
             InventoryId = inventory.Id,
@@ -1860,6 +1892,7 @@ internal sealed class InvoiceSyncService : IInvoiceSyncService
             device = new Device
             {
                 Id = incoming.DeviceId,
+                TenantId = await GetTenantIdAsync(db, cancellationToken),
                 StoreId = storeId
             };
             db.Devices.Add(device);
@@ -1874,6 +1907,15 @@ internal sealed class InvoiceSyncService : IInvoiceSyncService
         device.CreatedAt = incoming.CreatedAt;
         device.UpdatedAt = incoming.UpdatedAt;
         device.IsDeleted = incoming.IsDeleted;
+        device.EnrollmentCodeHash = incoming.EnrollmentCodeHash;
+        device.EnrolledAt = incoming.EnrolledAt;
+        // Sticky: revocation can never be undone by a generic snapshot upsert — see the matching
+        // comment in POS.Api/Program.cs's copy of this method.
+        if (incoming.IsRevoked && !device.IsRevoked)
+        {
+            device.IsRevoked = true;
+            device.RevokedAt = incoming.RevokedAt ?? DateTime.UtcNow;
+        }
         return device;
     }
 
@@ -1922,18 +1964,25 @@ internal sealed class InvoiceSyncService : IInvoiceSyncService
     private async Task<Guid> EnsureLocalRoleAsync(
         PosDbContext db,
         string roleName,
-        DateTime updatedAt,
+        int permissionsMask,
+        DateTime roleUpdatedAt,
         CancellationToken cancellationToken)
     {
+        var tenantId = await GetTenantIdAsync(db, cancellationToken);
         var normalizedRoleName = roleName.Trim();
-        var existing = await db.Roles.FirstOrDefaultAsync(r => r.Name == normalizedRoleName, cancellationToken);
+        var existing = await db.Roles.FirstOrDefaultAsync(r => r.TenantId == tenantId && r.Name == normalizedRoleName, cancellationToken);
         if (existing is not null)
         {
             if (existing.IsDeleted)
                 existing.IsDeleted = false;
 
-            if (existing.UpdatedAt < updatedAt)
-                existing.UpdatedAt = updatedAt;
+            // Same UpdatedAt-precedence rule used for every other synced aggregate: only apply the
+            // incoming permission mask if it is actually fresher than what's already local.
+            if (roleUpdatedAt > existing.UpdatedAt)
+            {
+                existing.PermissionsMask = permissionsMask;
+                existing.UpdatedAt = roleUpdatedAt;
+            }
 
             return existing.Id;
         }
@@ -1941,18 +1990,22 @@ internal sealed class InvoiceSyncService : IInvoiceSyncService
         var role = new Role
         {
             Id = Guid.NewGuid(),
+            TenantId = tenantId,
             Name = normalizedRoleName,
-            CreatedAt = updatedAt,
-            UpdatedAt = updatedAt,
+            PermissionsMask = permissionsMask,
+            CreatedAt = roleUpdatedAt,
+            UpdatedAt = roleUpdatedAt,
             IsDeleted = false
         };
         db.Roles.Add(role);
         return role.Id;
     }
 
-    private static void ApplyUserSnapshot(User existing, UserSyncDto incoming, Guid roleId, Guid storeId)
+    private static void ApplyUserSnapshot(User existing, UserSyncDto incoming, Guid tenantId, Guid roleId, Guid storeId)
     {
+        existing.TenantId = tenantId;
         existing.Username = string.IsNullOrWhiteSpace(incoming.Username) ? existing.Username : incoming.Username.Trim();
+        existing.NormalizedUsername = existing.Username.Trim().ToUpperInvariant();
         existing.PasswordHash = incoming.PasswordHash;
         existing.RoleId = roleId;
         existing.StoreId = storeId;
@@ -1962,14 +2015,17 @@ internal sealed class InvoiceSyncService : IInvoiceSyncService
         existing.IsDeleted = incoming.IsDeleted;
     }
 
-    private async Task<Device?> GetOrCreateSyncDeviceAsync(
+    // Every invoice must be keyed by a Box (Device) — when the pulled invoice carries no device
+    // identity at all, resolve/create a per-store fallback "Unknown Device" row instead of leaving
+    // DeviceId unset, since Invoice.DeviceId is required.
+    private async Task<Device> GetOrCreateSyncDeviceAsync(
         PosDbContext db,
         Guid storeId,
         InvoiceSyncInvoiceDto incoming,
         CancellationToken cancellationToken)
     {
         if (incoming.DeviceId is null && string.IsNullOrWhiteSpace(incoming.DeviceName))
-            return null;
+            return await GetOrCreateFallbackDeviceAsync(db, storeId, incoming.UpdatedAt, cancellationToken);
 
         var snapshot = new DeviceSyncDto(
             incoming.DeviceId ?? Guid.NewGuid(),
@@ -1982,10 +2038,37 @@ internal sealed class InvoiceSyncService : IInvoiceSyncService
         return await UpsertDeviceSnapshotAsync(db, storeId, snapshot, cancellationToken);
     }
 
-    private static Invoice CreateInvoiceFromSync(InvoiceSyncInvoiceDto incoming, Guid storeId, Guid userId, Guid? deviceId)
+    private async Task<Device> GetOrCreateFallbackDeviceAsync(
+        PosDbContext db,
+        Guid storeId,
+        DateTime now,
+        CancellationToken cancellationToken)
+    {
+        const string fallbackName = "Unknown Device";
+        var existing = await db.Devices
+            .FirstOrDefaultAsync(d => d.StoreId == storeId && d.Name == fallbackName && !d.IsDeleted, cancellationToken);
+        if (existing is not null)
+            return existing;
+
+        var created = new Device
+        {
+            Id = Guid.NewGuid(),
+            TenantId = await GetTenantIdAsync(db, cancellationToken),
+            StoreId = storeId,
+            Name = fallbackName,
+            SyncVersion = 1,
+            CreatedAt = now,
+            UpdatedAt = now
+        };
+        db.Devices.Add(created);
+        return created;
+    }
+
+    private static Invoice CreateInvoiceFromSync(InvoiceSyncInvoiceDto incoming, Guid tenantId, Guid storeId, Guid userId, Guid deviceId)
     {
         var invoice = new Invoice
         {
+            TenantId = tenantId,
             Id = incoming.InvoiceId,
             StoreId = storeId,
             UserId = userId,
@@ -2036,7 +2119,7 @@ internal sealed class InvoiceSyncService : IInvoiceSyncService
         return invoice;
     }
 
-    private static void ApplyInvoiceSnapshot(Invoice existing, InvoiceSyncInvoiceDto incoming, Guid userId, Guid? deviceId)
+    private static void ApplyInvoiceSnapshot(Invoice existing, InvoiceSyncInvoiceDto incoming, Guid userId, Guid deviceId)
     {
         existing.UserId = userId;
         existing.DeviceId = deviceId;
@@ -2133,6 +2216,7 @@ internal sealed class InvoiceSyncService : IInvoiceSyncService
 
     private static async Task ReconcileInvoiceInventoryAsync(
         PosDbContext db,
+        Guid tenantId,
         Guid storeId,
         Guid userId,
         Guid invoiceId,
@@ -2166,6 +2250,7 @@ internal sealed class InvoiceSyncService : IInvoiceSyncService
                 inventory = new Inventory
                 {
                     Id = Guid.NewGuid(),
+                    TenantId = tenantId,
                     ProductId = productId,
                     StoreId = storeId,
                     Quantity = 0m,
@@ -2182,6 +2267,7 @@ internal sealed class InvoiceSyncService : IInvoiceSyncService
             db.StockMovements.Add(new StockMovement
             {
                 Id = Guid.NewGuid(),
+                TenantId = tenantId,
                 ProductId = productId,
                 StoreId = storeId,
                 InventoryId = inventory.Id,

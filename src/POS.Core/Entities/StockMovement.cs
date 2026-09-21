@@ -5,6 +5,7 @@ namespace POS.Core.Entities;
 public class StockMovement
 {
     public Guid Id { get; set; }
+    public Guid TenantId { get; set; }
     public Guid ProductId { get; set; }
     public Guid StoreId { get; set; }
     public Guid? InventoryId { get; set; }
@@ -20,6 +21,7 @@ public class StockMovement
     public DateTime UpdatedAt { get; set; }
     public bool IsDeleted { get; set; }
 
+    public Tenant? Tenant { get; set; }
     public Product? Product { get; set; }
     public Store? Store { get; set; }
     public Inventory? Inventory { get; set; }

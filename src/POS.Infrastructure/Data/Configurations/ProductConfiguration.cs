@@ -16,6 +16,11 @@ internal sealed class ProductConfiguration : IEntityTypeConfiguration<Product>
         builder.Property(e => e.Cost).HasPrecision(18, 2);
         builder.Property(e => e.ImagePath).HasMaxLength(1000);
         builder.HasIndex(e => e.Barcode);
+        builder.HasIndex(e => e.TenantId);
+        builder.HasOne(e => e.Tenant)
+            .WithMany()
+            .HasForeignKey(e => e.TenantId)
+            .OnDelete(DeleteBehavior.Restrict);
         builder.HasOne(e => e.Category)
             .WithMany(c => c.Products)
             .HasForeignKey(e => e.CategoryId)

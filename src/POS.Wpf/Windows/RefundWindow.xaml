@@ -100,7 +100,7 @@
                                                    Foreground="{StaticResource TextTertiaryBrush}"/>
                                     </StackPanel>
                                     <TextBlock DockPanel.Dock="Right"
-                                               Text="{Binding Total, StringFormat={}{0:N2}}"
+                                               Text="{Binding Total, Converter={StaticResource Digits}, ConverterParameter=N2}"
                                                FontSize="13" FontWeight="SemiBold"
                                                Foreground="{StaticResource DangerBrush}"
                                                VerticalAlignment="Center"/>

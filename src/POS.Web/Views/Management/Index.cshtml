@@ -119,6 +119,11 @@
                         <label for="default-tax">Default tax percent</label>
                         <input id="default-tax" name="DefaultTaxPercent" type="number" step="0.01" class="form-control" value="@Model.OperationalSettings.DefaultTaxPercent" />
                     </div>
+                    <label class="inline-check">
+                        <input type="checkbox" name="PricesIncludeVat" value="true" @(Model.OperationalSettings.PricesIncludeVat ? "checked" : null) />
+                        <span>Product prices already include VAT (no tax added at checkout)</span>
+                    </label>
+                    <input type="hidden" name="PricesIncludeVat" value="false" />
                     <div>
                         <label for="receipt-footer">Receipt footer</label>
                         <textarea id="receipt-footer" name="ReceiptFooterText" class="form-control">@Model.OperationalSettings.ReceiptFooterText</textarea>

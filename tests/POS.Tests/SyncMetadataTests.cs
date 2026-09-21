@@ -85,6 +85,7 @@ public class SyncMetadataTests
                 db.Categories.Add(new Category
                 {
                     Id = categoryId,
+                    TenantId = host.TenantId,
                     Name = "Sequence Category",
                     CreatedAt = now,
                     UpdatedAt = now,
@@ -129,7 +130,9 @@ public class SyncMetadataTests
                 db.Users.Add(new User
                 {
                     Id = userId,
+                    TenantId = host.TenantId,
                     Username = "sync-user",
+                    NormalizedUsername = "SYNC-USER",
                     PasswordHash = "hash",
                     RoleId = roleId,
                     StoreId = host.StoreId,
@@ -169,6 +172,7 @@ public class SyncMetadataTests
                 db.Settings.Add(new Setting
                 {
                     Id = Guid.NewGuid(),
+                    TenantId = host.TenantId,
                     StoreId = host.StoreId,
                     Key = "Sync.InvoicePullSinceVersion",
                     Value = "0",

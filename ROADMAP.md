@@ -89,6 +89,39 @@ This file is the **single path from project start to the long-term vision**, sta
 
 ---
 
+## Stage 4T — Multi-tenant SaaS foundation
+
+Detailed plan: [tenant.md](tenant.md).
+
+This is a production-readiness prerequisite for Stage 5.1 and for Stage 5.2
+multi-branch reporting. Preserve the existing desktop, sync and dashboard work.
+
+- [ ] T0 — Audit actual code and approve ownership/migration decisions.
+- [ ] T1 — Tenant schema, store access and verified data migration.
+- [ ] T2 — Verified identity, enrollment and server-side authorization.
+- [ ] T3 — Tenant/store-bound desktop profiles and offline access.
+- [ ] T4 — Scoped, authorized and replay-safe synchronization.
+- [ ] T5 — Tenant-aware administration and store access.
+- [ ] T6 — Isolation, migration and resilience release tests.
+- [ ] T7 — Recovery rehearsal and controlled pilot.
+
+Exit: independent businesses and their stores remain isolated across desktop,
+API, web, synchronization, reports and recovery; existing financial history
+is preserved; production username-only authentication is removed.
+
+**Terminology decision (2026-09-21):** `Store` = branch (per tenant.md §2.3 — no
+separate Branch table). The existing `Device` entity is promoted to be the
+formal "Box" (register/terminal) a cashier logs into, rather than staying a
+pure sync-identity row. As part of T1/T4, `Invoice.DeviceId` becomes required
+(not nullable) and validated as belonging to the invoice's `StoreId`, so every
+invoice is keyed by tenant + branch (`StoreId`) + box (`DeviceId`) + user
+(`UserId`) — matching tenant.md §3's Invoice ownership row
+(`TenantId, StoreId, DeviceId, UserId`). UI/reporting should surface this as
+"Branch / Box / Cashier" even though the underlying columns stay `StoreId`
+and `DeviceId`.
+
+---
+
 ## Stage 5 — Web dashboard & beyond (Phase 4 from master plan)
 
 **Goal:** Browser-based admin and future channels.
@@ -116,6 +149,7 @@ These are not separate stages yet. They are prioritized backlog candidates to pr
 3. **Invoice layouts and invoice schemes:** multiple receipt/invoice templates, configurable numbering prefixes/sequences, optional QR/compliance fields.
 4. **Stock transfers between stores:** request/dispatch/receive flow, in-transit status, reconciliation.
 5. **Expense management:** expense entry, categories, expense reports, optional employee-paid expense attribution.
+6. **Granular role-based permissions (RBAC):** ~~Stage 2.2 shipped a binary gate only~~ — now superseded. `Role.PermissionsMask` (a `[Flags] Permission` bitmask: `ManageProducts`, `ViewReports`, `ViewAudit`, `ManageUsers`, `ManageSettings`, `ProcessRefunds`) replaces the old `IsAdmin`/"Admin-or-Manager" string check in the WPF app; every nav button and the Refund command (previously ungated entirely — any Cashier could open Refund) now checks its own permission via `ICurrentSession.HasPermission(...)`. The desktop `POS.Wpf` "Users" screen (sidebar) has a "Role permissions" editor — pick a role, check/uncheck what it can do, including brand-new roles created there. Permission edits propagate through the existing offline sync engine (`UserSyncDto` carries the role's mask and its own `UpdatedAt`, resolved with the same freshness rule used for every other synced aggregate) so multi-device stores stay consistent. The Admin role always keeps `ManageUsers` (server-enforced) to prevent locking everyone out. **Remaining:** `POS.Web`'s dashboard still gates on a coarse Admin/Manager role-string policy, and `POS.Api`'s JWT claims don't carry permissions — both were explicitly left untouched this pass and should adopt the same `Permission` model when the web dashboard needs finer-grained access than "Admin or Manager, full access."
 
 ### Commercial Extensions
 
@@ -146,11 +180,12 @@ Only promote these if product scope expands beyond core retail POS:
 
 Best candidates to promote soon after the current Stage 3/4 work:
 
-1. cash register management
-2. customer groups and selling price groups
-3. invoice layouts and invoice schemes
-4. stock transfers between stores
-5. notification template system
+1. granular role-based permissions (RBAC) — WPF/Core/sync portion done; Web + API auth enforcement remains
+2. cash register management
+3. customer groups and selling price groups
+4. invoice layouts and invoice schemes
+5. stock transfers between stores
+6. notification template system
 
 ---
 

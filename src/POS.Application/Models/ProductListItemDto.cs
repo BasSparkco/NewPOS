@@ -7,4 +7,7 @@ public sealed record ProductListItemDto(
     decimal Price,
     decimal QuantityOnHand,
     bool IsLowStock,
-    string? ImagePath);
+    string? ImagePath,
+    Guid CategoryId,
+    string CategoryName,
+    bool IsActive);

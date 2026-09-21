@@ -1,8 +1,9 @@
 namespace POS.Core.Entities;
 
 /// <summary>
-/// Exchange rate is expressed as: amount in store base = amount in this currency × (this.ExchangeRate / base.ExchangeRate).
-/// The store base currency should use ExchangeRate = 1.
+/// Global, immutable-ish ISO currency reference data shared across all tenants (Code/Name/Symbol only).
+/// Per-tenant exchange rates and base-currency policy live in <see cref="TenantCurrencyRate"/> instead,
+/// so one tenant's rate changes can never affect another tenant.
 /// </summary>
 public class Currency
 {
@@ -10,7 +11,6 @@ public class Currency
     public string Code { get; set; } = string.Empty;
     public string Name { get; set; } = string.Empty;
     public string? Symbol { get; set; }
-    public decimal ExchangeRate { get; set; } = 1m;
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
     public bool IsDeleted { get; set; }

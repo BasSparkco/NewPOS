@@ -30,7 +30,9 @@ public partial class CurrencySettingsViewModel : ObservableObject
     [ObservableProperty] private bool _allowNegativeStock;
     [ObservableProperty] private string _lowStockThresholdText = "5";
     [ObservableProperty] private string _defaultTaxPercentText = "0";
+    [ObservableProperty] private bool _pricesIncludeVat;
     [ObservableProperty] private string _receiptFooterText = string.Empty;
+    [ObservableProperty] private bool _useArabicIndicDigits;
 
     public CurrencyRateItem? SelectedBaseCurrency
     {
@@ -69,7 +71,9 @@ public partial class CurrencySettingsViewModel : ObservableObject
             AllowNegativeStock = settings.AllowNegativeStock;
             LowStockThresholdText = settings.LowStockThreshold.ToString("0.##", CultureInfo.CurrentCulture);
             DefaultTaxPercentText = settings.DefaultTaxPercent.ToString("0.##", CultureInfo.CurrentCulture);
+            PricesIncludeVat = settings.PricesIncludeVat;
             ReceiptFooterText = settings.ReceiptFooterText ?? string.Empty;
+            UseArabicIndicDigits = settings.UseArabicIndicDigits;
             StatusText = Locale.Get("CurrencySettings_Loaded");
         }
         finally
@@ -116,16 +120,20 @@ public partial class CurrencySettingsViewModel : ObservableObject
                 AllowNegativeStock,
                 lowStockThreshold,
                 defaultTaxPercent,
-                string.IsNullOrWhiteSpace(ReceiptFooterText) ? null : ReceiptFooterText.Trim());
+                string.IsNullOrWhiteSpace(ReceiptFooterText) ? null : ReceiptFooterText.Trim(),
+                UseArabicIndicDigits,
+                PricesIncludeVat);
 
             await settingsService.UpdateStoreSettingsAsync(settings);
             await currencyService.UpdateStoreCurrencyPolicyAsync(SelectedBaseCurrency.Id, rates);
 
             _session.Set(
+                _session.TenantId,
                 _session.UserId,
                 _session.StoreId,
                 _session.Username,
                 _session.RoleName,
+                _session.PermissionsMask,
                 SelectedBaseCurrency.Code,
                 SelectedBaseCurrency.Symbol);
 

@@ -10,7 +10,7 @@
             <h1 class="login-title">Track store performance, stock pressure, and team activity from one screen.</h1>
             <p class="hero-subtitle">
                 This first Stage 5.1 slice is a server-rendered control room over the shared POS data layer.
-                It uses the existing username-only login flow and is restricted to Admin or Manager roles.
+                It uses the same username/password accounts as the desktop app and is restricted to Admin or Manager roles.
             </p>
         </div>
 
@@ -34,7 +34,7 @@
         <div>
             <span class="eyebrow">Sign in</span>
             <h2 class="panel-title">Admin access</h2>
-            <p class="panel-copy mb-0">Demo admin login is <strong>admin</strong>. No password is required in the current auth flow.</p>
+            <p class="panel-copy mb-0">Sign in with your username and password. See <code>start.md</code> for the demo admin credentials.</p>
         </div>
 
         <form asp-action="Login" method="post" novalidate>
@@ -44,9 +44,21 @@
             <div asp-validation-summary="ModelOnly" class="text-danger mb-3"></div>
 
             <div class="mb-3">
+                <label asp-for="TenantSlug"></label>
+                <input asp-for="TenantSlug" class="form-control" autocomplete="organization" placeholder="Leave blank for a single-business deployment" />
+                <span asp-validation-for="TenantSlug" class="text-danger"></span>
+            </div>
+
+            <div class="mb-3">
                 <label asp-for="Username"></label>
                 <input asp-for="Username" class="form-control" autocomplete="username" />
                 <span asp-validation-for="Username" class="text-danger"></span>
+            </div>
+
+            <div class="mb-3">
+                <label asp-for="Password"></label>
+                <input asp-for="Password" class="form-control" autocomplete="current-password" />
+                <span asp-validation-for="Password" class="text-danger"></span>
             </div>
 
             <div class="form-check mb-4">

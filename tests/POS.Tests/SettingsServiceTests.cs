@@ -21,7 +21,8 @@ public class SettingsServiceTests
                 AllowNegativeStock: true,
                 LowStockThreshold: 12m,
                 DefaultTaxPercent: 17m,
-                ReceiptFooterText: "Thanks for shopping"));
+                ReceiptFooterText: "Thanks for shopping",
+                PricesIncludeVat: true));
 
             var actual = await settings.GetStoreSettingsAsync();
 
@@ -29,10 +30,11 @@ public class SettingsServiceTests
             Assert.Equal(12m, actual.LowStockThreshold);
             Assert.Equal(17m, actual.DefaultTaxPercent);
             Assert.Equal("Thanks for shopping", actual.ReceiptFooterText);
+            Assert.True(actual.PricesIncludeVat);
 
             var dbFactory = services.GetRequiredService<IDbContextFactory<PosDbContext>>();
             await using var db = await dbFactory.CreateDbContextAsync();
-            Assert.Equal(4, await db.Settings.CountAsync(x => x.StoreId == host.StoreId && !x.IsDeleted));
+            Assert.Equal(6, await db.Settings.CountAsync(x => x.StoreId == host.StoreId && !x.IsDeleted));
         });
     }
 

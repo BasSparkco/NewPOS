@@ -162,7 +162,7 @@ public partial class AuditLogWindow : Window
 
         AuditGrid.ItemsSource = rows;
         AuditEmptyText.Visibility = rows.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
-        AuditCountText.Text = string.Format(CultureInfo.CurrentUICulture, Locale.Get("Audit_CountFormat"), rows.Count);
+        AuditCountText.Text = Locale.ToDisplayDigits(string.Format(CultureInfo.CurrentUICulture, Locale.Get("Audit_CountFormat"), rows.Count));
     }
 
     private async void Refresh_Click(object sender, RoutedEventArgs e) =>

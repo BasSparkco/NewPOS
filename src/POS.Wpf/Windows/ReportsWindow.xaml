@@ -166,7 +166,7 @@
                             <DataTemplate>
                                 <DockPanel LastChildFill="False">
                                     <TextBlock DockPanel.Dock="Left"
-                                               Text="{Binding Rank, StringFormat=#{0}}"
+                                               Text="{Binding Rank, Converter={StaticResource Digits}, ConverterParameter='#{0}'}"
                                                FontSize="10" FontWeight="Bold"
                                                Width="22"
                                                Foreground="{StaticResource AccentBrush}"
@@ -179,12 +179,12 @@
                                                MaxWidth="120"
                                                VerticalAlignment="Center"/>
                                     <TextBlock DockPanel.Dock="Right"
-                                               Text="{Binding Revenue, StringFormat={}{0:N2}}"
+                                               Text="{Binding Revenue, Converter={StaticResource Digits}, ConverterParameter=N2}"
                                                FontSize="11" FontWeight="SemiBold"
                                                Foreground="{StaticResource AccentBrush}"
                                                VerticalAlignment="Center"/>
                                     <TextBlock DockPanel.Dock="Right"
-                                               Text="{Binding QtySold, StringFormat=×{0:N0}}"
+                                               Text="{Binding QtySold, Converter={StaticResource Digits}, ConverterParameter='×{0:N0}'}"
                                                FontSize="10"
                                                Foreground="{StaticResource TextTertiaryBrush}"
                                                VerticalAlignment="Center"
@@ -255,7 +255,7 @@
                                                    Foreground="{StaticResource TextTertiaryBrush}"/>
                                     </StackPanel>
                                     <TextBlock DockPanel.Dock="Right"
-                                               Text="{Binding Total, StringFormat={}{0:N2}}"
+                                               Text="{Binding Total, Converter={StaticResource Digits}, ConverterParameter=N2}"
                                                FontSize="12" FontWeight="SemiBold"
                                                Foreground="{StaticResource AccentBrush}"
                                                VerticalAlignment="Center"/>

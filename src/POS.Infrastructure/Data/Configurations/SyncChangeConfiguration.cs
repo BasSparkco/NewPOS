@@ -16,6 +16,12 @@ internal sealed class SyncChangeConfiguration : IEntityTypeConfiguration<SyncCha
 
         builder.HasIndex(e => new { e.AggregateType, e.Id });
         builder.HasIndex(e => new { e.StoreId, e.AggregateType, e.Id });
+        builder.HasIndex(e => new { e.TenantId, e.AggregateType, e.Id });
+
+        builder.HasOne(e => e.Tenant)
+            .WithMany()
+            .HasForeignKey(e => e.TenantId)
+            .OnDelete(DeleteBehavior.Restrict);
 
         builder.HasOne(e => e.Store)
             .WithMany()

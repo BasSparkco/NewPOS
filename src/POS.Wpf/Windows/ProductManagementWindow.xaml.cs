@@ -1,4 +1,5 @@
 using System.Windows;
+using System.Windows.Controls;
 using POS.Wpf.Localization;
 using POS.Wpf.ViewModels;
 
@@ -17,33 +18,22 @@ public partial class ProductManagementWindow : Window
     {
         Loaded -= OnLoaded;
         Locale.ApplyFlowDirection(this);
-        Title = Locale.Get("ProductMgmt_Title");
-        PmNewCategoryLbl.Text    = Locale.Get("ProductMgmt_NewCategory");
-        PmAddCategoryBtn.Content = Locale.Get("ProductMgmt_AddCategory");
-        PmAddProductBtn.Content  = Locale.Get("ProductMgmt_AddProduct");
-        PmEditBtn.Content        = Locale.Get("ProductMgmt_Edit");
-        PmDeleteBtn.Content      = Locale.Get("ProductMgmt_Delete");
-        PmSnapshotHeader.Text    = Locale.Get("ProductMgmt_InventorySnapshot");
-        PmRefreshInventoryBtn.Content = Locale.Get("ProductMgmt_RefreshHistory");
-        PmHistoryHeader.Text     = Locale.Get("ProductMgmt_StockLedger");
-        PmHistoryHint.Text       = Locale.Get("ProductMgmt_StockHistoryHint");
-        if (ProductsGrid.Columns.Count >= 4)
-        {
-            ProductsGrid.Columns[0].Header = Locale.Get("Col_Name");
-            ProductsGrid.Columns[1].Header = Locale.Get("Col_Barcode");
-            ProductsGrid.Columns[2].Header = Locale.Get("Col_Price");
-            ProductsGrid.Columns[3].Header = Locale.Get("Col_Qty");
-        }
 
-        if (StockMovementsGrid.Columns.Count >= 6)
-        {
-            StockMovementsGrid.Columns[0].Header = Locale.Get("Col_Product");
-            StockMovementsGrid.Columns[1].Header = Locale.Get("Col_MovementType");
-            StockMovementsGrid.Columns[2].Header = Locale.Get("Col_Change");
-            StockMovementsGrid.Columns[3].Header = Locale.Get("Col_After");
-            StockMovementsGrid.Columns[4].Header = Locale.Get("Col_Reference");
-            StockMovementsGrid.Columns[5].Header = Locale.Get("Col_When");
-        }
+        Title                    = Locale.Get("ProductMgmt_Title");
+        HeaderTitleTb.Text       = Locale.Get("ProductMgmt_Title");
+        AddProductBtnTb.Text     = Locale.Get("ProductMgmt_AddProduct");
+        CategoriesHeaderTb.Text  = Locale.Get("ProductMgmt_CategoriesHeader");
+        AddCategoryIconBtn.ToolTip = Locale.Get("ProductMgmt_AddCategory");
+        SearchPlaceholderTb.Text = Locale.Get("ProductMgmt_SearchPlaceholder");
+        EmptyTitleTb.Text        = Locale.Get("ProductMgmt_EmptyTitle");
+        EmptySubtitleTb.Text     = Locale.Get("ProductMgmt_EmptySubtitle");
+        NoSelectionHintTb.Text   = Locale.Get("ProductMgmt_NoSelectionHint");
+        PriceTileLabelTb.Text    = Locale.Get("Col_Price");
+        StockTileLabelTb.Text    = Locale.Get("ProductMgmt_StockLabel");
+        EditProductBtn.Content   = Locale.Get("ProductMgmt_Edit");
+        DeleteProductBtn.Content = Locale.Get("ProductMgmt_Delete");
+        ActivityHeaderTb.Text    = Locale.Get("ProductMgmt_ActivityHeader");
+        NoActivityTb.Text        = Locale.Get("ProductMgmt_NoActivity");
 
         if (DataContext is ProductManagementViewModel vm)
         {
@@ -57,5 +47,18 @@ public partial class ProductManagementWindow : Window
                 Close();
             }
         }
+    }
+
+    private void ProductsListBox_MouseDoubleClick(object sender, System.Windows.Input.MouseButtonEventArgs e)
+    {
+        if (DataContext is not ProductManagementViewModel vm)
+            return;
+
+        // Ignore double-clicks on empty space below the last row.
+        if ((sender as ListBox)?.SelectedItem is null)
+            return;
+
+        if (vm.EditProductCommand.CanExecute(null))
+            vm.EditProductCommand.Execute(null);
     }
 }
