@@ -112,6 +112,14 @@ builder.Services
 
 var app = builder.Build();
 
+// Opt-in: minimal authenticated tenant/store/first-admin provisioning (tenant.md T2). Unset (the
+// default) disables the endpoint entirely — no public self-service signup. When set, a caller proves
+// authorization with this shared secret rather than a normal user/JWT identity, since the whole point
+// is bootstrapping a tenant's very first account before any of its users can log in.
+// Read from app.Configuration (not builder.Configuration) — test-host configuration overrides aren't
+// guaranteed to be merged into builder.Configuration until Build() runs.
+var provisioningSecret = app.Configuration["Platform:ProvisioningSecret"];
+
 if (applyMigrationsOnStartup)
     app.Services.ApplyPosDatabaseMigrations(seedDemoDataOnStartup);
 
@@ -196,6 +204,28 @@ app.MapGet("/api/meta/ping", (IConfiguration configuration) =>
         databaseProvider = provider,
         utc = DateTime.UtcNow
     });
+});
+
+app.MapPost("/api/platform/tenants", async (
+    HttpRequest request,
+    ProvisionTenantRequest body,
+    ITenantProvisioningService provisioning,
+    CancellationToken cancellationToken) =>
+{
+    if (string.IsNullOrWhiteSpace(provisioningSecret))
+        return Results.NotFound();
+
+    var suppliedSecret = request.Headers["X-Provisioning-Secret"].ToString();
+    if (!FixedTimeEquals(suppliedSecret, provisioningSecret))
+        return Results.Unauthorized();
+
+    var (success, error, result) = await provisioning.ProvisionTenantAsync(
+        body.TenantName, body.TenantSlug, body.StoreName, body.AdminUsername, body.AdminPassword, body.BaseCurrencyCode, cancellationToken);
+
+    if (!success || result is null)
+        return Results.BadRequest(new ApiErrorResponse(error ?? "Could not provision tenant."));
+
+    return Results.Ok(new ProvisionTenantResponse(result.TenantId, result.StoreId, result.AdminUserId));
 });
 
 app.MapPost("/api/auth/login", async (
@@ -1367,6 +1397,16 @@ static Guid? TryParseGuid(string? raw) => Guid.TryParse(raw, out var parsed) ? p
 static Permission GetPermissions(ClaimsPrincipal user) =>
     int.TryParse(user.FindFirstValue(PermissionsClaim), out var mask) ? (Permission)mask : Permission.None;
 
+static bool FixedTimeEquals(string supplied, string expected)
+{
+    var suppliedBytes = Encoding.UTF8.GetBytes(supplied);
+    var expectedBytes = Encoding.UTF8.GetBytes(expected);
+    // CryptographicOperations.FixedTimeEquals requires equal-length spans; a length mismatch alone
+    // is not secret, so a short-circuit here doesn't leak anything a timing attack could exploit.
+    return suppliedBytes.Length == expectedBytes.Length
+        && System.Security.Cryptography.CryptographicOperations.FixedTimeEquals(suppliedBytes, expectedBytes);
+}
+
 static bool IsUnsafeSigningKey(string value) =>
     string.Equals(value, DevelopmentSigningKey, StringComparison.Ordinal)
     || value.Contains("change-me", StringComparison.OrdinalIgnoreCase)
@@ -2267,6 +2307,8 @@ static IResult MapSaleError(Exception exception)
 internal sealed record SequenceGuidChange(long Sequence, Guid EntityId);
 internal sealed record SequenceKeyChange(long Sequence, string EntityKey);
 internal sealed record LoginRequest(string Username, string Password, string? TenantSlug = null);
+internal sealed record ProvisionTenantRequest(string TenantName, string TenantSlug, string StoreName, string AdminUsername, string AdminPassword, string BaseCurrencyCode = "ILS");
+internal sealed record ProvisionTenantResponse(Guid TenantId, Guid StoreId, Guid AdminUserId);
 internal sealed record AddSaleLineRequest(Guid ProductId, decimal Quantity);
 internal sealed record UpdateSaleLineQuantityRequest(decimal Quantity);
 internal sealed record UpdateSaleLineDiscountRequest(decimal DiscountPercent);

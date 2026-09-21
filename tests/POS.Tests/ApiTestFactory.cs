@@ -11,13 +11,19 @@ namespace POS.Tests;
 internal sealed class ApiTestFactory : WebApplicationFactory<Program>
 {
     private readonly string _databasePath = Path.Combine(Path.GetTempPath(), $"pos-api-tests-{Guid.NewGuid():N}.db");
+    private readonly IDictionary<string, string?>? _extraConfiguration;
+
+    public ApiTestFactory(IDictionary<string, string?>? extraConfiguration = null)
+    {
+        _extraConfiguration = extraConfiguration;
+    }
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseEnvironment("Development");
         builder.ConfigureAppConfiguration((_, config) =>
         {
-            config.AddInMemoryCollection(new Dictionary<string, string?>
+            var settings = new Dictionary<string, string?>
             {
                 ["Database:Provider"] = "Sqlite",
                 ["ConnectionStrings:Default"] = $"Data Source={_databasePath}",
@@ -25,7 +31,15 @@ internal sealed class ApiTestFactory : WebApplicationFactory<Program>
                 ["Jwt:Audience"] = "POS.Tests",
                 ["Jwt:SigningKey"] = "integration-test-signing-key-32chars!!",
                 ["Jwt:AccessTokenMinutes"] = "120"
-            });
+            };
+
+            if (_extraConfiguration is not null)
+            {
+                foreach (var pair in _extraConfiguration)
+                    settings[pair.Key] = pair.Value;
+            }
+
+            config.AddInMemoryCollection(settings);
         });
         builder.ConfigureServices(services =>
         {

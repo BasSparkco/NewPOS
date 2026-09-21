@@ -1046,6 +1046,67 @@ public class ApiIntegrationTests
         Assert.True(string.Equals(response.Status, "Applied", StringComparison.Ordinal), response.ErrorMessage ?? "Expected an applied currency policy snapshot.");
     }
 
+    [Fact]
+    public async Task Platform_tenant_provisioning_is_disabled_without_a_configured_secret()
+    {
+        using var factory = new ApiTestFactory();
+        using var client = factory.CreateClient();
+
+        var response = await client.PostAsJsonAsync("/api/platform/tenants", new ProvisionTenantRequest(
+            "Second Business", "second-business", "Main Store", "owner", "OwnerPassword1!"));
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Platform_tenant_provisioning_requires_the_configured_secret_and_creates_a_working_tenant()
+    {
+        const string provisioningSecret = "test-provisioning-secret";
+
+        using var factory = new ApiTestFactory(new Dictionary<string, string?>
+        {
+            ["Platform:ProvisioningSecret"] = provisioningSecret
+        });
+        using var client = factory.CreateClient();
+
+        var request = new ProvisionTenantRequest("Second Business", "second-business", "Main Store", "owner", "OwnerPassword1!");
+
+        var noSecretResponse = await client.PostAsJsonAsync("/api/platform/tenants", request);
+        Assert.Equal(HttpStatusCode.Unauthorized, noSecretResponse.StatusCode);
+
+        var wrongSecretResponse = await SendWithSecretAsync(client, request, "not-the-secret");
+        Assert.Equal(HttpStatusCode.Unauthorized, wrongSecretResponse.StatusCode);
+
+        var correctResponse = await SendWithSecretAsync(client, request, provisioningSecret);
+        var result = await ReadRequiredAsync<ProvisionTenantResponse>(correctResponse);
+        Assert.NotEqual(Guid.Empty, result.TenantId);
+        Assert.NotEqual(Guid.Empty, result.StoreId);
+        Assert.NotEqual(Guid.Empty, result.AdminUserId);
+
+        var duplicateResponse = await SendWithSecretAsync(client, request, provisioningSecret);
+        Assert.Equal(HttpStatusCode.BadRequest, duplicateResponse.StatusCode);
+
+        // The new tenant's admin can now sign in with its slug — the tenant-scoped login this unblocks.
+        var newTenantLogin = await PostAndReadAsync<LoginResponse>(
+            client, "/api/auth/login", new LoginRequest("owner", "OwnerPassword1!", "second-business"));
+        Assert.False(string.IsNullOrWhiteSpace(newTenantLogin.AccessToken));
+
+        // The original bootstrap tenant's admin still resolves independently now that two tenants exist.
+        var bootstrapLogin = await PostAndReadAsync<LoginResponse>(
+            client, "/api/auth/login", new LoginRequest("admin", POS.Infrastructure.Data.DatabaseSeeder.DemoAdminPassword, "default"));
+        Assert.False(string.IsNullOrWhiteSpace(bootstrapLogin.AccessToken));
+    }
+
+    private static async Task<HttpResponseMessage> SendWithSecretAsync(HttpClient client, object body, string secret)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/api/platform/tenants")
+        {
+            Content = JsonContent.Create(body)
+        };
+        request.Headers.Add("X-Provisioning-Secret", secret);
+        return await client.SendAsync(request);
+    }
+
     private static async Task AuthorizeAsync(HttpClient client)
     {
         var login = await PostAndReadAsync<LoginResponse>(client, "/api/auth/login", new LoginRequest("admin", POS.Infrastructure.Data.DatabaseSeeder.DemoAdminPassword));
@@ -1093,7 +1154,9 @@ public class ApiIntegrationTests
         return Assert.IsType<T>(payload);
     }
 
-    private sealed record LoginRequest(string Username, string Password);
+    private sealed record LoginRequest(string Username, string Password, string? TenantSlug = null);
+    private sealed record ProvisionTenantRequest(string TenantName, string TenantSlug, string StoreName, string AdminUsername, string AdminPassword);
+    private sealed record ProvisionTenantResponse(Guid TenantId, Guid StoreId, Guid AdminUserId);
     private sealed record LoginResponse(string AccessToken, DateTime ExpiresAtUtc, Guid UserId, Guid StoreId, string Username, string RoleName, string BaseCurrencyCode, string? CurrencySymbol);
     private sealed record CurrentUserResponse(Guid UserId, Guid StoreId, string Username, string RoleName, string BaseCurrencyCode, string? CurrencySymbol);
     private sealed record CategoryResponse(Guid Id, string Name);

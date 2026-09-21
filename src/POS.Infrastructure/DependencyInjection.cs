@@ -35,6 +35,7 @@ public static class DependencyInjection
         services.AddScoped<ISettingsService, SettingsService>();
         services.AddScoped<IAuditLogService, AuditLogService>();
         services.AddScoped<IUserManagementService, UserManagementService>();
+        services.AddScoped<ITenantProvisioningService, TenantProvisioningService>();
         services.AddScoped<IDeviceManagementService, DeviceManagementService>();
         services.AddScoped<IInvoiceSyncService, InvoiceSyncService>();
 

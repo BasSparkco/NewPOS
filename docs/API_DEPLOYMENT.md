@@ -70,6 +70,31 @@ $env:Jwt__SigningKey = "replace-with-a-real-32-char-minimum-secret"
 
 The API now refuses to start outside development if `Jwt:SigningKey` is missing or still looks like a placeholder/development secret.
 
+### Tenant provisioning (creating a second business)
+
+`POST /api/platform/tenants` creates a new tenant with its first store and administrator — the "minimal authenticated provisioning" tenant.md T2 calls for, deliberately not a public signup page. It is disabled by default; set `Platform:ProvisioningSecret` to enable it, then present that value on every call via the `X-Provisioning-Secret` header (a wrong or missing header returns 401, a disabled endpoint returns 404 — same response either way to anyone probing without the secret):
+
+```powershell
+$env:Platform__ProvisioningSecret = "replace-with-an-operator-only-secret"
+```
+
+```
+POST /api/platform/tenants
+X-Provisioning-Secret: <the configured secret>
+Content-Type: application/json
+
+{
+  "tenantName": "Example Retail Co",
+  "tenantSlug": "example-retail",
+  "storeName": "Main Store",
+  "adminUsername": "owner",
+  "adminPassword": "a strong password, 8+ characters",
+  "baseCurrencyCode": "ILS"
+}
+```
+
+Only an operator with the shared secret can call this — there is still no in-app UI for it, and no platform-administrator identity concept yet (see STATUS.md Stage 4T/T2 for what's deliberately still missing: rate limiting, an audit trail for this endpoint, and self-service).
+
 ## HTTPS and reverse proxy conventions
 
 - `Http:RequireHttps=true` enables `UseHttpsRedirection()` outside development.
