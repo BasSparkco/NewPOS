@@ -20,8 +20,15 @@ public interface ICurrentSession
     /// session (e.g. the WPF background sync worker). Never persisted or logged.
     /// </summary>
     string? Password { get; }
+    /// <summary>
+    /// UTC time this identity last proved its authorization to the server (a successful online
+    /// login), used to enforce a finite offline-authorization validity window (tenant.md §5) before
+    /// blocking administrative actions on a long-disconnected device. Null means "never proven."
+    /// </summary>
+    DateTime? LastOnlineContactUtc { get; }
 
     void Set(Guid tenantId, Guid userId, Guid storeId, string username, string roleName, int permissionsMask, string baseCurrencyCode, string? currencySymbol);
     void SetPassword(string? password);
+    void SetLastOnlineContactUtc(DateTime? lastOnlineContactUtc);
     void Clear();
 }

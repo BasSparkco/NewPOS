@@ -1443,7 +1443,25 @@ internal sealed class InvoiceSyncService : IInvoiceSyncService
 
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", login.AccessToken);
         _cachedAuthorizedClient = client;
+        await RecordSuccessfulOnlineContactAsync(cancellationToken);
         return client;
+    }
+
+    /// <summary>
+    /// A successful online login is this device's proof that its user is still active and its
+    /// credentials still valid — the exact signal the offline-authorization expiry window (tenant.md
+    /// §5) needs. Persisted locally so it survives app restarts, and pushed into the in-memory
+    /// session immediately so <see cref="POS.Application.Abstractions.IOfflineAuthorizationPolicy"/>
+    /// sees it without a DB round-trip on every permission check.
+    /// </summary>
+    private async Task RecordSuccessfulOnlineContactAsync(CancellationToken cancellationToken)
+    {
+        var now = DateTime.UtcNow;
+        _session.SetLastOnlineContactUtc(now);
+
+        await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken);
+        await UpsertCursorAsync(db, OfflineAuthorizationSettingKeys.LastOnlineContactUtc, now.Ticks.ToString(CultureInfo.InvariantCulture), EmptyTicksCursor, cancellationToken);
+        await db.SaveChangesAsync(cancellationToken);
     }
 
     private async Task<string> GetCursorAsync(

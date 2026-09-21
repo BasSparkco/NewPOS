@@ -143,6 +143,84 @@ public class InvoiceSyncServiceTests
     private sealed record LoginRequestBody(string? Username, string? Password);
 
     [Fact]
+    public async Task Push_unsynced_invoices_records_last_online_contact_after_a_successful_login()
+    {
+        var handler = new FakeSyncHttpMessageHandler((request, _) =>
+        {
+            if (request.RequestUri?.AbsolutePath == "/api/auth/login")
+            {
+                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = JsonContent.Create(new { accessToken = "test-token" })
+                });
+            }
+
+            if (request.RequestUri?.AbsolutePath == "/api/sync/invoices/push")
+            {
+                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = JsonContent.Create(new InvoiceSyncPushResultDto(Array.Empty<InvoiceSyncInvoiceResultDto>()))
+                });
+            }
+
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.NotFound));
+        });
+
+        await using var host = await TestServiceHost.CreateAsync(
+            new Dictionary<string, string?>
+            {
+                ["Sync:Enabled"] = "true",
+                ["Sync:ApiBaseUrl"] = "https://sync.example.test",
+                ["Sync:BatchSize"] = "10"
+            },
+            services =>
+            {
+                services.RemoveAll<IHttpClientFactory>();
+                services.AddSingleton<IHttpClientFactory>(new FakeHttpClientFactory(handler));
+            });
+
+        var beforeLogin = DateTime.UtcNow;
+
+        await host.ExecuteScopeAsync(async services =>
+        {
+            var catalog = services.GetRequiredService<IProductCatalogService>();
+            var sales = services.GetRequiredService<ISaleService>();
+            var sync = services.GetRequiredService<IInvoiceSyncService>();
+            var dbFactory = services.GetRequiredService<IDbContextFactory<PosDbContext>>();
+
+            Assert.Null(host.Session.LastOnlineContactUtc);
+
+            var product = await catalog.CreateProductAsync(new ProductEditDto
+            {
+                Name = "Online Contact Item",
+                Price = 12m,
+                Cost = 5m,
+                CategoryId = host.CategoryId,
+                InitialStock = 20m,
+                IsActive = true
+            });
+
+            var invoiceId = await sales.StartNewSaleAsync();
+            await sales.AddOrMergeLineAsync(invoiceId, product.Id, 1m);
+
+            await sync.PushUnsyncedInvoicesAsync();
+
+            Assert.NotNull(host.Session.LastOnlineContactUtc);
+            Assert.InRange(host.Session.LastOnlineContactUtc!.Value, beforeLogin, DateTime.UtcNow);
+
+            await using var db = await dbFactory.CreateDbContextAsync();
+            var persisted = await db.Settings
+                .AsNoTracking()
+                .Where(s => s.StoreId == host.StoreId && s.Key == "Sync.LastOnlineContactUtc" && !s.IsDeleted)
+                .Select(s => s.Value)
+                .SingleAsync();
+
+            var persistedUtc = new DateTime(long.Parse(persisted), DateTimeKind.Utc);
+            Assert.InRange(persistedUtc, beforeLogin, DateTime.UtcNow);
+        });
+    }
+
+    [Fact]
     public async Task Push_unsynced_invoices_marks_local_invoice_synced_when_server_accepts()
     {
         var results = new InvoiceSyncPushResultDto(

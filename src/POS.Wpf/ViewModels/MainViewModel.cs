@@ -505,11 +505,33 @@ public partial class MainViewModel : ObservableObject
     /// <summary>Checks the given permission, setting a "no permission" status message if it's missing. Returns whether the caller should proceed.</summary>
     private bool EnsurePermission(Permission permission)
     {
-        if (_session.HasPermission(permission))
-            return true;
+        if (!_session.HasPermission(permission))
+        {
+            StatusText = T("You don't have permission for this.", "ليس لديك صلاحية لهذا الإجراء.", "אין לך הרשאה לפעולה זו.");
+            return false;
+        }
 
-        StatusText = T("You don't have permission for this.", "ليس لديك صلاحية لهذا الإجراء.", "אין לך הרשאה לפעולה זו.");
-        return false;
+        // Administrative actions need this device to have proven itself online recently (tenant.md
+        // §5's finite offline-authorization window) — selling itself is never blocked by this.
+        if (IsAdministrativePermission(permission) && IsOfflineAuthorizationExpired())
+        {
+            StatusText = T(
+                "This register needs to reconnect online before it can do this — it's been offline too long.",
+                "يحتاج هذا الجهاز إلى الاتصال بالإنترنت قبل تنفيذ هذا الإجراء — لقد كان غير متصل لفترة طويلة.",
+                "המכשיר צריך להתחבר לאינטרנט לפני ביצוע פעולה זו — הוא היה במצב לא מקוון זמן רב מדי.");
+            return false;
+        }
+
+        return true;
+    }
+
+    private static bool IsAdministrativePermission(Permission permission) =>
+        permission is Permission.ManageProducts or Permission.ManageUsers or Permission.ManageSettings or Permission.ProcessRefunds;
+
+    private bool IsOfflineAuthorizationExpired()
+    {
+        using var scope = _scopeFactory.CreateScope();
+        return scope.ServiceProvider.GetRequiredService<IOfflineAuthorizationPolicy>().IsAdministrativeAccessLocked();
     }
 
     /// <summary>Sidebar: Products → opens catalog (requires ManageProducts).</summary>

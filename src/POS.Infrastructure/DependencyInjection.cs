@@ -38,6 +38,7 @@ public static class DependencyInjection
         services.AddScoped<ITenantProvisioningService, TenantProvisioningService>();
         services.AddScoped<IDeviceManagementService, DeviceManagementService>();
         services.AddScoped<IInvoiceSyncService, InvoiceSyncService>();
+        services.AddScoped<IOfflineAuthorizationPolicy, OfflineAuthorizationPolicy>();
 
         return services;
     }

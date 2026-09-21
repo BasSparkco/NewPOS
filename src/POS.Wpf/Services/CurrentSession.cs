@@ -14,6 +14,7 @@ public sealed class CurrentSession : ICurrentSession
     public string? CurrencySymbol { get; private set; } = "₪";
     public bool IsAuthenticated { get; private set; }
     public string? Password { get; private set; }
+    public DateTime? LastOnlineContactUtc { get; private set; }
 
     public void Set(Guid tenantId, Guid userId, Guid storeId, string username, string roleName, int permissionsMask, string baseCurrencyCode, string? currencySymbol)
     {
@@ -32,6 +33,8 @@ public sealed class CurrentSession : ICurrentSession
 
     public void SetPassword(string? password) => Password = password;
 
+    public void SetLastOnlineContactUtc(DateTime? lastOnlineContactUtc) => LastOnlineContactUtc = lastOnlineContactUtc;
+
     public void Clear()
     {
         TenantId = Guid.Empty;
@@ -44,5 +47,6 @@ public sealed class CurrentSession : ICurrentSession
         CurrencySymbol = "₪";
         IsAuthenticated = false;
         Password = null;
+        LastOnlineContactUtc = null;
     }
 }

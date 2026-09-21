@@ -69,8 +69,18 @@ internal sealed class AuthService : IAuthService
         _session.Set(user.TenantId, user.Id, user.StoreId, user.Username, roleName, permissionsMask, baseCode, symbol);
         _session.SetPassword(password);
 
+        var lastOnlineContactSetting = await db.Settings
+            .AsNoTracking()
+            .Where(s => s.StoreId == user.StoreId && s.Key == OfflineAuthorizationSettingKeys.LastOnlineContactUtc && !s.IsDeleted)
+            .Select(s => s.Value)
+            .FirstOrDefaultAsync(cancellationToken);
+        _session.SetLastOnlineContactUtc(ParseLastOnlineContactUtc(lastOnlineContactSetting));
+
         return new AuthResult(true, null);
     }
+
+    private static DateTime? ParseLastOnlineContactUtc(string? raw) =>
+        long.TryParse(raw, out var ticks) && ticks > 0 ? new DateTime(ticks, DateTimeKind.Utc) : null;
 
     /// <summary>
     /// Resolves the login's tenant scope. An explicit slug must match an active tenant. With no slug,
