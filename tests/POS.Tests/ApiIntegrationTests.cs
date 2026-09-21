@@ -130,6 +130,64 @@ public class ApiIntegrationTests
     }
 
     [Fact]
+    public async Task Refund_endpoint_rejects_a_user_without_ProcessRefunds_permission()
+    {
+        using var factory = new ApiTestFactory();
+        using var client = factory.CreateClient();
+
+        await AuthorizeAsync(client);
+        var product = await GetProductAsync(client, "Sample Item A");
+
+        var sale = await PostAndReadAsync<SaleSnapshotResponse>(client, "/api/sales/open", new { });
+        var afterAdd = await PostAndReadAsync<SaleSnapshotResponse>(
+            client,
+            $"/api/sales/{sale.InvoiceId}/lines",
+            new AddSaleLineRequest(product.Id, 1m));
+
+        await PostAndReadAsync<CompleteCashSaleResponse>(
+            client,
+            $"/api/sales/{sale.InvoiceId}/complete/cash",
+            new CompleteCashSaleRequest(afterAdd.Summary.Total + 5m));
+
+        // Cashier's seeded PermissionsMask is Permission.None — no ProcessRefunds.
+        const string cashierPassword = "NoRefundCashier1!";
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var dbFactory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<PosDbContext>>();
+            await using var db = await dbFactory.CreateDbContextAsync();
+            var storeId = await db.Stores.AsNoTracking().Select(s => s.Id).SingleAsync();
+            var tenantId = await db.Stores.AsNoTracking().Select(s => s.TenantId).SingleAsync();
+            var cashierRoleId = await db.Roles.AsNoTracking().Where(r => r.Name == "Cashier").Select(r => r.Id).SingleAsync();
+
+            db.Users.Add(new User
+            {
+                Id = Guid.NewGuid(),
+                TenantId = tenantId,
+                Username = "no.refund.cashier",
+                NormalizedUsername = "NO.REFUND.CASHIER",
+                PasswordHash = BCrypt.Net.BCrypt.HashPassword(cashierPassword),
+                RoleId = cashierRoleId,
+                StoreId = storeId,
+                IsActive = true,
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow,
+                IsDeleted = false
+            });
+            await db.SaveChangesAsync();
+        }
+
+        using var cashierClient = factory.CreateClient();
+        var login = await PostAndReadAsync<LoginResponse>(
+            cashierClient,
+            "/api/auth/login",
+            new LoginRequest("no.refund.cashier", cashierPassword));
+        cashierClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", login.AccessToken);
+
+        var refundAttempt = await cashierClient.PostAsJsonAsync($"/api/sales/{sale.InvoiceId}/refund", new { });
+        Assert.Equal(HttpStatusCode.Forbidden, refundAttempt.StatusCode);
+    }
+
+    [Fact]
     public async Task Sync_endpoint_applies_invoice_snapshot_and_reports_conflict_for_stale_version()
     {
         using var factory = new ApiTestFactory();

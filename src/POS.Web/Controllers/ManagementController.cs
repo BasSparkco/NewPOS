@@ -53,6 +53,7 @@ public sealed class ManagementController : Controller
 
     [HttpPost]
     [ValidateAntiForgeryToken]
+    [Authorize(Policy = WebAuthorizationPolicies.ManageSettings)]
     public async Task<IActionResult> UpdateStoreProfile(StoreProfileFormViewModel form, CancellationToken cancellationToken)
     {
         var name = form.Name.Trim();
@@ -103,6 +104,7 @@ public sealed class ManagementController : Controller
 
     [HttpPost]
     [ValidateAntiForgeryToken]
+    [Authorize(Policy = WebAuthorizationPolicies.ManageSettings)]
     public async Task<IActionResult> UpdateOperationalSettings(OperationalSettingsFormViewModel form, CancellationToken cancellationToken)
     {
         if (form.LowStockThreshold < 0)
@@ -132,6 +134,7 @@ public sealed class ManagementController : Controller
 
     [HttpPost]
     [ValidateAntiForgeryToken]
+    [Authorize(Policy = WebAuthorizationPolicies.ManageSettings)]
     public async Task<IActionResult> UpdateCurrencyPolicy(CurrencyPolicyFormViewModel form, CancellationToken cancellationToken)
     {
         if (form.BaseCurrencyId == Guid.Empty)
@@ -152,6 +155,7 @@ public sealed class ManagementController : Controller
 
     [HttpPost]
     [ValidateAntiForgeryToken]
+    [Authorize(Policy = WebAuthorizationPolicies.ManageUsers)]
     public async Task<IActionResult> CreateUser(CreateUserFormViewModel form, CancellationToken cancellationToken)
     {
         var username = form.Username.Trim();
@@ -233,6 +237,7 @@ public sealed class ManagementController : Controller
 
     [HttpPost]
     [ValidateAntiForgeryToken]
+    [Authorize(Policy = WebAuthorizationPolicies.ManageProducts)]
     public async Task<IActionResult> CreateCategory(CreateCategoryFormViewModel form, CancellationToken cancellationToken)
     {
         var name = form.Name.Trim();
@@ -256,6 +261,7 @@ public sealed class ManagementController : Controller
 
     [HttpPost]
     [ValidateAntiForgeryToken]
+    [Authorize(Policy = WebAuthorizationPolicies.ManageProducts)]
     public async Task<IActionResult> UpdateCategory(CategoryEditorFormViewModel form, CancellationToken cancellationToken)
     {
         if (form.CategoryId == Guid.Empty)
@@ -286,6 +292,7 @@ public sealed class ManagementController : Controller
 
     [HttpPost]
     [ValidateAntiForgeryToken]
+    [Authorize(Policy = WebAuthorizationPolicies.ManageProducts)]
     public async Task<IActionResult> DeleteCategory(Guid categoryId, CancellationToken cancellationToken)
     {
         if (categoryId == Guid.Empty)
@@ -309,6 +316,7 @@ public sealed class ManagementController : Controller
 
     [HttpPost]
     [ValidateAntiForgeryToken]
+    [Authorize(Policy = WebAuthorizationPolicies.ManageUsers)]
     public async Task<IActionResult> UpdateUser(UserEditFormViewModel form, CancellationToken cancellationToken)
     {
         var username = form.Username.Trim();
@@ -396,6 +404,7 @@ public sealed class ManagementController : Controller
 
     [HttpPost]
     [ValidateAntiForgeryToken]
+    [Authorize(Policy = WebAuthorizationPolicies.ManageProducts)]
     public async Task<IActionResult> CreateProduct(ProductEditorFormViewModel form, CancellationToken cancellationToken)
     {
         var validationError = ValidateProductForm(form, requireProductId: false);
@@ -423,6 +432,7 @@ public sealed class ManagementController : Controller
 
     [HttpPost]
     [ValidateAntiForgeryToken]
+    [Authorize(Policy = WebAuthorizationPolicies.ManageProducts)]
     public async Task<IActionResult> UpdateProduct(ProductEditorFormViewModel form, CancellationToken cancellationToken)
     {
         var validationError = ValidateProductForm(form, requireProductId: true);
@@ -456,6 +466,7 @@ public sealed class ManagementController : Controller
 
     [HttpPost]
     [ValidateAntiForgeryToken]
+    [Authorize(Policy = WebAuthorizationPolicies.ManageProducts)]
     public async Task<IActionResult> DeleteProduct(Guid productId, CancellationToken cancellationToken)
     {
         if (productId == Guid.Empty)

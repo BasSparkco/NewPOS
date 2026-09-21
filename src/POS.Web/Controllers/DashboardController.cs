@@ -9,7 +9,7 @@ using POS.Web.Models;
 
 namespace POS.Web.Controllers;
 
-[Authorize(Policy = WebAuthorizationPolicies.DashboardAccess)]
+[Authorize(Policy = WebAuthorizationPolicies.ViewReports)]
 public sealed class DashboardController : Controller
 {
     private sealed class SalesLineSnapshot

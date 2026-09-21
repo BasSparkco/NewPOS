@@ -22,6 +22,8 @@ const string TenantIdClaim = "tenant_id";
 const string StoreIdClaim = "store_id";
 const string CurrencyCodeClaim = "currency_code";
 const string CurrencySymbolClaim = "currency_symbol";
+const string PermissionsClaim = "permissions";
+const string ProcessRefundsPolicy = "Permission:ProcessRefunds";
 const string DevelopmentSigningKey = "local-development-signing-key-1234567890";
 
 var applyMigrationsOnStartup = ReadBooleanSetting(builder.Configuration, "Database:ApplyMigrationsOnStartup", builder.Environment.IsDevelopment());
@@ -82,7 +84,15 @@ builder.Services.AddScoped<ICurrentSession, ApiCurrentSession>();
 builder.Services.AddInfrastructure(builder.Configuration, builder.Environment.ContentRootPath);
 if (useForwardedHeaders)
     builder.Services.Configure<ForwardedHeadersOptions>(options => ConfigureForwardedHeaders(options, builder.Configuration));
-builder.Services.AddAuthorization();
+builder.Services.AddAuthorization(options =>
+{
+    // Only the refund endpoint is gated so far — WPF already enforces ProcessRefunds for the same
+    // action, and this closes the matching gap on the API surface. Other endpoints stay at the
+    // existing "any authenticated user" RequireAuthorization() default; broader per-endpoint
+    // permission coverage is future work, not part of this pass.
+    options.AddPolicy(ProcessRefundsPolicy, policy =>
+        policy.RequireAssertion(ctx => GetPermissions(ctx.User).HasFlag(Permission.ProcessRefunds)));
+});
 builder.Services
     .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
@@ -136,6 +146,7 @@ app.Use(async (context, next) =>
             var username = user.FindFirstValue(ClaimTypes.Name);
             var roleName = user.FindFirstValue(ClaimTypes.Role);
             var baseCurrencyCode = user.FindFirstValue(CurrencyCodeClaim);
+            var permissionsMask = (int)GetPermissions(user);
 
             if (tenantId.HasValue
                 && userId.HasValue
@@ -150,7 +161,7 @@ app.Use(async (context, next) =>
                     storeId.Value,
                     username,
                     roleName,
-                    0, // Permission enforcement is not wired up for the API/JWT auth surface yet — sync-only for now.
+                    permissionsMask,
                     baseCurrencyCode,
                     user.FindFirstValue(CurrencySymbolClaim));
             }
@@ -209,7 +220,8 @@ app.MapPost("/api/auth/login", async (
         new(ClaimTypes.Role, session.RoleName),
         new(TenantIdClaim, session.TenantId.ToString()),
         new(StoreIdClaim, session.StoreId.ToString()),
-        new(CurrencyCodeClaim, session.BaseCurrencyCode)
+        new(CurrencyCodeClaim, session.BaseCurrencyCode),
+        new(PermissionsClaim, session.PermissionsMask.ToString())
     };
 
     if (!string.IsNullOrWhiteSpace(session.CurrencySymbol))
@@ -510,7 +522,7 @@ salesApi.MapPost("/{invoiceId:guid}/refund", async (
         return Results.BadRequest(new ApiErrorResponse(result.Error ?? "Could not refund invoice."));
 
     return Results.Ok(await BuildSaleLifecycleResponseAsync(invoiceId, sales, dbFactory, cancellationToken));
-});
+}).RequireAuthorization(ProcessRefundsPolicy);
 
 syncApi.MapPost("/invoices/push", async (
     ClaimsPrincipal user,
@@ -1351,6 +1363,9 @@ static void ConfigureForwardedHeaders(ForwardedHeadersOptions options, IConfigur
 }
 
 static Guid? TryParseGuid(string? raw) => Guid.TryParse(raw, out var parsed) ? parsed : null;
+
+static Permission GetPermissions(ClaimsPrincipal user) =>
+    int.TryParse(user.FindFirstValue(PermissionsClaim), out var mask) ? (Permission)mask : Permission.None;
 
 static bool IsUnsafeSigningKey(string value) =>
     string.Equals(value, DevelopmentSigningKey, StringComparison.Ordinal)

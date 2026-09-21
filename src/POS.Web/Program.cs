@@ -3,6 +3,7 @@ using System.Security.Claims;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.HttpOverrides;
 using POS.Application.Abstractions;
+using POS.Core.Enums;
 using POS.Infrastructure;
 using POS.Web.Infrastructure;
 
@@ -37,8 +38,22 @@ builder.Services
 
 builder.Services.AddAuthorization(options =>
 {
+    // Reachability gate: any granted permission, regardless of role name — a custom role with, say,
+    // only ViewReports must not be locked out just because it isn't literally named Admin/Manager.
     options.AddPolicy(WebAuthorizationPolicies.DashboardAccess, policy =>
-        policy.RequireRole("Admin", "Manager"));
+        policy.RequireAssertion(ctx => GetPermissions(ctx.User) != Permission.None));
+    options.AddPolicy(WebAuthorizationPolicies.ManageProducts, policy =>
+        policy.RequireAssertion(ctx => GetPermissions(ctx.User).HasFlag(Permission.ManageProducts)));
+    options.AddPolicy(WebAuthorizationPolicies.ViewReports, policy =>
+        policy.RequireAssertion(ctx => GetPermissions(ctx.User).HasFlag(Permission.ViewReports)));
+    options.AddPolicy(WebAuthorizationPolicies.ViewAudit, policy =>
+        policy.RequireAssertion(ctx => GetPermissions(ctx.User).HasFlag(Permission.ViewAudit)));
+    options.AddPolicy(WebAuthorizationPolicies.ManageUsers, policy =>
+        policy.RequireAssertion(ctx => GetPermissions(ctx.User).HasFlag(Permission.ManageUsers)));
+    options.AddPolicy(WebAuthorizationPolicies.ManageSettings, policy =>
+        policy.RequireAssertion(ctx => GetPermissions(ctx.User).HasFlag(Permission.ManageSettings)));
+    options.AddPolicy(WebAuthorizationPolicies.ProcessRefunds, policy =>
+        policy.RequireAssertion(ctx => GetPermissions(ctx.User).HasFlag(Permission.ProcessRefunds)));
 });
 
 var app = builder.Build();
@@ -76,6 +91,7 @@ app.Use(async (context, next) =>
             var username = user.FindFirstValue(ClaimTypes.Name);
             var roleName = user.FindFirstValue(ClaimTypes.Role);
             var baseCurrencyCode = user.FindFirstValue(WebClaimTypes.CurrencyCode);
+            var permissionsMask = (int)GetPermissions(user);
 
             if (tenantId.HasValue
                 && userId.HasValue
@@ -90,7 +106,7 @@ app.Use(async (context, next) =>
                     storeId.Value,
                     username,
                     roleName,
-                    0, // Permission enforcement is not wired up for the web dashboard's cookie auth yet — sync-only for now.
+                    permissionsMask,
                     baseCurrencyCode,
                     user.FindFirstValue(WebClaimTypes.CurrencySymbol));
             }
@@ -141,3 +157,6 @@ static void ConfigureForwardedHeaders(ForwardedHeadersOptions options, IConfigur
 }
 
 static Guid? TryParseGuid(string? raw) => Guid.TryParse(raw, out var parsed) ? parsed : null;
+
+static Permission GetPermissions(ClaimsPrincipal user) =>
+    int.TryParse(user.FindFirstValue(WebClaimTypes.Permissions), out var mask) ? (Permission)mask : Permission.None;

@@ -3,6 +3,8 @@ using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using POS.Core.Entities;
+using POS.Core.Enums;
 using POS.Infrastructure.Data;
 
 namespace POS.Tests;
@@ -34,6 +36,129 @@ public class WebIntegrationTests
         Assert.Equal(HttpStatusCode.OK, dashboard.StatusCode);
         Assert.Contains("Top products", html, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("Low-stock watchlist", html, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task Sign_in_is_rejected_for_a_user_with_no_granted_permission()
+    {
+        using var factory = new WebTestFactory();
+        using var client = factory.CreateClient(new WebApplicationFactoryClientOptions
+        {
+            AllowAutoRedirect = false
+        });
+
+        // Seeded Cashier role carries Permission.None — no dashboard-worthy permission at all.
+        const string password = "NoPermissionCashier1!";
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var dbFactory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<PosDbContext>>();
+            await using var db = await dbFactory.CreateDbContextAsync();
+            var storeId = await db.Stores.AsNoTracking().Select(s => s.Id).SingleAsync();
+            var tenantId = await db.Stores.AsNoTracking().Select(s => s.TenantId).SingleAsync();
+            var cashierRoleId = await db.Roles.AsNoTracking().Where(r => r.Name == "Cashier").Select(r => r.Id).SingleAsync();
+
+            db.Users.Add(new User
+            {
+                Id = Guid.NewGuid(),
+                TenantId = tenantId,
+                Username = "no.permission.cashier",
+                NormalizedUsername = "NO.PERMISSION.CASHIER",
+                PasswordHash = BCrypt.Net.BCrypt.HashPassword(password),
+                RoleId = cashierRoleId,
+                StoreId = storeId,
+                IsActive = true,
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow,
+                IsDeleted = false
+            });
+            await db.SaveChangesAsync();
+        }
+
+        var loginResult = await LoginAsync(client, "no.permission.cashier", password);
+        var html = await ReadHtmlAsync(loginResult);
+
+        Assert.Equal(HttpStatusCode.OK, loginResult.StatusCode);
+        Assert.Contains("Dashboard access requires at least one granted permission", html, StringComparison.OrdinalIgnoreCase);
+
+        var dashboardAttempt = await client.GetAsync("/Dashboard");
+        Assert.Equal(HttpStatusCode.Redirect, dashboardAttempt.StatusCode);
+        Assert.Equal("/account/login", dashboardAttempt.Headers.Location?.AbsolutePath);
+    }
+
+    [Fact]
+    public async Task User_without_ManageUsers_permission_cannot_create_users()
+    {
+        using var factory = new WebTestFactory();
+        using var client = factory.CreateClient(new WebApplicationFactoryClientOptions
+        {
+            AllowAutoRedirect = false
+        });
+
+        // A custom role with ManageProducts but not ManageUsers — should reach the dashboard
+        // (DashboardAccess only needs any permission) but be refused the user-creation action.
+        const string password = "ProductsOnlyManager1!";
+        Guid cashierRoleId;
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var dbFactory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<PosDbContext>>();
+            await using var db = await dbFactory.CreateDbContextAsync();
+            var storeId = await db.Stores.AsNoTracking().Select(s => s.Id).SingleAsync();
+            var tenantId = await db.Stores.AsNoTracking().Select(s => s.TenantId).SingleAsync();
+            cashierRoleId = await db.Roles.AsNoTracking().Where(r => r.Name == "Cashier").Select(r => r.Id).SingleAsync();
+
+            var now = DateTime.UtcNow;
+            var roleId = Guid.NewGuid();
+            db.Roles.Add(new Role
+            {
+                Id = roleId,
+                TenantId = tenantId,
+                Name = "Products Only",
+                PermissionsMask = (int)Permission.ManageProducts,
+                CreatedAt = now,
+                UpdatedAt = now
+            });
+            db.Users.Add(new User
+            {
+                Id = Guid.NewGuid(),
+                TenantId = tenantId,
+                Username = "products.only",
+                NormalizedUsername = "PRODUCTS.ONLY",
+                PasswordHash = BCrypt.Net.BCrypt.HashPassword(password),
+                RoleId = roleId,
+                StoreId = storeId,
+                IsActive = true,
+                CreatedAt = now,
+                UpdatedAt = now,
+                IsDeleted = false
+            });
+            await db.SaveChangesAsync();
+        }
+
+        await LoginAsync(client, "products.only", password);
+
+        var managementPage = await client.GetAsync("/Management");
+        var managementHtml = await ReadHtmlAsync(managementPage);
+        Assert.Equal(HttpStatusCode.OK, managementPage.StatusCode);
+        Assert.DoesNotContain("id=\"new-username\"", managementHtml, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Read-only", managementHtml, StringComparison.OrdinalIgnoreCase);
+
+        var createUserResponse = await client.PostAsync(
+            "/Management/CreateUser",
+            BuildFormContent(managementHtml, new Dictionary<string, string>
+            {
+                ["Username"] = "should.not.be.created",
+                ["RoleId"] = cashierRoleId.ToString(),
+                ["IsActive"] = "true"
+            }));
+
+        // Cookie auth's Forbid() redirects to AccessDeniedPath rather than returning a raw 403.
+        Assert.Equal(HttpStatusCode.Redirect, createUserResponse.StatusCode);
+        Assert.Equal("/account/access-denied", createUserResponse.Headers.Location?.AbsolutePath);
+
+        await using var verifyScope = factory.Services.CreateAsyncScope();
+        var verifyDbFactory = verifyScope.ServiceProvider.GetRequiredService<IDbContextFactory<PosDbContext>>();
+        await using var verifyDb = await verifyDbFactory.CreateDbContextAsync();
+        Assert.False(await verifyDb.Users.AnyAsync(u => u.Username == "should.not.be.created"));
     }
 
     [Fact]
@@ -1069,7 +1194,10 @@ public class WebIntegrationTests
             filteredHtml);
     }
 
-    private static async Task<HttpResponseMessage> LoginAsAdminAsync(HttpClient client)
+    private static async Task<HttpResponseMessage> LoginAsAdminAsync(HttpClient client) =>
+        await LoginAsync(client, "admin", POS.Infrastructure.Data.DatabaseSeeder.DemoAdminPassword);
+
+    private static async Task<HttpResponseMessage> LoginAsync(HttpClient client, string username, string password)
     {
         var loginPage = await client.GetAsync("/Account/Login");
         var loginHtml = await ReadHtmlAsync(loginPage);
@@ -1078,8 +1206,8 @@ public class WebIntegrationTests
             "/Account/Login",
             BuildFormContent(loginHtml, new Dictionary<string, string>
             {
-                ["Username"] = "admin",
-                ["Password"] = POS.Infrastructure.Data.DatabaseSeeder.DemoAdminPassword,
+                ["Username"] = username,
+                ["Password"] = password,
                 ["RememberMe"] = "true"
             }));
     }

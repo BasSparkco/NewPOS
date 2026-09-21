@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using POS.Application.Abstractions;
+using POS.Core.Enums;
 using POS.Web.Infrastructure;
 using POS.Web.Models;
 
@@ -43,10 +44,10 @@ public sealed class AccountController : Controller
             return View(model);
         }
 
-        if (!HasDashboardAccess(_session.RoleName))
+        if (_session.PermissionsMask == (int)Permission.None)
         {
             _session.Clear();
-            ModelState.AddModelError(string.Empty, "Dashboard access requires an Admin or Manager role.");
+            ModelState.AddModelError(string.Empty, "Dashboard access requires at least one granted permission.");
             return View(model);
         }
 
@@ -57,7 +58,8 @@ public sealed class AccountController : Controller
             new(ClaimTypes.Role, _session.RoleName),
             new(WebClaimTypes.TenantId, _session.TenantId.ToString()),
             new(WebClaimTypes.StoreId, _session.StoreId.ToString()),
-            new(WebClaimTypes.CurrencyCode, _session.BaseCurrencyCode)
+            new(WebClaimTypes.CurrencyCode, _session.BaseCurrencyCode),
+            new(WebClaimTypes.Permissions, _session.PermissionsMask.ToString())
         };
 
         if (!string.IsNullOrWhiteSpace(_session.CurrencySymbol))
@@ -97,8 +99,4 @@ public sealed class AccountController : Controller
 
         return RedirectToAction("Index", "Dashboard");
     }
-
-    private static bool HasDashboardAccess(string roleName) =>
-        roleName.Equals("Admin", StringComparison.OrdinalIgnoreCase)
-        || roleName.Equals("Manager", StringComparison.OrdinalIgnoreCase);
 }
