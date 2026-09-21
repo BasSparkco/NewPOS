@@ -209,6 +209,7 @@ internal sealed class TestServiceHost : IAsyncDisposable
         }
 
         session.Set(tenantId, userId, storeId, "admin", "Admin", (int)Permission.All, "USD", "$");
+        session.SetPassword("admin");
 
         return new TestServiceHost(provider, dbPath, session, tenantId, storeId, userId, categoryId, baseCurrencyId, altCurrencyId);
     }
@@ -251,6 +252,7 @@ internal sealed class TestCurrentSession : ICurrentSession
     public string BaseCurrencyCode { get; private set; } = "USD";
     public string? CurrencySymbol { get; private set; }
     public bool IsAuthenticated => UserId != Guid.Empty && StoreId != Guid.Empty;
+    public string? Password { get; private set; }
 
     public void Set(Guid tenantId, Guid userId, Guid storeId, string username, string roleName, int permissionsMask, string baseCurrencyCode, string? currencySymbol)
     {
@@ -264,6 +266,8 @@ internal sealed class TestCurrentSession : ICurrentSession
         CurrencySymbol = currencySymbol;
     }
 
+    public void SetPassword(string? password) => Password = password;
+
     public void Clear()
     {
         TenantId = Guid.Empty;
@@ -274,6 +278,7 @@ internal sealed class TestCurrentSession : ICurrentSession
         PermissionsMask = 0;
         BaseCurrencyCode = "USD";
         CurrencySymbol = null;
+        Password = null;
     }
 }
 

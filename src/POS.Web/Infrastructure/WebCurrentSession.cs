@@ -13,6 +13,7 @@ internal sealed class WebCurrentSession : ICurrentSession
     public string BaseCurrencyCode { get; private set; } = "ILS";
     public string? CurrencySymbol { get; private set; } = "₪";
     public bool IsAuthenticated => UserId != Guid.Empty && StoreId != Guid.Empty;
+    public string? Password { get; private set; }
 
     public void Set(Guid tenantId, Guid userId, Guid storeId, string username, string roleName, int permissionsMask, string baseCurrencyCode, string? currencySymbol)
     {
@@ -28,6 +29,8 @@ internal sealed class WebCurrentSession : ICurrentSession
             : currencySymbol;
     }
 
+    public void SetPassword(string? password) => Password = password;
+
     public void Clear()
     {
         TenantId = Guid.Empty;
@@ -38,5 +41,6 @@ internal sealed class WebCurrentSession : ICurrentSession
         PermissionsMask = 0;
         BaseCurrencyCode = "ILS";
         CurrencySymbol = "₪";
+        Password = null;
     }
 }

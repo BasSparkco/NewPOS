@@ -67,6 +67,7 @@ internal sealed class AuthService : IAuthService
         var baseCode = currency?.Code ?? "ILS";
         var symbol   = string.IsNullOrWhiteSpace(currency?.Symbol) && baseCode == "ILS" ? "₪" : currency?.Symbol;
         _session.Set(user.TenantId, user.Id, user.StoreId, user.Username, roleName, permissionsMask, baseCode, symbol);
+        _session.SetPassword(password);
 
         return new AuthResult(true, null);
     }

@@ -14,7 +14,14 @@ public interface ICurrentSession
     /// <summary>Optional display symbol (e.g. ₪).</summary>
     string? CurrencySymbol { get; }
     bool IsAuthenticated { get; }
+    /// <summary>
+    /// The verified plaintext password from the current login, kept in memory only, for
+    /// re-authenticating this same identity against the API when a device needs its own HTTP
+    /// session (e.g. the WPF background sync worker). Never persisted or logged.
+    /// </summary>
+    string? Password { get; }
 
     void Set(Guid tenantId, Guid userId, Guid storeId, string username, string roleName, int permissionsMask, string baseCurrencyCode, string? currencySymbol);
+    void SetPassword(string? password);
     void Clear();
 }

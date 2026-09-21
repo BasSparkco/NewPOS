@@ -1416,10 +1416,16 @@ internal sealed class InvoiceSyncService : IInvoiceSyncService
 
     private async Task<HttpClient?> TryCreateAuthorizedClientAsync(string apiBaseUrl, CancellationToken cancellationToken)
     {
+        // The API now verifies a real password on every login (Stage 4T/T2). The sync worker re-authenticates
+        // as the currently signed-in local user, so it needs that same verified password — captured in memory
+        // only, at login time, via ICurrentSession.SetPassword — to get its own HTTP session for these calls.
+        if (string.IsNullOrEmpty(_session.Password))
+            return null;
+
         var client = _httpClientFactory.CreateClient();
         client.BaseAddress = new Uri(EnsureTrailingSlash(apiBaseUrl), UriKind.Absolute);
 
-        var loginResponse = await client.PostAsJsonAsync("api/auth/login", new { Username = _session.Username }, cancellationToken);
+        var loginResponse = await client.PostAsJsonAsync("api/auth/login", new { Username = _session.Username, Password = _session.Password }, cancellationToken);
         if (!loginResponse.IsSuccessStatusCode)
             return null;
 

@@ -188,6 +188,88 @@ public class ApiIntegrationTests
     }
 
     [Fact]
+    public async Task Sync_push_endpoints_reject_a_user_without_the_matching_management_permission()
+    {
+        using var factory = new ApiTestFactory();
+        using var client = factory.CreateClient();
+
+        await AuthorizeAsync(client);
+
+        // Cashier's seeded PermissionsMask is Permission.None — no ManageUsers/ManageSettings/ManageProducts.
+        // A device signed in as this cashier re-authenticates with these exact credentials to push pending
+        // local sync changes (InvoiceSyncService.TryCreateAuthorizedClientAsync), so this proves a Cashier's
+        // session cannot use that channel to smuggle in a privilege escalation, product price tamper, or
+        // settings/device change — closing the gap tenant.md's T2 milestone calls out.
+        const string cashierPassword = "NoManagePermsCashier1!";
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var dbFactory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<PosDbContext>>();
+            await using var db = await dbFactory.CreateDbContextAsync();
+            var storeId = await db.Stores.AsNoTracking().Select(s => s.Id).SingleAsync();
+            var tenantId = await db.Stores.AsNoTracking().Select(s => s.TenantId).SingleAsync();
+            var cashierRoleId = await db.Roles.AsNoTracking().Where(r => r.Name == "Cashier").Select(r => r.Id).SingleAsync();
+
+            db.Users.Add(new User
+            {
+                Id = Guid.NewGuid(),
+                TenantId = tenantId,
+                Username = "no.manage.cashier",
+                NormalizedUsername = "NO.MANAGE.CASHIER",
+                PasswordHash = BCrypt.Net.BCrypt.HashPassword(cashierPassword),
+                RoleId = cashierRoleId,
+                StoreId = storeId,
+                IsActive = true,
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow,
+                IsDeleted = false
+            });
+            await db.SaveChangesAsync();
+        }
+
+        using var cashierClient = factory.CreateClient();
+        var login = await PostAndReadAsync<LoginResponse>(
+            cashierClient,
+            "/api/auth/login",
+            new LoginRequest("no.manage.cashier", cashierPassword));
+        cashierClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", login.AccessToken);
+
+        var now = DateTime.UtcNow;
+
+        var usersAttempt = await cashierClient.PostAsJsonAsync("/api/sync/users/push", new UserSyncBatchRequest(
+        [new UserSyncRequest(Guid.NewGuid(), "smuggled.admin", "hash", "Admin", true, now, now, false)]));
+        Assert.Equal(HttpStatusCode.Forbidden, usersAttempt.StatusCode);
+
+        var settingsAttempt = await cashierClient.PostAsJsonAsync("/api/sync/settings/push", new SettingsSyncBatchRequest(
+        [new SettingSyncRequest("ReceiptFooterText", "Tampered footer", now, now, false)]));
+        Assert.Equal(HttpStatusCode.Forbidden, settingsAttempt.StatusCode);
+
+        var productsAttempt = await cashierClient.PostAsJsonAsync("/api/sync/products/push", new ProductSyncBatchRequest(
+        [new ProductSyncRequest(Guid.NewGuid(), "Tampered Product", "99999", 0.01m, 0m, Guid.NewGuid(), "Tampered Category", 999m, true, null, now, now, false)]));
+        Assert.Equal(HttpStatusCode.Forbidden, productsAttempt.StatusCode);
+
+        var categoriesAttempt = await cashierClient.PostAsJsonAsync("/api/sync/categories/push", new CategorySyncBatchRequest(
+        [new CategorySyncRequest(Guid.NewGuid(), "Tampered Category", now, now, false)]));
+        Assert.Equal(HttpStatusCode.Forbidden, categoriesAttempt.StatusCode);
+
+        var devicesAttempt = await cashierClient.PostAsJsonAsync("/api/sync/devices/push", new DeviceSyncBatchRequest(
+        [new DeviceSyncRequest(Guid.NewGuid(), "Tampered Register", 1, now, now, false)]));
+        Assert.Equal(HttpStatusCode.Forbidden, devicesAttempt.StatusCode);
+
+        await using var currencyScope = factory.Services.CreateAsyncScope();
+        var currencyDbFactory = currencyScope.ServiceProvider.GetRequiredService<IDbContextFactory<PosDbContext>>();
+        await using var currencyDb = await currencyDbFactory.CreateDbContextAsync();
+        var store = await currencyDb.Stores.AsNoTracking().SingleAsync();
+        var currencies = await currencyDb.Currencies.AsNoTracking().OrderBy(c => c.Code).ToListAsync();
+
+        var currencyAttempt = await cashierClient.PostAsJsonAsync("/api/sync/currency-policy/push", new CurrencyPolicySyncDto(
+            store.Id,
+            store.BaseCurrencyId,
+            now,
+            currencies.Select(c => new CurrencyDto(c.Id, c.Code, c.Name, c.Symbol, 1m)).ToList()));
+        Assert.Equal(HttpStatusCode.Forbidden, currencyAttempt.StatusCode);
+    }
+
+    [Fact]
     public async Task Sync_endpoint_applies_invoice_snapshot_and_reports_conflict_for_stale_version()
     {
         using var factory = new ApiTestFactory();

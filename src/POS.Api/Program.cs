@@ -24,6 +24,9 @@ const string CurrencyCodeClaim = "currency_code";
 const string CurrencySymbolClaim = "currency_symbol";
 const string PermissionsClaim = "permissions";
 const string ProcessRefundsPolicy = "Permission:ProcessRefunds";
+const string ManageUsersPolicy = "Permission:ManageUsers";
+const string ManageSettingsPolicy = "Permission:ManageSettings";
+const string ManageProductsPolicy = "Permission:ManageProducts";
 const string DevelopmentSigningKey = "local-development-signing-key-1234567890";
 
 var applyMigrationsOnStartup = ReadBooleanSetting(builder.Configuration, "Database:ApplyMigrationsOnStartup", builder.Environment.IsDevelopment());
@@ -86,12 +89,21 @@ if (useForwardedHeaders)
     builder.Services.Configure<ForwardedHeadersOptions>(options => ConfigureForwardedHeaders(options, builder.Configuration));
 builder.Services.AddAuthorization(options =>
 {
-    // Only the refund endpoint is gated so far — WPF already enforces ProcessRefunds for the same
-    // action, and this closes the matching gap on the API surface. Other endpoints stay at the
-    // existing "any authenticated user" RequireAuthorization() default; broader per-endpoint
-    // permission coverage is future work, not part of this pass.
+    // Cash-register endpoints (catalog browsing, cart/sale lifecycle) intentionally stay at the
+    // "any authenticated user" RequireAuthorization() default, matching WPF where any signed-in
+    // cashier can sell. The endpoints below mirror a WPF/Web permission gate on the matching action —
+    // most importantly the sync push endpoints, which re-authenticate as the currently signed-in
+    // user's own verified identity (see InvoiceSyncService.TryCreateAuthorizedClientAsync), so gating
+    // them here closes the same "any authenticated user can push a fabricated Role.PermissionsMask,
+    // product price, or store setting" escalation path that tenant.md's T2 milestone calls out.
     options.AddPolicy(ProcessRefundsPolicy, policy =>
         policy.RequireAssertion(ctx => GetPermissions(ctx.User).HasFlag(Permission.ProcessRefunds)));
+    options.AddPolicy(ManageUsersPolicy, policy =>
+        policy.RequireAssertion(ctx => GetPermissions(ctx.User).HasFlag(Permission.ManageUsers)));
+    options.AddPolicy(ManageSettingsPolicy, policy =>
+        policy.RequireAssertion(ctx => GetPermissions(ctx.User).HasFlag(Permission.ManageSettings)));
+    options.AddPolicy(ManageProductsPolicy, policy =>
+        policy.RequireAssertion(ctx => GetPermissions(ctx.User).HasFlag(Permission.ManageProducts)));
 });
 builder.Services
     .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
@@ -998,7 +1010,7 @@ syncApi.MapPost("/devices/push", async (
     await db.SaveChangesAsync(cancellationToken);
     await tx.CommitAsync(cancellationToken);
     return Results.Ok(new DeviceSyncPushResultDto(results));
-});
+}).RequireAuthorization(ManageSettingsPolicy);
 
 syncApi.MapGet("/currency-policy/pull", async (
     ClaimsPrincipal user,
@@ -1093,7 +1105,7 @@ syncApi.MapPost("/currency-policy/push", async (
     {
         return Results.Ok(new CurrencyPolicySyncPushResultDto("Failed", currentUpdatedAt, ex.Message));
     }
-});
+}).RequireAuthorization(ManageSettingsPolicy);
 
 syncApi.MapPost("/products/push", async (
     ClaimsPrincipal user,
@@ -1154,7 +1166,7 @@ syncApi.MapPost("/products/push", async (
     await db.SaveChangesAsync(cancellationToken);
     await tx.CommitAsync(cancellationToken);
     return Results.Ok(new ProductSyncPushResultDto(results));
-});
+}).RequireAuthorization(ManageProductsPolicy);
 
 syncApi.MapPost("/categories/push", async (
     CategorySyncBatchDto request,
@@ -1209,7 +1221,7 @@ syncApi.MapPost("/categories/push", async (
     await db.SaveChangesAsync(cancellationToken);
     await tx.CommitAsync(cancellationToken);
     return Results.Ok(new CategorySyncPushResultDto(results));
-});
+}).RequireAuthorization(ManageProductsPolicy);
 
 syncApi.MapPost("/settings/push", async (
     ClaimsPrincipal user,
@@ -1282,7 +1294,7 @@ syncApi.MapPost("/settings/push", async (
     await db.SaveChangesAsync(cancellationToken);
     await tx.CommitAsync(cancellationToken);
     return Results.Ok(new SettingsSyncPushResultDto(results));
-});
+}).RequireAuthorization(ManageSettingsPolicy);
 
 syncApi.MapPost("/users/push", async (
     ClaimsPrincipal user,
@@ -1351,7 +1363,7 @@ syncApi.MapPost("/users/push", async (
     await db.SaveChangesAsync(cancellationToken);
     await tx.CommitAsync(cancellationToken);
     return Results.Ok(new UserSyncPushResultDto(results));
-});
+}).RequireAuthorization(ManageUsersPolicy);
 
 app.Run();
 

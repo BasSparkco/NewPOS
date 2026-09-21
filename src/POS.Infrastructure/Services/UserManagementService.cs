@@ -190,6 +190,10 @@ internal sealed class UserManagementService : IUserManagementService
         user.UpdatedAt = DateTime.UtcNow;
         await db.SaveChangesAsync(cancellationToken);
 
+        // Keep the in-memory credential the sync worker re-authenticates with (ICurrentSession.Password) in
+        // step with the new password, so background sync doesn't keep retrying the now-stale one until next login.
+        _session.SetPassword(newPassword);
+
         await TryWriteAuditAsync("UserPasswordChanged", nameof(User), user.Id, $"Username={user.Username}", cancellationToken);
 
         return (true, null);

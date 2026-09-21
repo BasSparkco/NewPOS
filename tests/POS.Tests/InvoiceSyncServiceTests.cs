@@ -13,6 +13,135 @@ namespace POS.Tests;
 
 public class InvoiceSyncServiceTests
 {
+    // Regression coverage for a real bug: once /api/auth/login started verifying a real password
+    // (Stage 4T/T2), the sync worker's internal re-login call sent no Password field at all and would
+    // have been rejected by any real AuthService — sync silently never succeeded end to end. These two
+    // tests fail on the old `new { Username = _session.Username }` login body without needing a real
+    // AuthService, by asserting on what TryCreateAuthorizedClientAsync actually sends/does.
+    [Fact]
+    public async Task Push_unsynced_invoices_sends_the_signed_in_users_cached_password_to_the_api_login_endpoint()
+    {
+        string? capturedPassword = "not-captured";
+
+        var handler = new FakeSyncHttpMessageHandler(async (request, cancellationToken) =>
+        {
+            if (request.RequestUri?.AbsolutePath == "/api/auth/login")
+            {
+                var body = await request.Content!.ReadFromJsonAsync<LoginRequestBody>(cancellationToken: cancellationToken);
+                capturedPassword = body?.Password;
+                return new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = JsonContent.Create(new { accessToken = "test-token" })
+                };
+            }
+
+            if (request.RequestUri?.AbsolutePath == "/api/sync/invoices/push")
+            {
+                return new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = JsonContent.Create(new InvoiceSyncPushResultDto(Array.Empty<InvoiceSyncInvoiceResultDto>()))
+                };
+            }
+
+            return new HttpResponseMessage(HttpStatusCode.NotFound);
+        });
+
+        await using var host = await TestServiceHost.CreateAsync(
+            new Dictionary<string, string?>
+            {
+                ["Sync:Enabled"] = "true",
+                ["Sync:ApiBaseUrl"] = "https://sync.example.test",
+                ["Sync:BatchSize"] = "10"
+            },
+            services =>
+            {
+                services.RemoveAll<IHttpClientFactory>();
+                services.AddSingleton<IHttpClientFactory>(new FakeHttpClientFactory(handler));
+            });
+
+        await host.ExecuteScopeAsync(async services =>
+        {
+            var catalog = services.GetRequiredService<IProductCatalogService>();
+            var sales = services.GetRequiredService<ISaleService>();
+            var sync = services.GetRequiredService<IInvoiceSyncService>();
+
+            var product = await catalog.CreateProductAsync(new ProductEditDto
+            {
+                Name = "Sync Password Item",
+                Price = 12m,
+                Cost = 5m,
+                CategoryId = host.CategoryId,
+                InitialStock = 20m,
+                IsActive = true
+            });
+
+            var invoiceId = await sales.StartNewSaleAsync();
+            await sales.AddOrMergeLineAsync(invoiceId, product.Id, 1m);
+
+            await sync.PushUnsyncedInvoicesAsync();
+
+            Assert.Equal("admin", capturedPassword);
+        });
+    }
+
+    [Fact]
+    public async Task Push_unsynced_invoices_fails_safe_without_attempting_login_when_session_has_no_cached_password()
+    {
+        var loginAttempted = false;
+
+        var handler = new FakeSyncHttpMessageHandler((request, _) =>
+        {
+            if (request.RequestUri?.AbsolutePath == "/api/auth/login")
+                loginAttempted = true;
+
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.NotFound));
+        });
+
+        await using var host = await TestServiceHost.CreateAsync(
+            new Dictionary<string, string?>
+            {
+                ["Sync:Enabled"] = "true",
+                ["Sync:ApiBaseUrl"] = "https://sync.example.test",
+                ["Sync:BatchSize"] = "10"
+            },
+            services =>
+            {
+                services.RemoveAll<IHttpClientFactory>();
+                services.AddSingleton<IHttpClientFactory>(new FakeHttpClientFactory(handler));
+            });
+
+        await host.ExecuteScopeAsync(async services =>
+        {
+            var catalog = services.GetRequiredService<IProductCatalogService>();
+            var sales = services.GetRequiredService<ISaleService>();
+            var sync = services.GetRequiredService<IInvoiceSyncService>();
+            var session = services.GetRequiredService<ICurrentSession>();
+
+            session.SetPassword(null);
+
+            var product = await catalog.CreateProductAsync(new ProductEditDto
+            {
+                Name = "Sync No Password Item",
+                Price = 12m,
+                Cost = 5m,
+                CategoryId = host.CategoryId,
+                InitialStock = 20m,
+                IsActive = true
+            });
+
+            var invoiceId = await sales.StartNewSaleAsync();
+            await sales.AddOrMergeLineAsync(invoiceId, product.Id, 1m);
+
+            var summary = await sync.PushUnsyncedInvoicesAsync();
+
+            Assert.False(loginAttempted);
+            Assert.Equal(1, summary.Attempted);
+            Assert.Equal(1, summary.Failed);
+        });
+    }
+
+    private sealed record LoginRequestBody(string? Username, string? Password);
+
     [Fact]
     public async Task Push_unsynced_invoices_marks_local_invoice_synced_when_server_accepts()
     {
