@@ -1,0 +1,27 @@
+# Multi-stage build for POS.Api. Build context must be the repository root, e.g.:
+#   docker build -f deploy/Dockerfile.api -t pos-api:staging .
+FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
+WORKDIR /src
+
+# Copy project files first so `dotnet restore` is cached independently of source changes.
+COPY src/POS.Core/POS.Core.csproj src/POS.Core/
+COPY src/POS.Application/POS.Application.csproj src/POS.Application/
+COPY src/POS.Infrastructure/POS.Infrastructure.csproj src/POS.Infrastructure/
+COPY src/POS.Infrastructure.Migrations.Postgres/POS.Infrastructure.Migrations.Postgres.csproj src/POS.Infrastructure.Migrations.Postgres/
+COPY src/POS.Api/POS.Api.csproj src/POS.Api/
+RUN dotnet restore src/POS.Api/POS.Api.csproj
+
+COPY src/POS.Core/ src/POS.Core/
+COPY src/POS.Application/ src/POS.Application/
+COPY src/POS.Infrastructure/ src/POS.Infrastructure/
+COPY src/POS.Infrastructure.Migrations.Postgres/ src/POS.Infrastructure.Migrations.Postgres/
+COPY src/POS.Api/ src/POS.Api/
+
+RUN dotnet publish src/POS.Api/POS.Api.csproj -c Release -o /app/publish --no-restore
+
+FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS runtime
+WORKDIR /app
+ENV ASPNETCORE_URLS=http://+:8080
+EXPOSE 8080
+COPY --from=build /app/publish .
+ENTRYPOINT ["dotnet", "POS.Api.dll"]

@@ -10,6 +10,9 @@
   <ItemGroup>
     <ProjectReference Include="..\POS.Application\POS.Application.csproj" />
     <ProjectReference Include="..\POS.Infrastructure\POS.Infrastructure.csproj" />
+    <!-- Referenced so the Postgres migrations assembly is present in the published output — see
+         POS.Infrastructure.Migrations.Postgres/POS.Infrastructure.Migrations.Postgres.csproj. -->
+    <ProjectReference Include="..\POS.Infrastructure.Migrations.Postgres\POS.Infrastructure.Migrations.Postgres.csproj" />
   </ItemGroup>
 
   <ItemGroup>

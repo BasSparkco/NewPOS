@@ -56,7 +56,17 @@ public static class DependencyInjection
     {
         if (IsPostgres(configuredProvider, connectionString))
         {
-            options.UseNpgsql(connectionString);
+            // PostgreSQL gets its own migration history (POS.Infrastructure.Migrations.Postgres),
+            // separate from this project's SQLite-typed one (Data/Migrations). Applying the
+            // SQLite-scaffolded migrations directly against real PostgreSQL produced a schema with
+            // every GUID/DateTime/bool/decimal column typed as text/integer instead of
+            // uuid/timestamptz/boolean/numeric — functionally broken (e.g. "argument of NOT must be
+            // type boolean, not type integer" on the very first real query), confirmed empirically
+            // against a live PostgreSQL instance, not assumed. One DbContext with multiple providers
+            // requires a separate migrations assembly per EF Core's own documented pattern:
+            // https://learn.microsoft.com/en-us/ef/core/managing-schemas/migrations/providers
+            options.UseNpgsql(connectionString, npgsql =>
+                npgsql.MigrationsAssembly("POS.Infrastructure.Migrations.Postgres"));
             return;
         }
 

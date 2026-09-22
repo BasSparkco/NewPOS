@@ -1,0 +1,112 @@
+name: pos
+
+# Isolated POS staging stack for the shared Docker/Traefik host. Nothing here touches any other
+# tenant's containers, networks, or volumes on that host — see docs/STAGING_DEPLOYMENT.md.
+#
+# Usage (from /opt/sites/pos on the server, with a real .env next to this file — see .env.example):
+#   docker compose -f docker-compose.staging.yml --env-file .env up -d --build
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: pos-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-pos_staging}
+      POSTGRES_USER: ${POSTGRES_USER:-pos_app}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+    volumes:
+      - pos_staging_pgdata:/var/lib/postgresql/data
+    networks:
+      - internal
+    # Deliberately no `ports:` — Postgres is reachable only from pos-api/pos-web on the internal
+    # network, never from the host or the public internet.
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-pos_app} -d ${POSTGRES_DB:-pos_staging}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.api
+    image: pos-api:staging
+    container_name: pos-api
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      Database__Provider: Postgres
+      Database__ApplyMigrationsOnStartup: ${API_APPLY_MIGRATIONS_ON_STARTUP:-false}
+      Database__SeedDemoDataOnStartup: ${API_SEED_DEMO_DATA_ON_STARTUP:-false}
+      ConnectionStrings__Default: Host=postgres;Port=5432;Database=${POSTGRES_DB:-pos_staging};Username=${POSTGRES_USER:-pos_app};Password=${POSTGRES_PASSWORD}
+      Jwt__SigningKey: ${JWT_SIGNING_KEY:?JWT_SIGNING_KEY is required}
+      Jwt__Issuer: POS.Api
+      Jwt__Audience: POS.Clients
+      # TLS terminates at Traefik; the API only ever sees plain HTTP on the internal network.
+      Http__RequireHttps: "false"
+      Http__UseHsts: "false"
+      ReverseProxy__UseForwardedHeaders: "true"
+      Platform__ProvisioningSecret: ${PLATFORM_PROVISIONING_SECRET:-}
+    networks:
+      - internal
+      - traefik-public
+    labels:
+      traefik.enable: "true"
+      traefik.docker.network: traefik-public
+      traefik.http.routers.pos-api-staging.rule: Host(`${POS_API_HOSTNAME:?POS_API_HOSTNAME is required}`)
+      traefik.http.routers.pos-api-staging.entrypoints: websecure
+      traefik.http.routers.pos-api-staging.tls: "true"
+      traefik.http.routers.pos-api-staging.tls.certresolver: letsencrypt
+      traefik.http.services.pos-api-staging.loadbalancer.server.port: "8080"
+
+  web:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.web
+    image: pos-web:staging
+    container_name: pos-web
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      Database__Provider: Postgres
+      # Web never applies migrations itself — the API's one controlled boot (or a manual
+      # `dotnet ef database update`) is the only migration path, see docs/STAGING_DEPLOYMENT.md.
+      Database__ApplyMigrationsOnStartup: "false"
+      Database__SeedDemoDataOnStartup: "false"
+      ConnectionStrings__Default: Host=postgres;Port=5432;Database=${POSTGRES_DB:-pos_staging};Username=${POSTGRES_USER:-pos_app};Password=${POSTGRES_PASSWORD}
+      Http__RequireHttps: "false"
+      Http__UseHsts: "false"
+      ReverseProxy__UseForwardedHeaders: "true"
+    networks:
+      - internal
+      - traefik-public
+    labels:
+      traefik.enable: "true"
+      traefik.docker.network: traefik-public
+      traefik.http.routers.pos-web-staging.rule: Host(`${POS_WEB_HOSTNAME:?POS_WEB_HOSTNAME is required}`)
+      traefik.http.routers.pos-web-staging.entrypoints: websecure
+      traefik.http.routers.pos-web-staging.tls: "true"
+      traefik.http.routers.pos-web-staging.tls.certresolver: letsencrypt
+      traefik.http.routers.pos-web-staging.middlewares: pos-web-staging-auth
+      # Basic-auth protects the human/browser-facing dashboard. The API is left off Traefik-level
+      # auth so a WPF rehearsal client can reach it directly with its existing JWT login flow — see
+      # docs/STAGING_DEPLOYMENT.md for the full rationale.
+      traefik.http.middlewares.pos-web-staging-auth.basicauth.users: ${TRAEFIK_BASIC_AUTH_USERS:?TRAEFIK_BASIC_AUTH_USERS is required}
+      traefik.http.services.pos-web-staging.loadbalancer.server.port: "8080"
+
+networks:
+  internal:
+    name: pos_staging_internal
+  traefik-public:
+    external: true
+
+volumes:
+  pos_staging_pgdata:
+    name: pos_staging_pgdata

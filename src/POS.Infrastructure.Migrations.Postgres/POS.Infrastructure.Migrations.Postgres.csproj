@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>POS.Infrastructure.Migrations.Postgres</RootNamespace>
+  </PropertyGroup>
+
+  <!--
+    Holds a PostgreSQL-native migration history for PosDbContext, kept separate from
+    POS.Infrastructure/Data/Migrations (which is SQLite-typed) per the EF Core-documented pattern for
+    one DbContext type targeting multiple providers with independent migrations:
+    https://learn.microsoft.com/en-us/ef/core/managing-schemas/migrations/providers
+    ("Using one context type... currently requires moving the migrations into a separate assembly.")
+    See docs/POSTGRES_MIGRATIONS.md for the full rationale and the empirical finding that motivated it.
+  -->
+
+  <ItemGroup>
+    <ProjectReference Include="..\POS.Infrastructure\POS.Infrastructure.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Migration/MigrationBuilder types live in Microsoft.EntityFrameworkCore.Relational, pulled in
+         transitively via Npgsql.EntityFrameworkCore.PostgreSQL — no direct EFCore.Design reference is
+         needed to compile already-generated migration classes (Design is dev-time tooling only). -->
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="8.0.11" />
+  </ItemGroup>
+
+</Project>
