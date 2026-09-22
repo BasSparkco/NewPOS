@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using POS.Application.Models;
@@ -1592,6 +1593,46 @@ public class ApiIntegrationTests
             "Second Business", "second-business", "Main Store", "owner", "OwnerPassword1!"));
 
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    /// <summary>
+    /// tenant.md §4 explicitly calls for verifying — not assuming — that SQLite foreign-key enforcement is
+    /// actually on: application-level ownership checks (like the two nested-reference fixes above) are one
+    /// defense, but a DB-level constraint is the backstop for a future code path that forgets one. Checks
+    /// the live PRAGMA on the real connection this app uses, then proves it in practice by attempting a
+    /// raw insert with a nonexistent InvoiceId, bypassing every application check entirely.
+    /// </summary>
+    [Fact]
+    public async Task Database_foreign_key_enforcement_is_enabled_and_rejects_an_orphaned_reference()
+    {
+        using var factory = new ApiTestFactory();
+        await using var scope = factory.Services.CreateAsyncScope();
+        var dbFactory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<PosDbContext>>();
+        await using var db = await dbFactory.CreateDbContextAsync();
+
+        var connection = db.Database.GetDbConnection();
+        await connection.OpenAsync();
+        await using (var pragmaCommand = connection.CreateCommand())
+        {
+            pragmaCommand.CommandText = "PRAGMA foreign_keys;";
+            var enabled = (long)(await pragmaCommand.ExecuteScalarAsync())!;
+            Assert.Equal(1L, enabled);
+        }
+
+        // Bypasses every application-level ownership check by inserting raw SQL directly — proves the
+        // database itself, not just the application, rejects an orphaned reference.
+        await Assert.ThrowsAsync<SqliteException>(async () =>
+        {
+            await using var insertCommand = connection.CreateCommand();
+            insertCommand.CommandText =
+                "INSERT INTO InvoiceItems (Id, InvoiceId, ProductId, Quantity, UnitPrice, DiscountPercent, LineTotal, CreatedAt, UpdatedAt, IsDeleted) " +
+                "VALUES (@id, @invoiceId, @productId, 1, 1, 0, 1, @now, @now, 0);";
+            insertCommand.Parameters.Add(new SqliteParameter("@id", Guid.NewGuid().ToString()));
+            insertCommand.Parameters.Add(new SqliteParameter("@invoiceId", Guid.NewGuid().ToString())); // does not exist
+            insertCommand.Parameters.Add(new SqliteParameter("@productId", Guid.NewGuid().ToString())); // does not exist
+            insertCommand.Parameters.Add(new SqliteParameter("@now", DateTime.UtcNow.ToString("O")));
+            await insertCommand.ExecuteNonQueryAsync();
+        });
     }
 
     [Fact]
