@@ -2640,24 +2640,55 @@ static async Task ReconcileInvoiceInventoryAsync(
         if (delta == 0)
             continue;
 
+        decimal quantityAfter;
         if (!inventories.TryGetValue(productId, out var inventory))
         {
+            // A brand-new inventory row has nothing to race against yet, so a direct set is safe.
             inventory = new Inventory
             {
                 Id = Guid.NewGuid(),
                 TenantId = tenantId,
                 ProductId = productId,
                 StoreId = storeId,
-                Quantity = 0m,
+                Quantity = delta,
                 CreatedAt = changedAt,
                 UpdatedAt = changedAt
             };
             db.Inventories.Add(inventory);
             inventories[productId] = inventory;
+            quantityAfter = inventory.Quantity;
+        }
+        else
+        {
+            // Apply as an atomic DB-level increment, not an in-memory read-modify-write, so two
+            // concurrent requests reconciling different invoices for the same product (e.g. two
+            // offline devices whose sales both push around the same time) cannot lose one delta to
+            // the other. inventory.Quantity is then re-synced from the DB but excluded from this
+            // batch's own final SaveChangesAsync, so that later call does not redundantly (and
+            // non-atomically) overwrite what this statement already committed.
+            await db.Inventories
+                .Where(i => i.Id == inventory.Id)
+                .ExecuteUpdateAsync(s => s
+                    .SetProperty(i => i.Quantity, i => i.Quantity + delta)
+                    .SetProperty(i => i.UpdatedAt, changedAt), cancellationToken);
+
+            quantityAfter = await db.Inventories
+                .Where(i => i.Id == inventory.Id)
+                .Select(i => i.Quantity)
+                .FirstAsync(cancellationToken);
+
+            inventory.Quantity = quantityAfter;
+            inventory.UpdatedAt = changedAt;
+            db.Entry(inventory).Property(i => i.Quantity).IsModified = false;
+            db.Entry(inventory).Property(i => i.UpdatedAt).IsModified = false;
         }
 
-        inventory.Quantity += delta;
-        inventory.UpdatedAt = changedAt;
+        // Central stock going negative here means two offline devices' completed sales could not
+        // both be honored against the same physical stock — both sales are preserved and applied
+        // exactly once (never discarded, clamped, or overwritten); the shortfall is recorded as a
+        // visible discrepancy for manager review instead. Strict global stock availability is not
+        // guaranteed while devices are offline — see docs/SYNC_STRATEGY.md.
+        var isDiscrepancy = quantityAfter < 0m;
 
         db.StockMovements.Add(new StockMovement
         {
@@ -2670,14 +2701,32 @@ static async Task ReconcileInvoiceInventoryAsync(
             UserId = userId,
             Type = delta < 0m ? StockMovementType.Sale : StockMovementType.Refund,
             QuantityDelta = delta,
-            QuantityAfter = inventory.Quantity,
+            QuantityAfter = quantityAfter,
             Reference = FormatInvoiceReference(invoiceId),
             Notes = delta < 0m
                 ? "Inventory reduced while reconciling a synced invoice snapshot."
                 : "Inventory increased while reconciling a synced invoice snapshot.",
+            IsDiscrepancy = isDiscrepancy,
             CreatedAt = changedAt,
             UpdatedAt = changedAt
         });
+
+        if (isDiscrepancy)
+        {
+            db.AuditLogs.Add(new AuditLog
+            {
+                Id = Guid.NewGuid(),
+                TenantId = tenantId,
+                StoreId = storeId,
+                UserId = userId,
+                Action = "StockDiscrepancyDetected",
+                EntityName = "Product",
+                EntityId = productId,
+                Details = $"Reconciling invoice {FormatInvoiceReference(invoiceId)} drove stock to {quantityAfter:0.####} (below zero). Two or more offline sales likely exceeded available stock before reconnecting.",
+                CreatedAt = changedAt,
+                UpdatedAt = changedAt
+            });
+        }
     }
 }
 

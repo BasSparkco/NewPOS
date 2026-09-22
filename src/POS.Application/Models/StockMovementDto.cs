@@ -11,4 +11,5 @@ public sealed record StockMovementDto(
     decimal QuantityAfter,
     string? Reference,
     string? Notes,
+    bool IsDiscrepancy,
     DateTime CreatedAt);

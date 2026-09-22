@@ -500,6 +500,10 @@
                             <input id="product-stock-@product.ProductId" name="InitialStock" type="number" step="0.01" class="form-control" value="@product.QuantityOnHand" />
                         </div>
                         <div>
+                            <label for="product-stock-reason-@product.ProductId">Reason (required if stock changes)</label>
+                            <input id="product-stock-reason-@product.ProductId" name="StockAdjustmentReason" class="form-control" placeholder="e.g. cycle count correction, damaged goods" />
+                        </div>
+                        <div>
                             <label for="product-image-@product.ProductId">Image path</label>
                             <input id="product-image-@product.ProductId" name="ImagePath" class="form-control" value="@product.ImagePath" />
                         </div>
@@ -562,10 +566,14 @@
                 <label for="stock-ledger-to">To date</label>
                 <input id="stock-ledger-to" name="stockToDate" type="date" class="form-control" value="@(Model.StockToDate?.ToString("yyyy-MM-dd"))" />
             </div>
+            <label class="inline-check">
+                <input id="stock-ledger-discrepancy" type="checkbox" name="stockDiscrepancyOnly" value="true" @(Model.StockDiscrepancyOnly ? "checked" : null) />
+                <span>Discrepancies only</span>
+            </label>
             <div class="inline-form-actions">
                 <button type="submit" class="shell-button shell-button--ghost">Filter ledger</button>
             </div>
-            @if (Model.StockProductFilterId.HasValue || Model.StockMovementTypeFilter.HasValue || Model.StockFromDate.HasValue || Model.StockToDate.HasValue)
+            @if (Model.StockProductFilterId.HasValue || Model.StockMovementTypeFilter.HasValue || Model.StockFromDate.HasValue || Model.StockToDate.HasValue || Model.StockDiscrepancyOnly)
             {
                 <div class="inline-form-actions">
                     <a asp-action="Index" class="shell-button shell-button--ghost">Clear</a>
@@ -577,6 +585,7 @@
             <a asp-action="Index"
                asp-route-stockProductId="@Model.StockProductFilterId"
                asp-route-stockMovementType="@Model.StockMovementTypeFilter"
+               asp-route-stockDiscrepancyOnly="@Model.StockDiscrepancyOnly"
                asp-route-stockDatePreset="Today"
                class="shell-link ledger-preset-link @(Model.StockDatePreset == "Today" ? "ledger-preset-link--active" : null)">
                 Today
@@ -584,6 +593,7 @@
             <a asp-action="Index"
                asp-route-stockProductId="@Model.StockProductFilterId"
                asp-route-stockMovementType="@Model.StockMovementTypeFilter"
+               asp-route-stockDiscrepancyOnly="@Model.StockDiscrepancyOnly"
                asp-route-stockDatePreset="Yesterday"
                class="shell-link ledger-preset-link @(Model.StockDatePreset == "Yesterday" ? "ledger-preset-link--active" : null)">
                 Yesterday
@@ -591,6 +601,7 @@
             <a asp-action="Index"
                asp-route-stockProductId="@Model.StockProductFilterId"
                asp-route-stockMovementType="@Model.StockMovementTypeFilter"
+               asp-route-stockDiscrepancyOnly="@Model.StockDiscrepancyOnly"
                asp-route-stockDatePreset="Last7Days"
                class="shell-link ledger-preset-link @(Model.StockDatePreset == "Last7Days" ? "ledger-preset-link--active" : null)">
                 Last 7 days
@@ -598,6 +609,7 @@
             <a asp-action="Index"
                asp-route-stockProductId="@Model.StockProductFilterId"
                asp-route-stockMovementType="@Model.StockMovementTypeFilter"
+               asp-route-stockDiscrepancyOnly="@Model.StockDiscrepancyOnly"
                asp-route-stockDatePreset="Last30Days"
                class="shell-link ledger-preset-link @(Model.StockDatePreset == "Last30Days" ? "ledger-preset-link--active" : null)">
                 Last 30 days
@@ -605,6 +617,7 @@
             <a asp-action="Index"
                asp-route-stockProductId="@Model.StockProductFilterId"
                asp-route-stockMovementType="@Model.StockMovementTypeFilter"
+               asp-route-stockDiscrepancyOnly="@Model.StockDiscrepancyOnly"
                asp-route-stockDatePreset="ThisMonth"
                class="shell-link ledger-preset-link @(Model.StockDatePreset == "ThisMonth" ? "ledger-preset-link--active" : null)">
                 This month
@@ -636,6 +649,10 @@
                             <div class="table-sub">After @movement.QuantityAfter.ToString("N2")</div>
                         </div>
                         <div class="table-sub">@(string.IsNullOrWhiteSpace(movement.Notes) ? "No notes" : movement.Notes)</div>
+                        @if (movement.IsDiscrepancy)
+                        {
+                            <div class="status-pill status-pill--warn" title="Reconciling this movement drove stock below zero — review needed.">Discrepancy</div>
+                        }
                     </div>
                 }
             </div>

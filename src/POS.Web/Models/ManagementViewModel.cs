@@ -13,6 +13,7 @@ public sealed class ManagementViewModel
     public DateOnly? StockFromDate { get; init; }
     public DateOnly? StockToDate { get; init; }
     public string? StockDatePreset { get; init; }
+    public bool StockDiscrepancyOnly { get; init; }
     public string StockLedgerSummary { get; init; } = "Showing latest movements for all products.";
     public StoreProfileFormViewModel StoreProfile { get; init; } = new();
     public OperationalSettingsFormViewModel OperationalSettings { get; init; } = new();
@@ -101,6 +102,7 @@ public sealed class ProductEditorFormViewModel
     public decimal Cost { get; init; }
     public Guid CategoryId { get; init; }
     public decimal InitialStock { get; init; }
+    public string? StockAdjustmentReason { get; init; }
     public string? ImagePath { get; init; }
     public bool IsActive { get; init; }
 }
@@ -160,5 +162,6 @@ public sealed class ManagementStockMovementRowViewModel
     public decimal QuantityAfter { get; init; }
     public string? Reference { get; init; }
     public string? Notes { get; init; }
+    public bool IsDiscrepancy { get; init; }
     public DateTime CreatedAtLocal { get; init; }
 }

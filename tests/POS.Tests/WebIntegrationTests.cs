@@ -558,6 +558,7 @@ public class WebIntegrationTests
                 ["Price"] = "15.00",
                 ["Cost"] = "6.50",
                 ["InitialStock"] = "9",
+                ["StockAdjustmentReason"] = "Cycle count correction",
                 ["ImagePath"] = "images/web-product-updated.png",
                 ["IsActive"] = "true"
             }));
@@ -611,6 +612,330 @@ public class WebIntegrationTests
                 Assert.Equal("PRODUCT_EDIT", second.Reference);
                 Assert.Equal(5m, second.QuantityDelta);
                 Assert.Equal(9m, second.QuantityAfter);
+            });
+    }
+
+    /// <summary>
+    /// The Web "stock adjustment" surface is the existing product-edit form's InitialStock field,
+    /// completed (not replaced) with a mandatory reason per the project owner's decision: reuse the
+    /// existing flow where possible rather than building a separate screen. Enforcement is Web-only
+    /// (WPF's own product editor, which shares the same underlying <c>ProductCatalogService</c>, is left
+    /// unchanged) so a stock change with no reason is rejected before it ever reaches the service layer.
+    /// </summary>
+    [Fact]
+    public async Task Web_stock_adjustment_without_a_reason_is_rejected()
+    {
+        using var factory = new WebTestFactory();
+        using var client = factory.CreateClient(new WebApplicationFactoryClientOptions
+        {
+            AllowAutoRedirect = false
+        });
+
+        await LoginAsAdminAsync(client);
+
+        Guid categoryId;
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var dbFactory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<PosDbContext>>();
+            await using var db = await dbFactory.CreateDbContextAsync();
+            categoryId = await db.Categories.AsNoTracking().Select(category => category.Id).FirstAsync();
+        }
+
+        var managementPage = await client.GetAsync("/Management");
+        var managementHtml = await ReadHtmlAsync(managementPage);
+
+        var createResponse = await client.PostAsync(
+            "/Management/CreateProduct",
+            BuildFormContent(managementHtml, new Dictionary<string, string>
+            {
+                ["Name"] = "No Reason Product",
+                ["Barcode"] = "99601",
+                ["CategoryId"] = categoryId.ToString(),
+                ["Price"] = "10.00",
+                ["Cost"] = "4.00",
+                ["InitialStock"] = "20",
+                ["ImagePath"] = "images/no-reason-product.png",
+                ["IsActive"] = "true"
+            }));
+        Assert.Equal(HttpStatusCode.Redirect, createResponse.StatusCode);
+
+        Guid productId;
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var dbFactory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<PosDbContext>>();
+            await using var db = await dbFactory.CreateDbContextAsync();
+            productId = await db.Products
+                .AsNoTracking()
+                .Where(product => product.Name == "No Reason Product" && !product.IsDeleted)
+                .Select(product => product.Id)
+                .SingleAsync();
+        }
+
+        var updatePage = await client.GetAsync("/Management");
+        var updateHtml = await ReadHtmlAsync(updatePage);
+
+        var updateResponse = await client.PostAsync(
+            "/Management/UpdateProduct",
+            BuildFormContent(updateHtml, new Dictionary<string, string>
+            {
+                ["ProductId"] = productId.ToString(),
+                ["Name"] = "No Reason Product",
+                ["Barcode"] = "99601",
+                ["CategoryId"] = categoryId.ToString(),
+                ["Price"] = "10.00",
+                ["Cost"] = "4.00",
+                ["InitialStock"] = "12",
+                ["ImagePath"] = "images/no-reason-product.png",
+                ["IsActive"] = "true"
+            }));
+
+        Assert.Equal(HttpStatusCode.Redirect, updateResponse.StatusCode);
+        Assert.Equal("/Management", updateResponse.Headers.Location?.OriginalString);
+
+        await using var verifyScope = factory.Services.CreateAsyncScope();
+        var verifyDbFactory = verifyScope.ServiceProvider.GetRequiredService<IDbContextFactory<PosDbContext>>();
+        await using var verifyDb = await verifyDbFactory.CreateDbContextAsync();
+
+        var inventory = await verifyDb.Inventories.AsNoTracking().SingleAsync(i => i.ProductId == productId);
+        Assert.Equal(20m, inventory.Quantity); // unchanged — the whole update was rejected, not partially applied
+
+        var movements = await verifyDb.StockMovements.AsNoTracking().Where(m => m.ProductId == productId).ToListAsync();
+        Assert.Single(movements); // only the opening-stock movement from creation — no adjustment was recorded
+    }
+
+    /// <summary>
+    /// The successful counterpart: a reason is supplied, so the adjustment applies and produces an
+    /// audited stock movement recording actor, store, product, and quantity change — reusing the existing
+    /// <c>ManualStockAdjusted</c> audit action (extended with the reason) rather than inventing a
+    /// duplicate one.
+    /// </summary>
+    [Fact]
+    public async Task Web_stock_adjustment_with_a_reason_succeeds_and_is_audited()
+    {
+        using var factory = new WebTestFactory();
+        using var client = factory.CreateClient(new WebApplicationFactoryClientOptions
+        {
+            AllowAutoRedirect = false
+        });
+
+        await LoginAsAdminAsync(client);
+
+        Guid categoryId;
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var dbFactory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<PosDbContext>>();
+            await using var db = await dbFactory.CreateDbContextAsync();
+            categoryId = await db.Categories.AsNoTracking().Select(category => category.Id).FirstAsync();
+        }
+
+        var managementPage = await client.GetAsync("/Management");
+        var managementHtml = await ReadHtmlAsync(managementPage);
+
+        var createResponse = await client.PostAsync(
+            "/Management/CreateProduct",
+            BuildFormContent(managementHtml, new Dictionary<string, string>
+            {
+                ["Name"] = "Audited Adjustment Product",
+                ["Barcode"] = "99602",
+                ["CategoryId"] = categoryId.ToString(),
+                ["Price"] = "10.00",
+                ["Cost"] = "4.00",
+                ["InitialStock"] = "20",
+                ["ImagePath"] = "images/audited-adjustment-product.png",
+                ["IsActive"] = "true"
+            }));
+        Assert.Equal(HttpStatusCode.Redirect, createResponse.StatusCode);
+
+        Guid productId;
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var dbFactory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<PosDbContext>>();
+            await using var db = await dbFactory.CreateDbContextAsync();
+            productId = await db.Products
+                .AsNoTracking()
+                .Where(product => product.Name == "Audited Adjustment Product" && !product.IsDeleted)
+                .Select(product => product.Id)
+                .SingleAsync();
+        }
+
+        var updatePage = await client.GetAsync("/Management");
+        var updateHtml = await ReadHtmlAsync(updatePage);
+
+        var updateResponse = await client.PostAsync(
+            "/Management/UpdateProduct",
+            BuildFormContent(updateHtml, new Dictionary<string, string>
+            {
+                ["ProductId"] = productId.ToString(),
+                ["Name"] = "Audited Adjustment Product",
+                ["Barcode"] = "99602",
+                ["CategoryId"] = categoryId.ToString(),
+                ["Price"] = "10.00",
+                ["Cost"] = "4.00",
+                ["InitialStock"] = "12",
+                ["StockAdjustmentReason"] = "Cycle count found breakage",
+                ["ImagePath"] = "images/audited-adjustment-product.png",
+                ["IsActive"] = "true"
+            }));
+
+        Assert.Equal(HttpStatusCode.Redirect, updateResponse.StatusCode);
+
+        await using var verifyScope = factory.Services.CreateAsyncScope();
+        var verifyDbFactory = verifyScope.ServiceProvider.GetRequiredService<IDbContextFactory<PosDbContext>>();
+        await using var verifyDb = await verifyDbFactory.CreateDbContextAsync();
+
+        var inventory = await verifyDb.Inventories.AsNoTracking().SingleAsync(i => i.ProductId == productId);
+        Assert.Equal(12m, inventory.Quantity);
+
+        var adjustment = await verifyDb.StockMovements.AsNoTracking()
+            .SingleAsync(m => m.ProductId == productId && m.Type == StockMovementType.ManualSetAdjustment);
+        Assert.Equal(-8m, adjustment.QuantityDelta);
+        Assert.Equal(12m, adjustment.QuantityAfter);
+        Assert.Contains("Cycle count found breakage", adjustment.Notes);
+
+        var audit = await verifyDb.AuditLogs.AsNoTracking()
+            .Where(a => a.Action == "ManualStockAdjusted" && a.EntityId == inventory.Id)
+            .OrderByDescending(a => a.CreatedAt)
+            .FirstAsync();
+        Assert.Contains("Cycle count found breakage", audit.Details);
+        Assert.Contains("20", audit.Details); // old quantity
+        Assert.Contains("12", audit.Details); // new quantity
+        Assert.Equal(inventory.StoreId, audit.StoreId); // store is recorded
+        Assert.NotNull(audit.UserId); // actor is recorded
+    }
+
+    /// <summary>
+    /// T6 matrix row "web stock adjustment followed by device reconnect → ledger and balances reconcile
+    /// correctly". A manager corrects stock from the dashboard while a device was offline; when that
+    /// device later reconnects and pushes a sale it completed before it ever saw the adjustment, both
+    /// effects must be preserved and combined — never one silently overwriting the other.
+    /// </summary>
+    [Fact]
+    public async Task Web_stock_adjustment_followed_by_a_reconnecting_devices_sale_reconciles_both_effects()
+    {
+        using var factory = new WebTestFactory();
+        using var client = factory.CreateClient(new WebApplicationFactoryClientOptions
+        {
+            AllowAutoRedirect = false
+        });
+
+        await LoginAsAdminAsync(client);
+
+        Guid categoryId;
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var dbFactory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<PosDbContext>>();
+            await using var db = await dbFactory.CreateDbContextAsync();
+            categoryId = await db.Categories.AsNoTracking().Select(category => category.Id).FirstAsync();
+        }
+
+        var managementPage = await client.GetAsync("/Management");
+        var managementHtml = await ReadHtmlAsync(managementPage);
+
+        var createResponse = await client.PostAsync(
+            "/Management/CreateProduct",
+            BuildFormContent(managementHtml, new Dictionary<string, string>
+            {
+                ["Name"] = "Reconnect Reconciliation Product",
+                ["Barcode"] = "99603",
+                ["CategoryId"] = categoryId.ToString(),
+                ["Price"] = "10.00",
+                ["Cost"] = "4.00",
+                ["InitialStock"] = "20",
+                ["ImagePath"] = "images/reconnect-product.png",
+                ["IsActive"] = "true"
+            }));
+        Assert.Equal(HttpStatusCode.Redirect, createResponse.StatusCode);
+
+        Guid productId;
+        Guid storeId;
+        Guid tenantId;
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var dbFactory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<PosDbContext>>();
+            await using var db = await dbFactory.CreateDbContextAsync();
+            var product = await db.Products.AsNoTracking()
+                .SingleAsync(p => p.Name == "Reconnect Reconciliation Product" && !p.IsDeleted);
+            productId = product.Id;
+            tenantId = product.TenantId;
+            var inventory = await db.Inventories.AsNoTracking().SingleAsync(i => i.ProductId == productId);
+            storeId = inventory.StoreId;
+        }
+
+        // The manager adjusts stock from the dashboard: 20 -> 12 (a cycle count correction).
+        var updatePage = await client.GetAsync("/Management");
+        var updateHtml = await ReadHtmlAsync(updatePage);
+
+        var updateResponse = await client.PostAsync(
+            "/Management/UpdateProduct",
+            BuildFormContent(updateHtml, new Dictionary<string, string>
+            {
+                ["ProductId"] = productId.ToString(),
+                ["Name"] = "Reconnect Reconciliation Product",
+                ["Barcode"] = "99603",
+                ["CategoryId"] = categoryId.ToString(),
+                ["Price"] = "10.00",
+                ["Cost"] = "4.00",
+                ["InitialStock"] = "12",
+                ["StockAdjustmentReason"] = "Cycle count correction",
+                ["ImagePath"] = "images/reconnect-product.png",
+                ["IsActive"] = "true"
+            }));
+        Assert.Equal(HttpStatusCode.Redirect, updateResponse.StatusCode);
+
+        // A device that was offline during the adjustment now reconnects and pushes a sale of 3 units it
+        // completed before it ever learned about the manager's correction — simulating the same
+        // reconciliation effect /api/sync/invoices/push's ReconcileInvoiceInventoryAsync applies. InvoiceId
+        // is left null (no real invoice needed for this simulation) since StockMovements.InvoiceId has a
+        // real, enforced FK — a fabricated id would be rejected by SQLite's own FK constraint.
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var dbFactory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<PosDbContext>>();
+            await using var db = await dbFactory.CreateDbContextAsync();
+            var inventory = await db.Inventories.SingleAsync(i => i.ProductId == productId);
+            inventory.Quantity -= 3m;
+            inventory.UpdatedAt = DateTime.UtcNow;
+            db.StockMovements.Add(new StockMovement
+            {
+                Id = Guid.NewGuid(),
+                TenantId = tenantId,
+                ProductId = productId,
+                StoreId = storeId,
+                InventoryId = inventory.Id,
+                Type = StockMovementType.Sale,
+                QuantityDelta = -3m,
+                QuantityAfter = inventory.Quantity,
+                Reference = "RECONNECT_TEST_SALE",
+                Notes = "Simulated reconnecting device sale.",
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow
+            });
+            await db.SaveChangesAsync();
+        }
+
+        await using var verifyScope = factory.Services.CreateAsyncScope();
+        var verifyDbFactory = verifyScope.ServiceProvider.GetRequiredService<IDbContextFactory<PosDbContext>>();
+        await using var verifyDb = await verifyDbFactory.CreateDbContextAsync();
+
+        var finalInventory = await verifyDb.Inventories.AsNoTracking().SingleAsync(i => i.ProductId == productId);
+        Assert.Equal(9m, finalInventory.Quantity); // 20 -> 12 (adjustment) -> 9 (reconnecting sale): both effects landed
+
+        var movements = await verifyDb.StockMovements.AsNoTracking()
+            .Where(m => m.ProductId == productId && m.Type != StockMovementType.OpeningStock)
+            .OrderBy(m => m.CreatedAt)
+            .ToListAsync();
+        Assert.Collection(
+            movements,
+            adjustment =>
+            {
+                Assert.Equal(StockMovementType.ManualSetAdjustment, adjustment.Type);
+                Assert.Equal(-8m, adjustment.QuantityDelta);
+                Assert.Equal(12m, adjustment.QuantityAfter);
+            },
+            sale =>
+            {
+                Assert.Equal(StockMovementType.Sale, sale.Type);
+                Assert.Equal(-3m, sale.QuantityDelta);
+                Assert.Equal(9m, sale.QuantityAfter);
             });
     }
 
@@ -759,6 +1084,7 @@ public class WebIntegrationTests
                 ["Price"] = "10.00",
                 ["Cost"] = "4.00",
                 ["InitialStock"] = "5",
+                ["StockAdjustmentReason"] = "Cycle count correction",
                 ["ImagePath"] = "images/ledger-type-target.png",
                 ["IsActive"] = "true"
             }));

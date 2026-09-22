@@ -48,9 +48,9 @@ public sealed class ManagementController : Controller
     }
 
     [HttpGet]
-    public async Task<IActionResult> Index(Guid? stockProductId, StockMovementType? stockMovementType, DateOnly? stockFromDate, DateOnly? stockToDate, string? stockDatePreset, CancellationToken cancellationToken)
+    public async Task<IActionResult> Index(Guid? stockProductId, StockMovementType? stockMovementType, DateOnly? stockFromDate, DateOnly? stockToDate, string? stockDatePreset, bool stockDiscrepancyOnly, CancellationToken cancellationToken)
     {
-        var model = await BuildViewModelAsync(stockProductId, stockMovementType, stockFromDate, stockToDate, stockDatePreset, cancellationToken);
+        var model = await BuildViewModelAsync(stockProductId, stockMovementType, stockFromDate, stockToDate, stockDatePreset, stockDiscrepancyOnly, cancellationToken);
         return View(model);
     }
 
@@ -474,12 +474,20 @@ public sealed class ManagementController : Controller
             return RedirectToAction(nameof(Index));
         }
 
+        var requestedStock = Math.Max(0m, form.InitialStock);
+        if (requestedStock != existing.InitialStock && string.IsNullOrWhiteSpace(form.StockAdjustmentReason))
+        {
+            TempData["ManagementError"] = "A reason is required when changing a product's stock.";
+            return RedirectToAction(nameof(Index));
+        }
+
         existing.Name = form.Name.Trim();
         existing.Barcode = NormalizeOptional(form.Barcode);
         existing.Price = form.Price;
         existing.Cost = form.Cost;
         existing.CategoryId = form.CategoryId;
-        existing.InitialStock = Math.Max(0m, form.InitialStock);
+        existing.InitialStock = requestedStock;
+        existing.StockAdjustmentReason = NormalizeOptional(form.StockAdjustmentReason);
         existing.ImagePath = NormalizeOptional(form.ImagePath);
         existing.IsActive = form.IsActive;
 
@@ -513,7 +521,7 @@ public sealed class ManagementController : Controller
         return RedirectToAction(nameof(Index));
     }
 
-    private async Task<ManagementViewModel> BuildViewModelAsync(Guid? stockProductId, StockMovementType? stockMovementType, DateOnly? stockFromDate, DateOnly? stockToDate, string? stockDatePreset, CancellationToken cancellationToken)
+    private async Task<ManagementViewModel> BuildViewModelAsync(Guid? stockProductId, StockMovementType? stockMovementType, DateOnly? stockFromDate, DateOnly? stockToDate, string? stockDatePreset, bool stockDiscrepancyOnly, CancellationToken cancellationToken)
     {
         await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken);
 
@@ -543,6 +551,9 @@ public sealed class ManagementController : Controller
 
         if (stockToDate.HasValue)
             stockMovements = stockMovements.Where(movement => DateOnly.FromDateTime(movement.CreatedAt.ToLocalTime()) <= stockToDate.Value).ToList();
+
+        if (stockDiscrepancyOnly)
+            stockMovements = stockMovements.Where(movement => movement.IsDiscrepancy).ToList();
 
         var roles = await db.Roles
             .AsNoTracking()
@@ -632,6 +643,7 @@ public sealed class ManagementController : Controller
             StockFromDate = stockFromDate,
             StockToDate = stockToDate,
             StockDatePreset = stockDatePreset,
+            StockDiscrepancyOnly = stockDiscrepancyOnly,
             StockLedgerSummary = stockLedgerSummary,
             StoreProfile = new StoreProfileFormViewModel
             {
@@ -709,6 +721,7 @@ public sealed class ManagementController : Controller
                     QuantityAfter = movement.QuantityAfter,
                     Reference = movement.Reference,
                     Notes = movement.Notes,
+                    IsDiscrepancy = movement.IsDiscrepancy,
                     CreatedAtLocal = movement.CreatedAt.ToLocalTime()
                 })
                 .ToList(),

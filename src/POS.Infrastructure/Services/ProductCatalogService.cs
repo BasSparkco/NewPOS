@@ -236,6 +236,7 @@ internal sealed class ProductCatalogService : IProductCatalogService
                 entry.Movement.QuantityAfter,
                 entry.Movement.Reference,
                 entry.Movement.Notes,
+                entry.Movement.IsDiscrepancy,
                 entry.Movement.CreatedAt))
             .ToListAsync(cancellationToken);
     }
@@ -316,6 +317,7 @@ internal sealed class ProductCatalogService : IProductCatalogService
     {
         var storeId = _session.StoreId;
         await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken);
+        await using var tx = await db.Database.BeginTransactionAsync(cancellationToken);
         var tenantId = await GetTenantIdAsync(db, cancellationToken);
         var product = await db.Products.FirstOrDefaultAsync(p => p.Id == input.Id && !p.IsDeleted, cancellationToken)
             ?? throw new InvalidOperationException("Product not found.");
@@ -383,14 +385,37 @@ internal sealed class ProductCatalogService : IProductCatalogService
         else
         {
             previousQuantity = inv.Quantity;
-            inv.Quantity = input.InitialStock < 0 ? 0 : input.InitialStock;
-            inv.UpdatedAt = now;
-            currentQuantity = inv.Quantity;
+            var targetQuantity = input.InitialStock < 0 ? 0 : input.InitialStock;
+            var delta = targetQuantity - previousQuantity;
             inventoryId = inv.Id;
 
-            var delta = inv.Quantity - previousQuantity;
             if (delta != 0)
             {
+                // Apply as an atomic DB-level increment derived from what the editor saw, not a blind
+                // absolute overwrite, so a concurrent invoice reconciliation touching this same product
+                // (e.g. an offline device's sale reconnecting at the same moment) is combined with this
+                // adjustment instead of silently discarded — the balance is derived from both accepted
+                // effects, matching tenant.md's "do not overwrite concurrent balances" rule.
+                await db.Inventories
+                    .Where(i => i.Id == inv.Id)
+                    .ExecuteUpdateAsync(s => s
+                        .SetProperty(i => i.Quantity, i => i.Quantity + delta)
+                        .SetProperty(i => i.UpdatedAt, now), cancellationToken);
+
+                currentQuantity = await db.Inventories
+                    .Where(i => i.Id == inv.Id)
+                    .Select(i => i.Quantity)
+                    .FirstAsync(cancellationToken);
+
+                inv.Quantity = currentQuantity;
+                inv.UpdatedAt = now;
+                db.Entry(inv).Property(i => i.Quantity).IsModified = false;
+                db.Entry(inv).Property(i => i.UpdatedAt).IsModified = false;
+
+                var reason = string.IsNullOrWhiteSpace(input.StockAdjustmentReason)
+                    ? null
+                    : input.StockAdjustmentReason.Trim();
+
                 db.StockMovements.Add(new StockMovement
                 {
                     Id = Guid.NewGuid(),
@@ -401,16 +426,23 @@ internal sealed class ProductCatalogService : IProductCatalogService
                     UserId = _session.UserId == Guid.Empty ? null : _session.UserId,
                     Type = StockMovementType.ManualSetAdjustment,
                     QuantityDelta = delta,
-                    QuantityAfter = inv.Quantity,
+                    QuantityAfter = currentQuantity,
                     Reference = "PRODUCT_EDIT",
-                    Notes = "Inventory manually set from product editor.",
+                    Notes = reason is null
+                        ? "Inventory manually set from product editor."
+                        : $"Inventory manually set from product editor. Reason: {reason}",
                     CreatedAt = now,
                     UpdatedAt = now
                 });
             }
+            else
+            {
+                currentQuantity = previousQuantity;
+            }
         }
 
         await db.SaveChangesAsync(cancellationToken);
+        await tx.CommitAsync(cancellationToken);
 
         await TryWriteAuditAsync(
             "ProductUpdated",
@@ -421,11 +453,15 @@ internal sealed class ProductCatalogService : IProductCatalogService
 
         if (previousQuantity != currentQuantity)
         {
+            var reasonSuffix = string.IsNullOrWhiteSpace(input.StockAdjustmentReason)
+                ? string.Empty
+                : $" Reason: {input.StockAdjustmentReason.Trim()}.";
+
             await TryWriteAuditAsync(
                 "ManualStockAdjusted",
                 "Inventory",
                 inventoryId,
-                $"Product '{product.Name}' stock manually set {previousQuantity:0.####} -> {currentQuantity:0.####}.",
+                $"Product '{product.Name}' stock manually set {previousQuantity:0.####} -> {currentQuantity:0.####}.{reasonSuffix}",
                 cancellationToken);
         }
 

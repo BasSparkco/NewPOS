@@ -17,6 +17,9 @@ public class StockMovement
     public decimal QuantityAfter { get; set; }
     public string? Reference { get; set; }
     public string? Notes { get; set; }
+    /// <summary>True when this movement's reconciled result drove Inventory.Quantity negative — a
+    /// visible discrepancy for manager review, never a silently clamped/discarded/overwritten value.</summary>
+    public bool IsDiscrepancy { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
     public bool IsDeleted { get; set; }

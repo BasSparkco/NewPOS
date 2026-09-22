@@ -595,6 +595,137 @@ public class ApiIntegrationTests
         Assert.Equal(startingQuantity - 2m, finalProduct.QuantityOnHand);
     }
 
+    /// <summary>
+    /// T6 matrix row "concurrent offline edits and last-unit sales → defined reconciliation, no silent
+    /// loss or false stock guarantee" (tenant.md §6.11 / §7's T6 table), unblocked by the project owner's
+    /// explicit product decision: enforce the configured stock rule against each device's own local
+    /// balance (already true — <see cref="POS.Infrastructure.Services.SaleService"/> checks
+    /// AllowNegativeStock against the selling device's own Inventory snapshot before completing a sale),
+    /// then on reconnection apply every completed sale exactly once, never discard one, never clamp the
+    /// result to zero, and never silently overwrite the other device's effect. If the combined result goes
+    /// negative, record a visible discrepancy for manager review instead of hiding it. Strict global stock
+    /// availability is not guaranteed while devices are offline — see docs/SYNC_STRATEGY.md.
+    /// </summary>
+    [Fact]
+    public async Task Two_offline_devices_selling_the_last_unit_both_apply_and_the_shortfall_is_a_visible_discrepancy()
+    {
+        using var factory = new ApiTestFactory();
+        using var client = factory.CreateClient();
+
+        await AuthorizeAsync(client);
+        var product = await GetProductAsync(client, "Sample Item A");
+
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var dbFactory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<PosDbContext>>();
+            await using var db = await dbFactory.CreateDbContextAsync();
+            var inventory = await db.Inventories.SingleAsync(i => i.ProductId == product.Id);
+            // Simulate the moment both offline devices last saw this product: exactly one unit left,
+            // matching what each device's own local no-negative-stock check would have allowed.
+            inventory.Quantity = 1m;
+            await db.SaveChangesAsync();
+        }
+
+        var deviceAInvoiceId = Guid.NewGuid();
+        var deviceALineId = Guid.NewGuid();
+        var deviceAId = Guid.NewGuid();
+        var deviceBInvoiceId = Guid.NewGuid();
+        var deviceBLineId = Guid.NewGuid();
+        var deviceBId = Guid.NewGuid();
+        var now = DateTime.UtcNow;
+
+        // Device A reconnects first and pushes its completed sale of the last unit.
+        var pushA = await PostAndReadAsync<InvoiceSyncPushResultResponse>(client, "/api/sync/invoices/push", new InvoiceSyncBatchRequest(
+        [
+            new InvoiceSyncInvoiceRequest(
+                deviceAInvoiceId, deviceAId, "Last Unit Device A", 1, (int)InvoiceStatus.Paid, 10m, 0m, "USD", null, now, now,
+                [new InvoiceSyncLineRequest(deviceALineId, product.Id, 1m, 10m, 0m, 10m, now, now, false)],
+                [])]));
+        Assert.Equal("Applied", Assert.Single(pushA.Results).Status);
+
+        // Device B was offline too, independently sold what it also believed was the last unit, and
+        // reconnects a moment later. Its sale must still apply — never rejected, never silently dropped.
+        var pushB = await PostAndReadAsync<InvoiceSyncPushResultResponse>(client, "/api/sync/invoices/push", new InvoiceSyncBatchRequest(
+        [
+            new InvoiceSyncInvoiceRequest(
+                deviceBInvoiceId, deviceBId, "Last Unit Device B", 1, (int)InvoiceStatus.Paid, 10m, 0m, "USD", null, now.AddSeconds(1), now.AddSeconds(1),
+                [new InvoiceSyncLineRequest(deviceBLineId, product.Id, 1m, 10m, 0m, 10m, now, now, false)],
+                [])]));
+        Assert.Equal("Applied", Assert.Single(pushB.Results).Status);
+
+        await using var verifyScope = factory.Services.CreateAsyncScope();
+        var verifyDbFactory = verifyScope.ServiceProvider.GetRequiredService<IDbContextFactory<PosDbContext>>();
+        await using var verifyDb = await verifyDbFactory.CreateDbContextAsync();
+
+        // Both sales are preserved as completed, paid invoices — neither was discarded to protect stock.
+        var invoiceA = await verifyDb.Invoices.AsNoTracking().SingleAsync(i => i.Id == deviceAInvoiceId);
+        var invoiceB = await verifyDb.Invoices.AsNoTracking().SingleAsync(i => i.Id == deviceBInvoiceId);
+        Assert.Equal(InvoiceStatus.Paid, invoiceA.Status);
+        Assert.Equal(InvoiceStatus.Paid, invoiceB.Status);
+
+        // Central stock reflects both sales applied exactly once each — combined, not overwritten.
+        var finalInventory = await verifyDb.Inventories.AsNoTracking().SingleAsync(i => i.ProductId == product.Id);
+        Assert.Equal(-1m, finalInventory.Quantity); // never silently clamped to zero
+
+        var movements = await verifyDb.StockMovements.AsNoTracking()
+            .Where(m => m.ProductId == product.Id && (m.InvoiceId == deviceAInvoiceId || m.InvoiceId == deviceBInvoiceId))
+            .OrderBy(m => m.CreatedAt)
+            .ToListAsync();
+        Assert.Equal(2, movements.Count); // both sales are audited stock movements, neither one lost
+        Assert.Equal(-1m, movements[0].QuantityDelta);
+        Assert.Equal(0m, movements[0].QuantityAfter);
+        Assert.False(movements[0].IsDiscrepancy);
+        Assert.Equal(-1m, movements[1].QuantityDelta);
+        Assert.Equal(-1m, movements[1].QuantityAfter);
+        Assert.True(movements[1].IsDiscrepancy); // the shortfall is flagged, not hidden
+
+        var discrepancyAudit = await verifyDb.AuditLogs.AsNoTracking()
+            .SingleOrDefaultAsync(a => a.Action == "StockDiscrepancyDetected" && a.EntityId == product.Id);
+        Assert.NotNull(discrepancyAudit);
+    }
+
+    /// <summary>
+    /// Regression companion to the deterministic test above, in the same spirit as
+    /// <see cref="Concurrent_retries_of_the_same_invoice_completion_produce_exactly_one_stock_effect"/>:
+    /// two genuinely concurrent HTTP pushes of two *different* invoices for the same product must combine
+    /// both stock effects rather than one silently overwriting the other (the lost-update race
+    /// <c>ReconcileInvoiceInventoryAsync</c>'s atomic DB-level increment exists to close). As documented on
+    /// that sibling test, this in-process SQLite test host has been observed to fully serialize concurrent
+    /// requests, so this cannot force a true interleave — it is kept as a "never corrupts under repeated
+    /// concurrent load" regression check, with authoritative confirmation deferred to the live PostgreSQL
+    /// rehearsal (STATUS.md's Stage 4T section).
+    /// </summary>
+    [Fact]
+    public async Task Concurrent_pushes_of_different_invoices_for_the_same_product_combine_both_stock_effects()
+    {
+        using var factory = new ApiTestFactory();
+        using var client = factory.CreateClient();
+
+        await AuthorizeAsync(client);
+        var product = await GetProductAsync(client, "Sample Item A");
+        var startingQuantity = product.QuantityOnHand;
+        var now = DateTime.UtcNow;
+
+        const int concurrentInvoices = 6;
+        var payloads = Enumerable.Range(0, concurrentInvoices)
+            .Select(i => new InvoiceSyncBatchRequest(
+            [
+                new InvoiceSyncInvoiceRequest(
+                    Guid.NewGuid(), Guid.NewGuid(), $"Concurrent Product Device {i}", 1, (int)InvoiceStatus.Paid, 10m, 0m, "USD", null, now, now,
+                    [new InvoiceSyncLineRequest(Guid.NewGuid(), product.Id, 1m, 10m, 0m, 10m, now, now, false)],
+                    [])]))
+            .ToArray();
+
+        var responses = await Task.WhenAll(payloads.Select(payload =>
+            client.PostAsJsonAsync("/api/sync/invoices/push", payload)));
+
+        foreach (var response in responses)
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var finalProduct = await GetProductAsync(client, "Sample Item A");
+        Assert.Equal(startingQuantity - concurrentInvoices, finalProduct.QuantityOnHand);
+    }
+
     [Fact]
     public async Task Sync_endpoint_reconciles_inventory_when_paid_invoice_is_later_refunded()
     {
