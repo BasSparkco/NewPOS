@@ -814,14 +814,28 @@ syncApi.MapPost("/invoices/push", async (
         await tx.RollbackAsync(cancellationToken);
         return Results.Conflict(new ApiErrorResponse("One or more invoices in this batch were updated concurrently by another request. Retry this push."));
     }
-    catch (DbUpdateException)
+    catch (DbUpdateException ex) when (POS.Api.Infrastructure.SyncConflictClassifier.IsRetryable(ex))
     {
-        // Same reasoning for the rarer case where the race manifests as a raw constraint/lock failure
-        // (e.g. a colliding child-row insert, or the database provider surfacing a write-lock conflict
-        // as something other than an EF concurrency exception) rather than the concurrency-token path
-        // above — still a safe-to-retry race, never a reason to leak an unhandled 500.
+        // Same reasoning as the concurrency-token path above, for the rarer case where a genuine race
+        // manifests as a raw unique-constraint/serialization failure instead (e.g. two concurrent pushes
+        // both deciding "this invoice doesn't exist yet" and both trying to insert it — a retry's fresh
+        // read now finds the row and takes the update path instead) — still safe to retry as-is.
         await tx.RollbackAsync(cancellationToken);
         return Results.Conflict(new ApiErrorResponse("One or more invoices in this batch could not be saved due to a concurrent write. Retry this push."));
+    }
+    catch (DbUpdateException)
+    {
+        // T6 matrix requirement: do not treat every DbUpdateException as a retryable 409. A foreign-key,
+        // check, or not-null violation surfacing only at save time (after every earlier per-item existence
+        // check passed under this transaction's own snapshot — e.g. a referenced product was deleted by a
+        // different request in the gap between this batch's check and its commit) is a real data problem,
+        // not a race: retrying the identical payload will fail identically forever. The whole batch is
+        // still rolled back atomically exactly like the retryable path above (see
+        // Invoice_failed_push_rolls_back_every_write_in_the_batch_including_unrelated_invoices in
+        // POS.Tests), but reported as permanent so the caller does not loop retrying something that can
+        // never succeed unmodified.
+        await tx.RollbackAsync(cancellationToken);
+        return Results.UnprocessableEntity(new ApiErrorResponse("One or more invoices in this batch failed a database validation constraint and cannot be retried unmodified."));
     }
 
     return Results.Ok(new InvoiceSyncPushResultDto(results));

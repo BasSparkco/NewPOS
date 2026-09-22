@@ -56,18 +56,30 @@ internal sealed class StoreAccessService : IStoreAccessService
 
     public async Task<bool> CanCurrentUserAccessStoreAsync(Guid storeId, CancellationToken cancellationToken = default)
     {
-        if (storeId == Guid.Empty)
+        await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken);
+        var tenantId = await GetCurrentTenantIdAsync(db, cancellationToken);
+        return await CanAccessStoreCoreAsync(db, tenantId, _session.UserId, storeId, cancellationToken);
+    }
+
+    public async Task<bool> CanUserAccessStoreAsync(Guid tenantId, Guid userId, Guid storeId, CancellationToken cancellationToken = default)
+    {
+        if (tenantId == Guid.Empty || userId == Guid.Empty)
             return false;
 
         await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken);
-        var userId = _session.UserId;
-        var tenantId = await GetCurrentTenantIdAsync(db, cancellationToken);
+        return await CanAccessStoreCoreAsync(db, tenantId, userId, storeId, cancellationToken);
+    }
+
+    private static async Task<bool> CanAccessStoreCoreAsync(PosDbContext db, Guid tenantId, Guid userId, Guid storeId, CancellationToken cancellationToken)
+    {
+        if (storeId == Guid.Empty)
+            return false;
 
         var storeInTenant = await db.Stores.AsNoTracking().AnyAsync(s => s.Id == storeId && s.TenantId == tenantId && !s.IsDeleted, cancellationToken);
         if (!storeInTenant)
             return false;
 
-        var isHomeStore = await db.Users.AsNoTracking().AnyAsync(u => u.Id == userId && u.StoreId == storeId && !u.IsDeleted, cancellationToken);
+        var isHomeStore = await db.Users.AsNoTracking().AnyAsync(u => u.Id == userId && u.TenantId == tenantId && u.StoreId == storeId && !u.IsDeleted, cancellationToken);
         if (isHomeStore)
             return true;
 

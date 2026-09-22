@@ -1,6 +1,7 @@
 using System.Net;
 using System.Security.Claims;
 using System.Threading.RateLimiting;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.RateLimiting;
@@ -36,6 +37,40 @@ builder.Services
         options.Cookie.SameSite = SameSiteMode.Lax;
         options.SlidingExpiration = true;
         options.ExpireTimeSpan = TimeSpan.FromHours(8);
+        options.Events = new CookieAuthenticationEvents
+        {
+            // Closes a real gap (T6 matrix: "stale online token after ... access revocation"): the
+            // active-store claim is otherwise only checked at Switch time (StoresController.Switch) and
+            // then trusted for the rest of the cookie's up-to-8h sliding window. Re-checking on every
+            // request means an admin's RevokeAccess takes effect on the very next request from the
+            // revoked user, not merely their next store switch or re-login. Deliberately re-queries the
+            // database every request rather than caching/throttling — correctness over latency for an
+            // authorization decision; revisit if request volume ever makes this a real bottleneck.
+            OnValidatePrincipal = async context =>
+            {
+                var principal = context.Principal;
+                if (principal?.Identity?.IsAuthenticated != true)
+                    return;
+
+                var tenantId = TryParseGuid(principal.FindFirstValue(WebClaimTypes.TenantId));
+                var userId = TryParseGuid(principal.FindFirstValue(ClaimTypes.NameIdentifier));
+                var storeId = TryParseGuid(principal.FindFirstValue(WebClaimTypes.StoreId));
+                if (tenantId is null || userId is null || storeId is null)
+                {
+                    context.RejectPrincipal();
+                    await context.HttpContext.SignOutAsync(WebAuthenticationDefaults.Scheme);
+                    return;
+                }
+
+                var storeAccess = context.HttpContext.RequestServices.GetRequiredService<IStoreAccessService>();
+                var stillAllowed = await storeAccess.CanUserAccessStoreAsync(tenantId.Value, userId.Value, storeId.Value, context.HttpContext.RequestAborted);
+                if (!stillAllowed)
+                {
+                    context.RejectPrincipal();
+                    await context.HttpContext.SignOutAsync(WebAuthenticationDefaults.Scheme);
+                }
+            }
+        };
     });
 
 builder.Services.AddAuthorization(options =>

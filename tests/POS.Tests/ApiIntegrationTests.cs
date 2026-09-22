@@ -417,6 +417,85 @@ public class ApiIntegrationTests
     }
 
     /// <summary>
+    /// Companion to the deterministic concurrency test above, proving the specific guarantee the T6 matrix
+    /// asks for by name: a failed concurrent push rolls back its invoice, inventory AND stock-ledger writes
+    /// *together*, not just the invoice row. The losing context here stages all three — the invoice status
+    /// flip, an <see cref="Inventory"/> quantity decrement, and a new <see cref="StockMovement"/> ledger
+    /// row — exactly what <c>/api/sync/invoices/push</c>'s real <c>ReconcileInvoiceInventoryAsync</c> would
+    /// queue for a completed sale, all inside the one <c>SaveChangesAsync</c> the real endpoint also uses.
+    /// EF Core sends a DbContext's pending changes as a single batch, so if any one of them is rejected
+    /// (here, the invoice's stale concurrency token), none of the batch's statements — including the
+    /// inventory/stock-ledger ones with no concurrency token of their own — are applied. This is an EF
+    /// Core/ADO.NET guarantee, not custom code, but it is exactly the property the real endpoint's
+    /// single-transaction/single-save design (Program.cs's invoices/push handler) depends on.
+    /// </summary>
+    [Fact]
+    public async Task Failed_concurrent_push_rolls_back_invoice_inventory_and_stock_ledger_writes_together()
+    {
+        using var factory = new ApiTestFactory();
+        using var client = factory.CreateClient();
+
+        await AuthorizeAsync(client);
+        var product = await GetProductAsync(client, "Sample Item A");
+
+        var invoiceId = Guid.NewGuid();
+        var lineId = Guid.NewGuid();
+        var deviceId = Guid.NewGuid();
+        var now = DateTime.UtcNow;
+
+        var created = await PostAndReadAsync<InvoiceSyncPushResultResponse>(client, "/api/sync/invoices/push", new InvoiceSyncBatchRequest(
+        [
+            new InvoiceSyncInvoiceRequest(
+                invoiceId, deviceId, "Rollback Test Device", 1, (int)InvoiceStatus.Open, 20m, 0m, "USD", null, now, now,
+                [new InvoiceSyncLineRequest(lineId, product.Id, 2m, 10m, 0m, 20m, now, now, false)],
+                [])]));
+        Assert.Equal("Applied", Assert.Single(created.Results).Status);
+
+        await using var scope = factory.Services.CreateAsyncScope();
+        var dbFactory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<PosDbContext>>();
+
+        await using var ctxA = await dbFactory.CreateDbContextAsync();
+        await using var ctxB = await dbFactory.CreateDbContextAsync();
+
+        var invoiceA = await ctxA.Invoices.SingleAsync(i => i.Id == invoiceId);
+        var invoiceB = await ctxB.Invoices.SingleAsync(i => i.Id == invoiceId);
+
+        var inventoryB = await ctxB.Inventories.SingleAsync(i => i.ProductId == product.Id && i.StoreId == invoiceB.StoreId);
+        var quantityBeforeRace = inventoryB.Quantity;
+
+        // Winner: commits first, same as the existing deterministic test.
+        invoiceA.Status = InvoiceStatus.Paid;
+        invoiceA.SyncVersion = 2;
+        await ctxA.SaveChangesAsync();
+
+        // Loser: stages the invoice flip AND the inventory/stock-ledger writes a real completion would
+        // produce, in the same context/batch, then loses on the invoice's stale concurrency token.
+        invoiceB.Status = InvoiceStatus.Paid;
+        invoiceB.SyncVersion = 2;
+        inventoryB.Quantity -= 2m;
+        var stockMovementId = Guid.NewGuid();
+        ctxB.StockMovements.Add(new StockMovement
+        {
+            Id = stockMovementId,
+            TenantId = invoiceB.TenantId,
+            ProductId = product.Id,
+            StoreId = invoiceB.StoreId,
+            InvoiceId = invoiceId,
+            Type = StockMovementType.Sale,
+            QuantityDelta = -2m,
+            QuantityAfter = inventoryB.Quantity,
+            CreatedAt = now,
+            UpdatedAt = now
+        });
+        await Assert.ThrowsAsync<DbUpdateConcurrencyException>(() => ctxB.SaveChangesAsync());
+
+        await using var verifyDb = await dbFactory.CreateDbContextAsync();
+        var finalInventory = await verifyDb.Inventories.AsNoTracking().SingleAsync(i => i.ProductId == product.Id && i.StoreId == invoiceB.StoreId);
+        Assert.Equal(quantityBeforeRace, finalInventory.Quantity); // the losing context's decrement never landed
+        Assert.False(await verifyDb.StockMovements.AsNoTracking().AnyAsync(m => m.Id == stockMovementId)); // nor its ledger row
+    }
+
+    /// <summary>
     /// End-to-end companion to the deterministic test above, covering the T6 matrix row "retry sale/
     /// refund after server commit but before acknowledgement → single financial and stock effect":
     /// several genuinely concurrent HTTP pushes of the *identical* payload (same invoice, same target

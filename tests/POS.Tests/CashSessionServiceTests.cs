@@ -365,6 +365,88 @@ public class CashSessionServiceTests
         });
     }
 
+    /// <summary>
+    /// T6 matrix: "close a cash session opened under a different tenant/store → rejected." Closing is
+    /// scoped by the caller's own current store (<see cref="CashSessionService.CloseSessionAsync"/> filters
+    /// on <c>s.StoreId == _session.StoreId</c>), so a real, valid cash session id belonging to a different
+    /// tenant's store must be indistinguishable from a nonexistent one, not merely "access denied" — no
+    /// disclosure that the id even exists.
+    /// </summary>
+    [Fact]
+    public async Task Closing_a_cash_session_belonging_to_a_different_tenant_and_store_is_rejected()
+    {
+        await using var host = await TestServiceHost.CreateAsync();
+
+        var otherSessionId = Guid.Empty;
+        await host.ExecuteScopeAsync(async services =>
+        {
+            var dbFactory = services.GetRequiredService<IDbContextFactory<PosDbContext>>();
+            await using var db = await dbFactory.CreateDbContextAsync();
+
+            var now = DateTime.UtcNow;
+            var otherTenantId = Guid.NewGuid();
+            db.Tenants.Add(new Tenant { Id = otherTenantId, Name = "Other Tenant", NormalizedSlug = "other-tenant-cash", Status = TenantStatus.Active, CreatedAt = now, UpdatedAt = now });
+
+            var otherStore = new Store { Id = Guid.NewGuid(), TenantId = otherTenantId, Name = "Other Tenant Store", BaseCurrencyId = host.BaseCurrencyId, CreatedAt = now, UpdatedAt = now };
+            db.Stores.Add(otherStore);
+
+            var otherRole = new Role { Id = Guid.NewGuid(), TenantId = otherTenantId, Name = "Admin", PermissionsMask = (int)Permission.All, CreatedAt = now, UpdatedAt = now };
+            db.Roles.Add(otherRole);
+
+            var otherUserId = Guid.NewGuid();
+            db.Users.Add(new User
+            {
+                Id = otherUserId,
+                TenantId = otherTenantId,
+                Username = "other.tenant.cashier",
+                NormalizedUsername = "OTHER.TENANT.CASHIER",
+                PasswordHash = "hash",
+                RoleId = otherRole.Id,
+                StoreId = otherStore.Id,
+                IsActive = true,
+                CreatedAt = now,
+                UpdatedAt = now
+            });
+
+            var otherRegisterId = Guid.NewGuid();
+            db.Registers.Add(new Register { Id = otherRegisterId, TenantId = otherTenantId, StoreId = otherStore.Id, Number = 1, Name = "Register 1", CreatedAt = now, UpdatedAt = now });
+
+            otherSessionId = Guid.NewGuid();
+            db.CashSessions.Add(new CashSession
+            {
+                Id = otherSessionId,
+                TenantId = otherTenantId,
+                StoreId = otherStore.Id,
+                RegisterId = otherRegisterId,
+                OpenedByUserId = otherUserId,
+                OpenedAt = now,
+                OpeningCashAmount = 100m,
+                CurrencyCode = "USD",
+                Status = CashSessionStatus.Open,
+                CreatedAt = now,
+                UpdatedAt = now
+            });
+
+            await db.SaveChangesAsync();
+        });
+
+        await host.ExecuteScopeAsync(async services =>
+        {
+            var cashSessions = services.GetRequiredService<ICashSessionService>();
+
+            // host's own session is still tenant A / host.StoreId — attempting to close tenant B's real,
+            // valid, open session id must fail exactly like a nonexistent id would.
+            var (success, error, summary) = await cashSessions.CloseSessionAsync(otherSessionId, 100m);
+            Assert.False(success);
+            Assert.NotNull(error);
+            Assert.Null(summary);
+
+            await using var db = await services.GetRequiredService<IDbContextFactory<PosDbContext>>().CreateDbContextAsync();
+            var stillOpen = await db.CashSessions.AsNoTracking().Where(s => s.Id == otherSessionId).Select(s => s.Status).SingleAsync();
+            Assert.Equal(CashSessionStatus.Open, stillOpen);
+        });
+    }
+
     private static async Task<Guid> GetOrCreateRegisterIdAsync(IServiceProvider services)
     {
         var sales = services.GetRequiredService<ISaleService>();

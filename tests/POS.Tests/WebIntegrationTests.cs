@@ -1650,6 +1650,94 @@ public class WebIntegrationTests
         Assert.DoesNotContain("Other Store", afterHtml, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// T6 matrix: "stale online token after user/device/access revocation → access blocked within the
+    /// documented policy." Revoking a user's granted store access must take effect on the very next
+    /// protected request, not merely the next time they call Switch or the cookie's sliding-expiration
+    /// window happens to lapse — proven via the real cookie, never re-issuing it in between.
+    /// </summary>
+    [Fact]
+    public async Task Revoking_store_access_mid_session_blocks_the_very_next_protected_request()
+    {
+        using var factory = new WebTestFactory();
+        using var adminClient = factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
+        using var viewerClient = factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
+
+        Guid branchStoreId;
+        const string viewerPassword = "ReportsOnlyViewer2!";
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var dbFactory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<PosDbContext>>();
+            await using var db = await dbFactory.CreateDbContextAsync();
+            var homeStore = await db.Stores.AsNoTracking().SingleAsync();
+
+            var now = DateTime.UtcNow;
+            var branch = new Store
+            {
+                Id = Guid.NewGuid(),
+                TenantId = homeStore.TenantId,
+                Name = "Revoke Test Branch",
+                BaseCurrencyId = homeStore.BaseCurrencyId,
+                CreatedAt = now,
+                UpdatedAt = now
+            };
+            db.Stores.Add(branch);
+            branchStoreId = branch.Id;
+
+            var roleId = Guid.NewGuid();
+            db.Roles.Add(new Role { Id = roleId, TenantId = homeStore.TenantId, Name = "Revoke Test Viewer Role", PermissionsMask = (int)Permission.ViewReports, CreatedAt = now, UpdatedAt = now });
+            db.Users.Add(new User
+            {
+                Id = Guid.NewGuid(),
+                TenantId = homeStore.TenantId,
+                Username = "revoke.target",
+                NormalizedUsername = "REVOKE.TARGET",
+                PasswordHash = BCrypt.Net.BCrypt.HashPassword(viewerPassword),
+                RoleId = roleId,
+                StoreId = homeStore.Id,
+                IsActive = true,
+                CreatedAt = now,
+                UpdatedAt = now,
+                IsDeleted = false
+            });
+            await db.SaveChangesAsync();
+        }
+
+        await LoginAsAdminAsync(adminClient);
+        await LoginAsync(viewerClient, "revoke.target", viewerPassword);
+
+        var userId = await GetUserIdAsync(factory, "revoke.target");
+
+        // Grant, then switch the viewer's active-session cookie into the branch store.
+        var adminStoresHtml = await ReadHtmlAsync(await adminClient.GetAsync($"/Stores?storeId={branchStoreId}"));
+        var grantResponse = await adminClient.PostAsync(
+            "/Stores/GrantAccess",
+            BuildFormContent(adminStoresHtml, new Dictionary<string, string> { ["userId"] = userId, ["storeId"] = branchStoreId.ToString() }));
+        Assert.Equal(HttpStatusCode.Redirect, grantResponse.StatusCode);
+
+        var managementHtml = await ReadHtmlAsync(await viewerClient.GetAsync("/Management"));
+        var switchResponse = await viewerClient.PostAsync(
+            "/Stores/Switch",
+            BuildFormContent(managementHtml, new Dictionary<string, string> { ["storeId"] = branchStoreId.ToString() }));
+        Assert.Equal(HttpStatusCode.Redirect, switchResponse.StatusCode);
+
+        var afterSwitchHtml = await ReadHtmlAsync(await viewerClient.GetAsync("/Management"));
+        Assert.Contains("Revoke Test Branch", afterSwitchHtml, StringComparison.Ordinal);
+
+        // Admin revokes the grant. The viewer's cookie still carries the branch-store claim and has not
+        // expired or been re-issued — this is exactly the staleness window the matrix row is about.
+        var adminStoresAfterSwitchHtml = await ReadHtmlAsync(await adminClient.GetAsync($"/Stores?storeId={branchStoreId}"));
+        var revokeResponse = await adminClient.PostAsync(
+            "/Stores/RevokeAccess",
+            BuildFormContent(adminStoresAfterSwitchHtml, new Dictionary<string, string> { ["userId"] = userId, ["storeId"] = branchStoreId.ToString() }));
+        Assert.Equal(HttpStatusCode.Redirect, revokeResponse.StatusCode);
+
+        // The very next protected request — no re-Switch, same still-valid cookie — must be blocked.
+        var blockedResponse = await viewerClient.GetAsync("/Management");
+        Assert.Equal(HttpStatusCode.Redirect, blockedResponse.StatusCode);
+        Assert.Equal("/account/login", blockedResponse.Headers.Location?.AbsolutePath);
+    }
+
     private static async Task<string> GetUserIdAsync(WebTestFactory factory, string username)
     {
         await using var scope = factory.Services.CreateAsyncScope();

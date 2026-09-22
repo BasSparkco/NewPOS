@@ -27,6 +27,16 @@ public interface IStoreAccessService
     Task<bool> CanCurrentUserAccessStoreAsync(Guid storeId, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Session-independent form of <see cref="CanCurrentUserAccessStoreAsync"/>, for callers that run before
+    /// <see cref="ICurrentSession"/> is populated for the request — e.g. a cookie-authentication
+    /// <c>OnValidatePrincipal</c> handler re-checking an already-issued cookie's claims on every request, so a
+    /// mid-session <see cref="RevokeStoreAccessAsync"/> is enforced before the cookie's sliding expiration would
+    /// otherwise let it re-authenticate. Never trusts <paramref name="tenantId"/> alone: the store must actually
+    /// belong to that tenant.
+    /// </summary>
+    Task<bool> CanUserAccessStoreAsync(Guid tenantId, Guid userId, Guid storeId, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Creates a new store (branch) in the current session's tenant, inheriting the tenant's existing
     /// canonical base currency (tenant.md §3: one base currency per tenant catalog — a new store cannot
     /// pick its own). Requires <c>Permission.ManageStores</c> at the call site.
