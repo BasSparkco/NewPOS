@@ -144,6 +144,7 @@ Share this with the user securely — it will not be shown again.</value></data>
   <data name="Users_PermManageUsers" xml:space="preserve"><value>Manage users &amp; roles</value></data>
   <data name="Users_PermManageSettings" xml:space="preserve"><value>Manage settings</value></data>
   <data name="Users_PermProcessRefunds" xml:space="preserve"><value>Process refunds</value></data>
+  <data name="Users_PermManageStores" xml:space="preserve"><value>Manage stores (create branches, grant store access)</value></data>
   <data name="Users_SavePermissions" xml:space="preserve"><value>Save permissions</value></data>
   <data name="Users_SelectRoleForPermissions" xml:space="preserve"><value>Please select a role to edit.</value></data>
   <data name="Users_PermissionsSavedFormat" xml:space="preserve"><value>Permissions for '{0}' saved.</value></data>

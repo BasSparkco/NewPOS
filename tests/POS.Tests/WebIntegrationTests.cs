@@ -3,6 +3,7 @@ using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using POS.Application.Abstractions;
 using POS.Core.Entities;
 using POS.Core.Enums;
 using POS.Infrastructure.Data;
@@ -1438,6 +1439,224 @@ public class WebIntegrationTests
         var auditAttempt = await client.GetAsync("/Audit");
         Assert.Equal(HttpStatusCode.Redirect, auditAttempt.StatusCode);
         Assert.Equal("/account/access-denied", auditAttempt.Headers.Location?.AbsolutePath);
+    }
+
+    [Fact]
+    public async Task Stores_page_requires_ManageStores_permission()
+    {
+        using var factory = new WebTestFactory();
+        using var client = factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
+
+        const string password = "ProductsOnlyNoStores1!";
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var dbFactory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<PosDbContext>>();
+            await using var db = await dbFactory.CreateDbContextAsync();
+            var storeId = await db.Stores.AsNoTracking().Select(s => s.Id).SingleAsync();
+            var tenantId = await db.Stores.AsNoTracking().Select(s => s.TenantId).SingleAsync();
+
+            var now = DateTime.UtcNow;
+            var roleId = Guid.NewGuid();
+            db.Roles.Add(new Role { Id = roleId, TenantId = tenantId, Name = "Products Only", PermissionsMask = (int)Permission.ManageProducts, CreatedAt = now, UpdatedAt = now });
+            db.Users.Add(new User
+            {
+                Id = Guid.NewGuid(),
+                TenantId = tenantId,
+                Username = "no.stores.manager",
+                NormalizedUsername = "NO.STORES.MANAGER",
+                PasswordHash = BCrypt.Net.BCrypt.HashPassword(password),
+                RoleId = roleId,
+                StoreId = storeId,
+                IsActive = true,
+                CreatedAt = now,
+                UpdatedAt = now,
+                IsDeleted = false
+            });
+            await db.SaveChangesAsync();
+        }
+
+        await LoginAsync(client, "no.stores.manager", password);
+
+        var storesAttempt = await client.GetAsync("/Stores");
+        Assert.Equal(HttpStatusCode.Redirect, storesAttempt.StatusCode);
+        Assert.Equal("/account/access-denied", storesAttempt.Headers.Location?.AbsolutePath);
+    }
+
+    [Fact]
+    public async Task Creating_a_store_inherits_the_tenant_base_currency_and_appears_in_the_tenant_store_list()
+    {
+        using var factory = new WebTestFactory();
+        using var client = factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
+
+        await LoginAsAdminAsync(client);
+
+        var storesPage = await client.GetAsync("/Stores");
+        var storesHtml = await ReadHtmlAsync(storesPage);
+
+        var createResponse = await client.PostAsync(
+            "/Stores/Create",
+            BuildFormContent(storesHtml, new Dictionary<string, string>
+            {
+                ["Name"] = "Downtown Branch",
+                ["Address"] = "12 Main St",
+                ["Phone"] = "555-0100"
+            }));
+        Assert.Equal(HttpStatusCode.Redirect, createResponse.StatusCode);
+
+        await using var scope = factory.Services.CreateAsyncScope();
+        var dbFactory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<PosDbContext>>();
+        await using var db = await dbFactory.CreateDbContextAsync();
+
+        var originalStore = await db.Stores.AsNoTracking().Where(s => s.Name != "Downtown Branch").SingleAsync();
+        var newStore = await db.Stores.AsNoTracking().SingleAsync(s => s.Name == "Downtown Branch");
+
+        Assert.Equal(originalStore.TenantId, newStore.TenantId);
+        Assert.Equal(originalStore.BaseCurrencyId, newStore.BaseCurrencyId);
+
+        var listPage = await client.GetAsync("/Stores");
+        var listHtml = await ReadHtmlAsync(listPage);
+        Assert.Contains("Downtown Branch", listHtml, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The core T6 matrix row this feature makes testable for the first time: "use A1 cashier rights to
+    /// access A2 → denied unless explicitly assigned and permitted." A user with only ViewReports (can
+    /// reach the dashboard, has no ManageStores) must be refused a switch into a second same-tenant store
+    /// until a ManageStores-holding admin explicitly grants it — proven end to end via the real cookie
+    /// claim, not by asserting on an internal service call.
+    /// </summary>
+    [Fact]
+    public async Task Store_switch_is_rejected_without_an_explicit_grant_and_succeeds_once_one_is_made()
+    {
+        using var factory = new WebTestFactory();
+        using var adminClient = factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
+        using var viewerClient = factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
+
+        Guid homeStoreId, branchStoreId;
+        const string viewerPassword = "ReportsOnlyViewer1!";
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var dbFactory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<PosDbContext>>();
+            await using var db = await dbFactory.CreateDbContextAsync();
+            var homeStore = await db.Stores.AsNoTracking().SingleAsync();
+            homeStoreId = homeStore.Id;
+
+            var now = DateTime.UtcNow;
+            var branch = new Store
+            {
+                Id = Guid.NewGuid(),
+                TenantId = homeStore.TenantId,
+                Name = "Branch Two",
+                BaseCurrencyId = homeStore.BaseCurrencyId,
+                CreatedAt = now,
+                UpdatedAt = now
+            };
+            db.Stores.Add(branch);
+            branchStoreId = branch.Id;
+
+            var roleId = Guid.NewGuid();
+            db.Roles.Add(new Role { Id = roleId, TenantId = homeStore.TenantId, Name = "Reports Viewer", PermissionsMask = (int)Permission.ViewReports, CreatedAt = now, UpdatedAt = now });
+            db.Users.Add(new User
+            {
+                Id = Guid.NewGuid(),
+                TenantId = homeStore.TenantId,
+                Username = "branch.viewer",
+                NormalizedUsername = "BRANCH.VIEWER",
+                PasswordHash = BCrypt.Net.BCrypt.HashPassword(viewerPassword),
+                RoleId = roleId,
+                StoreId = homeStoreId,
+                IsActive = true,
+                CreatedAt = now,
+                UpdatedAt = now,
+                IsDeleted = false
+            });
+            await db.SaveChangesAsync();
+        }
+
+        await LoginAsAdminAsync(adminClient);
+        await LoginAsync(viewerClient, "branch.viewer", viewerPassword);
+
+        // Before any grant: the viewer's own Management page shows their home store, and switching into
+        // Branch Two is refused without ever changing the active-store cookie claim.
+        var managementPage = await viewerClient.GetAsync("/Management");
+        var managementHtml = await ReadHtmlAsync(managementPage);
+
+        var deniedSwitch = await viewerClient.PostAsync(
+            "/Stores/Switch",
+            BuildFormContent(managementHtml, new Dictionary<string, string> { ["storeId"] = branchStoreId.ToString() }));
+        Assert.Equal(HttpStatusCode.Redirect, deniedSwitch.StatusCode);
+
+        var stillHomeHtml = await ReadHtmlAsync(await viewerClient.GetAsync("/Management"));
+        Assert.DoesNotContain("Branch Two", stillHomeHtml, StringComparison.Ordinal);
+
+        // Admin grants access to Branch Two via the real Stores screen (never touching UserStoreAccess directly).
+        var adminStoresHtml = await ReadHtmlAsync(await adminClient.GetAsync($"/Stores?storeId={branchStoreId}"));
+        var grantResponse = await adminClient.PostAsync(
+            "/Stores/GrantAccess",
+            BuildFormContent(adminStoresHtml, new Dictionary<string, string>
+            {
+                ["userId"] = await GetUserIdAsync(factory, "branch.viewer"),
+                ["storeId"] = branchStoreId.ToString()
+            }));
+        Assert.Equal(HttpStatusCode.Redirect, grantResponse.StatusCode);
+
+        // The switch now succeeds, proven by the active store's name actually changing on the next page.
+        var refreshedManagementHtml = await ReadHtmlAsync(await viewerClient.GetAsync("/Management"));
+        var allowedSwitch = await viewerClient.PostAsync(
+            "/Stores/Switch",
+            BuildFormContent(refreshedManagementHtml, new Dictionary<string, string> { ["storeId"] = branchStoreId.ToString() }));
+        Assert.Equal(HttpStatusCode.Redirect, allowedSwitch.StatusCode);
+
+        var afterSwitchHtml = await ReadHtmlAsync(await viewerClient.GetAsync("/Management"));
+        Assert.Contains("Branch Two", afterSwitchHtml, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Cross-tenant companion to the same T6 row: a valid, authenticated session in tenant A must never
+    /// be able to switch into a store belonging to tenant B, even by guessing/knowing its id directly —
+    /// <see cref="POS.Application.Abstractions.IStoreAccessService.CanCurrentUserAccessStoreAsync"/> checks
+    /// tenant ownership before access, not access alone.
+    /// </summary>
+    [Fact]
+    public async Task Store_switch_is_rejected_for_a_store_belonging_to_a_different_tenant()
+    {
+        using var factory = new WebTestFactory();
+        using var client = factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
+
+        // Log in before the second tenant exists: AuthService's tenant-slug auto-resolution only kicks
+        // in "when exactly one active tenant exists system-wide" — provisioning tenant B first would make
+        // an unqualified "admin" login (this test helper sends no TenantSlug) fail closed instead of
+        // resolving to tenant A, which is a real, already-documented T2 behavior, not a bug to work around
+        // silently here.
+        await LoginAsAdminAsync(client);
+
+        Guid otherTenantStoreId;
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var provisioning = scope.ServiceProvider.GetRequiredService<ITenantProvisioningService>();
+            var (success, error, result) = await provisioning.ProvisionTenantAsync(
+                "Other Business", "other-business", "Other Store", "other.admin", "OtherAdminPass1!");
+            Assert.True(success, error);
+            otherTenantStoreId = result!.StoreId;
+        }
+
+        var managementHtml = await ReadHtmlAsync(await client.GetAsync("/Management"));
+        var switchAttempt = await client.PostAsync(
+            "/Stores/Switch",
+            BuildFormContent(managementHtml, new Dictionary<string, string> { ["storeId"] = otherTenantStoreId.ToString() }));
+        Assert.Equal(HttpStatusCode.Redirect, switchAttempt.StatusCode);
+
+        var afterHtml = await ReadHtmlAsync(await client.GetAsync("/Management"));
+        Assert.DoesNotContain("Other Store", afterHtml, StringComparison.Ordinal);
+    }
+
+    private static async Task<string> GetUserIdAsync(WebTestFactory factory, string username)
+    {
+        await using var scope = factory.Services.CreateAsyncScope();
+        var dbFactory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<PosDbContext>>();
+        await using var db = await dbFactory.CreateDbContextAsync();
+        var id = await db.Users.AsNoTracking().Where(u => u.Username == username).Select(u => u.Id).SingleAsync();
+        return id.ToString();
     }
 
     private static async Task<HttpResponseMessage> LoginAsAdminAsync(HttpClient client) =>

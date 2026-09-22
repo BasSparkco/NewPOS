@@ -38,6 +38,7 @@ public partial class UserManagementViewModel : ObservableObject
     [ObservableProperty] private bool _permManageUsers;
     [ObservableProperty] private bool _permManageSettings;
     [ObservableProperty] private bool _permProcessRefunds;
+    [ObservableProperty] private bool _permManageStores;
 
     /// <summary>The Admin role always keeps ManageUsers (server-enforced too) so nobody can lock everyone out of this screen.</summary>
     public bool CanEditManageUsersPermission =>
@@ -59,6 +60,7 @@ public partial class UserManagementViewModel : ObservableObject
         PermManageUsers    = (mask & (int)Permission.ManageUsers) != 0;
         PermManageSettings = (mask & (int)Permission.ManageSettings) != 0;
         PermProcessRefunds = (mask & (int)Permission.ProcessRefunds) != 0;
+        PermManageStores   = (mask & (int)Permission.ManageStores) != 0;
         OnPropertyChanged(nameof(CanEditManageUsersPermission));
     }
 
@@ -233,6 +235,7 @@ public partial class UserManagementViewModel : ObservableObject
         if (PermManageUsers)    mask |= Permission.ManageUsers;
         if (PermManageSettings) mask |= Permission.ManageSettings;
         if (PermProcessRefunds) mask |= Permission.ProcessRefunds;
+        if (PermManageStores)   mask |= Permission.ManageStores;
 
         IsBusy = true;
         try

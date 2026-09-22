@@ -795,8 +795,34 @@ syncApi.MapPost("/invoices/push", async (
         }
     }
 
-    await db.SaveChangesAsync(cancellationToken);
-    await tx.CommitAsync(cancellationToken);
+    try
+    {
+        await db.SaveChangesAsync(cancellationToken);
+        await tx.CommitAsync(cancellationToken);
+    }
+    catch (DbUpdateConcurrencyException)
+    {
+        // A truly concurrent request (a lost-ack retry racing the original in-flight push, or two
+        // devices' background sync passes overlapping) applied a conflicting write to the same
+        // invoice(s) in this batch first — Invoice.SyncVersion is a concurrency token specifically so
+        // this loses cleanly instead of silently double-applying a stock/financial effect. Roll back
+        // (nothing in this batch commits, including any invoice in it that did not itself conflict —
+        // the whole batch is safe to retry, matching this endpoint's existing per-batch atomicity) and
+        // fail soft: the caller's InvoiceSyncService already treats a non-success response as "leave
+        // these invoices unsynced, retry next pass," which is exactly correct here since the winning
+        // request already durably committed the single effect.
+        await tx.RollbackAsync(cancellationToken);
+        return Results.Conflict(new ApiErrorResponse("One or more invoices in this batch were updated concurrently by another request. Retry this push."));
+    }
+    catch (DbUpdateException)
+    {
+        // Same reasoning for the rarer case where the race manifests as a raw constraint/lock failure
+        // (e.g. a colliding child-row insert, or the database provider surfacing a write-lock conflict
+        // as something other than an EF concurrency exception) rather than the concurrency-token path
+        // above — still a safe-to-retry race, never a reason to leak an unhandled 500.
+        await tx.RollbackAsync(cancellationToken);
+        return Results.Conflict(new ApiErrorResponse("One or more invoices in this batch could not be saved due to a concurrent write. Retry this push."));
+    }
 
     return Results.Ok(new InvoiceSyncPushResultDto(results));
 }).RequireAuthorization(SyncPolicy);

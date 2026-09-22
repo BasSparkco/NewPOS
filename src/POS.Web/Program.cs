@@ -56,6 +56,8 @@ builder.Services.AddAuthorization(options =>
         policy.RequireAssertion(ctx => GetPermissions(ctx.User).HasFlag(Permission.ManageSettings)));
     options.AddPolicy(WebAuthorizationPolicies.ProcessRefunds, policy =>
         policy.RequireAssertion(ctx => GetPermissions(ctx.User).HasFlag(Permission.ProcessRefunds)));
+    options.AddPolicy(WebAuthorizationPolicies.ManageStores, policy =>
+        policy.RequireAssertion(ctx => GetPermissions(ctx.User).HasFlag(Permission.ManageStores)));
 });
 builder.Services.AddRateLimiter(options =>
 {

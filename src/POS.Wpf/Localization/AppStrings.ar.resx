@@ -144,6 +144,7 @@
   <data name="Users_PermManageUsers" xml:space="preserve"><value>إدارة المستخدمين والأدوار</value></data>
   <data name="Users_PermManageSettings" xml:space="preserve"><value>إدارة الإعدادات</value></data>
   <data name="Users_PermProcessRefunds" xml:space="preserve"><value>معالجة الاسترجاعات</value></data>
+  <data name="Users_PermManageStores" xml:space="preserve"><value>إدارة الفروع (إنشاء فروع، منح صلاحية الوصول)</value></data>
   <data name="Users_SavePermissions" xml:space="preserve"><value>حفظ الصلاحيات</value></data>
   <data name="Users_SelectRoleForPermissions" xml:space="preserve"><value>يرجى اختيار دور للتعديل.</value></data>
   <data name="Users_PermissionsSavedFormat" xml:space="preserve"><value>تم حفظ صلاحيات '{0}'.</value></data>

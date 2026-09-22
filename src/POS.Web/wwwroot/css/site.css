@@ -156,6 +156,20 @@ a {
   letter-spacing: 0.16em;
 }
 
+.store-switcher {
+  display: inline-flex;
+}
+
+.store-switcher__select {
+  min-height: 2.5rem;
+  padding: 0.5rem 0.9rem;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.75);
+  color: var(--ink);
+  font-weight: 600;
+}
+
 .dashboard-hero,
 .management-hero,
 .login-shell,
@@ -592,6 +606,24 @@ a {
   grid-template-columns: minmax(150px, 0.8fr) minmax(0, 0.9fr) minmax(0, 0.9fr) minmax(0, 1.4fr);
 }
 
+.table-row--stores {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.table-row--store-access {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+a.table-row {
+  text-decoration: none;
+  color: inherit;
+}
+
+.table-row--selected {
+  border-color: var(--accent-strong);
+  background: rgba(255, 255, 255, 0.95);
+}
+
 .status-pill {
   display: inline-flex;
   align-items: center;
@@ -709,7 +741,8 @@ a {
   .table-row--users,
   .table-row--invoices,
   .table-row--stock,
-  .table-row--audit {
+  .table-row--audit,
+  .table-row--store-access {
     grid-template-columns: 1fr;
   }
 

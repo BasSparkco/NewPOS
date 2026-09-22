@@ -19,6 +19,7 @@ internal static class WebAuthorizationPolicies
     public const string ManageUsers = "Permission:ManageUsers";
     public const string ManageSettings = "Permission:ManageSettings";
     public const string ProcessRefunds = "Permission:ProcessRefunds";
+    public const string ManageStores = "Permission:ManageStores";
 }
 
 internal static class WebRateLimitPolicies

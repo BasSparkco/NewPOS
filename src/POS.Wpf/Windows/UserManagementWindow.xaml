@@ -117,6 +117,7 @@
                               IsEnabled="{Binding CanEditManageUsersPermission}"/>
                     <CheckBox x:Name="UsersPermManageSettingsCheck" Margin="0,8,0,0" IsChecked="{Binding PermManageSettings}"/>
                     <CheckBox x:Name="UsersPermProcessRefundsCheck" Margin="0,8,0,0" IsChecked="{Binding PermProcessRefunds}"/>
+                    <CheckBox x:Name="UsersPermManageStoresCheck" Margin="0,8,0,0" IsChecked="{Binding PermManageStores}"/>
 
                     <Button x:Name="UsersSavePermissionsBtn"
                             Margin="0,14,0,0"

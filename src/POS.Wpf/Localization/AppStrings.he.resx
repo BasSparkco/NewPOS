@@ -144,6 +144,7 @@
   <data name="Users_PermManageUsers" xml:space="preserve"><value>ניהול משתמשים ותפקידים</value></data>
   <data name="Users_PermManageSettings" xml:space="preserve"><value>ניהול הגדרות</value></data>
   <data name="Users_PermProcessRefunds" xml:space="preserve"><value>ביצוע החזרים</value></data>
+  <data name="Users_PermManageStores" xml:space="preserve"><value>ניהול סניפים (יצירת סניפים, הענקת גישה)</value></data>
   <data name="Users_SavePermissions" xml:space="preserve"><value>שמירת הרשאות</value></data>
   <data name="Users_SelectRoleForPermissions" xml:space="preserve"><value>נא לבחור תפקיד לעריכה.</value></data>
   <data name="Users_PermissionsSavedFormat" xml:space="preserve"><value>ההרשאות עבור '{0}' נשמרו.</value></data>

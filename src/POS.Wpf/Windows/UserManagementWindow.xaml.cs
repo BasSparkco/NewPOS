@@ -48,6 +48,7 @@ public partial class UserManagementWindow : Window
         UsersPermManageUsersCheck.Content = Locale.Get("Users_PermManageUsers");
         UsersPermManageSettingsCheck.Content = Locale.Get("Users_PermManageSettings");
         UsersPermProcessRefundsCheck.Content = Locale.Get("Users_PermProcessRefunds");
+        UsersPermManageStoresCheck.Content = Locale.Get("Users_PermManageStores");
         UsersSavePermissionsBtn.Content = Locale.Get("Users_SavePermissions");
 
         UsersUsernameCol.Header = Locale.Get("Users_ColUsername");

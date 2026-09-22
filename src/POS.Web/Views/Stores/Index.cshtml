@@ -1,0 +1,138 @@
+@model POS.Web.Models.StoresViewModel
+@{
+    ViewData["Title"] = "Stores";
+}
+
+<section class="management-hero">
+    <div class="hero-copy">
+        <div>
+            <span class="eyebrow">Tenant administration</span>
+            <h1 class="hero-title">Manage your business's branches and who can work at each one.</h1>
+            <p class="hero-subtitle">
+                Every store below belongs to your tenant and shares its product catalog and base currency
+                (tenant.md &sect;3). Creating a store here adds a new branch; granting access lets a
+                cashier or manager switch into it from the store selector in the header.
+            </p>
+        </div>
+    </div>
+</section>
+
+@if (TempData["StoresSuccess"] is string successMessage)
+{
+    <div class="flash-message flash-message--success">@successMessage</div>
+}
+
+@if (TempData["StoresError"] is string errorMessage)
+{
+    <div class="flash-message flash-message--error">@errorMessage</div>
+}
+
+<section class="panel-grid">
+    <article class="panel panel--span-4 panel-stack">
+        <div class="panel-header">
+            <div>
+                <span class="eyebrow">Branches</span>
+                <h2 class="panel-title">Stores in this tenant</h2>
+            </div>
+        </div>
+
+        @if (Model.Stores.Count == 0)
+        {
+            <div class="empty-state">No stores yet.</div>
+        }
+        else
+        {
+            <div class="table-list">
+                @foreach (var store in Model.Stores)
+                {
+                    <a asp-action="Index" asp-route-storeId="@store.Id"
+                       class="table-row table-row--stores @(store.Id == Model.SelectedStoreId ? "table-row--selected" : "")">
+                        <div>
+                            <div class="table-main">@store.Name</div>
+                            <div class="table-sub">@store.BaseCurrencyCode @(store.Id == Model.ActiveStoreId ? "• active now" : "")</div>
+                        </div>
+                    </a>
+                }
+            </div>
+        }
+
+        <div class="section-divider"></div>
+
+        <div class="panel-stack">
+            <div>
+                <span class="eyebrow">New branch</span>
+                <h3 class="panel-title">Create a store</h3>
+            </div>
+            <form asp-action="Create" method="post" class="panel-stack">
+                @Html.AntiForgeryToken()
+                <div>
+                    <label for="new-store-name">Name</label>
+                    <input id="new-store-name" name="Name" class="form-control" autocomplete="off" />
+                </div>
+                <div>
+                    <label for="new-store-address">Address</label>
+                    <input id="new-store-address" name="Address" class="form-control" autocomplete="off" />
+                </div>
+                <div>
+                    <label for="new-store-phone">Phone</label>
+                    <input id="new-store-phone" name="Phone" class="form-control" autocomplete="off" />
+                </div>
+                <button type="submit" class="shell-button">Create store</button>
+            </form>
+        </div>
+    </article>
+
+    <article class="panel panel--span-8 panel-stack">
+        <div class="panel-header">
+            <div>
+                <span class="eyebrow">Access</span>
+                <h2 class="panel-title">Who can work at @(Model.SelectedStoreName ?? "this store")</h2>
+            </div>
+            <div class="muted">A user's home store (bold) always has access and cannot be revoked here.</div>
+        </div>
+
+        @if (Model.SelectedStoreId == Guid.Empty)
+        {
+            <div class="empty-state">Select a store to manage its access.</div>
+        }
+        else if (Model.AccessRows.Count == 0)
+        {
+            <div class="empty-state">No tenant users exist yet.</div>
+        }
+        else
+        {
+            <div class="table-list">
+                @foreach (var row in Model.AccessRows)
+                {
+                    <div class="table-row table-row--store-access">
+                        <div class="table-main">@(row.IsHomeStore ? $"{row.Username} (home store)" : row.Username)</div>
+                        <div>
+                            @if (row.IsHomeStore)
+                            {
+                                <span class="muted">Always has access</span>
+                            }
+                            else if (row.HasAccess)
+                            {
+                                <form asp-action="RevokeAccess" method="post" class="inline-form-actions">
+                                    @Html.AntiForgeryToken()
+                                    <input type="hidden" name="userId" value="@row.UserId" />
+                                    <input type="hidden" name="storeId" value="@Model.SelectedStoreId" />
+                                    <button type="submit" class="shell-button shell-button--ghost">Revoke access</button>
+                                </form>
+                            }
+                            else
+                            {
+                                <form asp-action="GrantAccess" method="post" class="inline-form-actions">
+                                    @Html.AntiForgeryToken()
+                                    <input type="hidden" name="userId" value="@row.UserId" />
+                                    <input type="hidden" name="storeId" value="@Model.SelectedStoreId" />
+                                    <button type="submit" class="shell-button">Grant access</button>
+                                </form>
+                            }
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+    </article>
+</section>

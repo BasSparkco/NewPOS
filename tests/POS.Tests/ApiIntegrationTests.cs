@@ -357,6 +357,165 @@ public class ApiIntegrationTests
         Assert.Equal(3, staleResult.ServerSyncVersion);
     }
 
+    /// <summary>
+    /// Deterministic proof of the concurrency-double-push fix's actual mechanism, independent of real
+    /// request timing: two <see cref="PosDbContext"/> instances both load the same invoice while it is
+    /// still at SyncVersion 1 (mirroring two concurrent pushes' read phase, neither having committed
+    /// yet), the first applies and commits its update, and the second — still holding its now-stale
+    /// original SyncVersion — must be rejected rather than silently overwrite the first's committed
+    /// effect. <see cref="InvoiceConfiguration"/> now marks <c>SyncVersion</c> as an EF concurrency
+    /// token specifically so this throws instead of succeeding; before that change this test fails
+    /// (both writes succeed, the second silently reapplying the same change).
+    /// </summary>
+    [Fact]
+    public async Task Invoice_concurrency_token_rejects_a_stale_concurrent_update_instead_of_silently_reapplying_it()
+    {
+        using var factory = new ApiTestFactory();
+        using var client = factory.CreateClient();
+
+        await AuthorizeAsync(client);
+        var product = await GetProductAsync(client, "Sample Item A");
+
+        var invoiceId = Guid.NewGuid();
+        var lineId = Guid.NewGuid();
+        var deviceId = Guid.NewGuid();
+        var now = DateTime.UtcNow;
+
+        var created = await PostAndReadAsync<InvoiceSyncPushResultResponse>(client, "/api/sync/invoices/push", new InvoiceSyncBatchRequest(
+        [
+            new InvoiceSyncInvoiceRequest(
+                invoiceId, deviceId, "Concurrency Test Device", 1, (int)InvoiceStatus.Open, 20m, 0m, "USD", null, now, now,
+                [new InvoiceSyncLineRequest(lineId, product.Id, 2m, 10m, 0m, 20m, now, now, false)],
+                [])]));
+        Assert.Equal("Applied", Assert.Single(created.Results).Status);
+
+        await using var scope = factory.Services.CreateAsyncScope();
+        var dbFactory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<PosDbContext>>();
+
+        await using var ctxA = await dbFactory.CreateDbContextAsync();
+        await using var ctxB = await dbFactory.CreateDbContextAsync();
+
+        // Both contexts read the invoice while it is still at SyncVersion 1 — the same stale-read
+        // starting point two genuinely concurrent HTTP pushes would each see before either commits.
+        var invoiceA = await ctxA.Invoices.SingleAsync(i => i.Id == invoiceId);
+        var invoiceB = await ctxB.Invoices.SingleAsync(i => i.Id == invoiceId);
+        Assert.Equal(1, invoiceA.SyncVersion);
+        Assert.Equal(1, invoiceB.SyncVersion);
+
+        invoiceA.Status = InvoiceStatus.Paid;
+        invoiceA.SyncVersion = 2;
+        await ctxA.SaveChangesAsync();
+
+        invoiceB.Status = InvoiceStatus.Paid;
+        invoiceB.SyncVersion = 2;
+        await Assert.ThrowsAsync<DbUpdateConcurrencyException>(() => ctxB.SaveChangesAsync());
+
+        await using var verifyDb = await dbFactory.CreateDbContextAsync();
+        var finalInvoice = await verifyDb.Invoices.AsNoTracking().SingleAsync(i => i.Id == invoiceId);
+        Assert.Equal(2, finalInvoice.SyncVersion);
+        Assert.Equal(InvoiceStatus.Paid, finalInvoice.Status);
+    }
+
+    /// <summary>
+    /// End-to-end companion to the deterministic test above, covering the T6 matrix row "retry sale/
+    /// refund after server commit but before acknowledgement → single financial and stock effect":
+    /// several genuinely concurrent HTTP pushes of the *identical* payload (same invoice, same target
+    /// SyncVersion, same line/payment ids — exactly what a client's background sync worker sends when it
+    /// retries a push whose acknowledgement was lost) must never leave more than one stock-ledger entry,
+    /// double-count the sale, or leak an unhandled 500 to a losing racer.
+    /// <para>
+    /// Empirically, against this in-process <c>WebApplicationFactory</c>/SQLite test host, these
+    /// concurrent requests were observed to fully serialize even at 40-way concurrency with the fix
+    /// reverted — SQLite's single-writer file locking (and/or the test host's request scheduling)
+    /// apparently never lets two requests' reads both land before either commits, so this test alone
+    /// could not be made to reproduce the race end-to-end even against the pre-fix code. It is kept as a
+    /// real regression test for "repeated identical retries never corrupt state or crash the server,"
+    /// while <see cref="Invoice_concurrency_token_rejects_a_stale_concurrent_update_instead_of_silently_reapplying_it"/>
+    /// is the test that actually proves the fix's mechanism (it forces the interleave directly instead of
+    /// hoping for it). Whether genuine multi-connection interleaving is reachable in practice against a
+    /// real MVCC engine under load is exactly what the still-pending live PostgreSQL rehearsal must
+    /// confirm — see STATUS.md's Stage 4T section.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public async Task Concurrent_retries_of_the_same_invoice_completion_produce_exactly_one_stock_effect()
+    {
+        using var factory = new ApiTestFactory();
+        using var client = factory.CreateClient();
+
+        await AuthorizeAsync(client);
+        var product = await GetProductAsync(client, "Sample Item A");
+        var startingQuantity = product.QuantityOnHand;
+
+        var invoiceId = Guid.NewGuid();
+        var lineId = Guid.NewGuid();
+        var paymentId = Guid.NewGuid();
+        var deviceId = Guid.NewGuid();
+        var now = DateTime.UtcNow;
+
+        // Seed the invoice already carrying its line and payment (Open, no stock/financial effect yet)
+        // so the race below is a pure "flip to Paid" update with no new child row to insert — a colliding
+        // insert on a retried Payment/line id would already be rejected by its own primary key, which
+        // would mask the actual bug this test targets (a duplicated StockMovement, not a duplicated
+        // Payment). Isolating the update-only race is what actually exercises the missing-concurrency-
+        // token gap.
+        var seeded = await PostAndReadAsync<InvoiceSyncPushResultResponse>(client, "/api/sync/invoices/push", new InvoiceSyncBatchRequest(
+        [
+            new InvoiceSyncInvoiceRequest(
+                invoiceId, deviceId, "Concurrency Retry Device", 1, (int)InvoiceStatus.Open, 20m, 0m, "USD", null, now, now,
+                [new InvoiceSyncLineRequest(lineId, product.Id, 2m, 10m, 0m, 20m, now, now, false)],
+                [new InvoiceSyncPaymentRequest(paymentId, 20m, 0, now, now, now, false)])]));
+        Assert.Equal("Applied", Assert.Single(seeded.Results).Status);
+
+        var completionPayload = new InvoiceSyncBatchRequest(
+        [
+            new InvoiceSyncInvoiceRequest(
+                invoiceId, deviceId, "Concurrency Retry Device", 2, (int)InvoiceStatus.Paid, 20m, 0m, "USD", null, now, now,
+                [new InvoiceSyncLineRequest(lineId, product.Id, 2m, 10m, 0m, 20m, now, now, false)],
+                [new InvoiceSyncPaymentRequest(paymentId, 20m, 0, now, now, now, false)])]);
+
+        const int concurrentRetries = 8;
+        var responses = await Task.WhenAll(Enumerable.Range(0, concurrentRetries)
+            .Select(_ => client.PostAsJsonAsync("/api/sync/invoices/push", completionPayload)));
+
+        foreach (var response in responses)
+        {
+            Assert.True(
+                response.StatusCode is HttpStatusCode.OK or HttpStatusCode.Conflict,
+                $"Expected a graceful OK/Conflict, got {response.StatusCode}.");
+        }
+
+        var okResults = new List<InvoiceSyncInvoiceResultResponse>();
+        foreach (var response in responses.Where(r => r.StatusCode == HttpStatusCode.OK))
+        {
+            var payload = await response.Content.ReadFromJsonAsync<InvoiceSyncPushResultResponse>();
+            Assert.NotNull(payload);
+            okResults.Add(Assert.Single(payload.Results));
+        }
+
+        // At least one racer must have actually applied the completion — the invariant below would hold
+        // trivially (and uselessly) if every racer failed.
+        Assert.Contains(okResults, r => r.Status is "Applied" or "Skipped");
+
+        await using var scope = factory.Services.CreateAsyncScope();
+        var dbFactory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<PosDbContext>>();
+        await using var db = await dbFactory.CreateDbContextAsync();
+
+        var finalInvoice = await db.Invoices.AsNoTracking().SingleAsync(i => i.Id == invoiceId);
+        Assert.Equal(InvoiceStatus.Paid, finalInvoice.Status);
+        Assert.Equal(2, finalInvoice.SyncVersion);
+
+        var stockMovements = await db.StockMovements.AsNoTracking().Where(m => m.InvoiceId == invoiceId).ToListAsync();
+        Assert.Single(stockMovements);
+        Assert.Equal(-2m, stockMovements[0].QuantityDelta);
+
+        var payments = await db.Payments.AsNoTracking().Where(p => p.InvoiceId == invoiceId).ToListAsync();
+        Assert.Single(payments);
+
+        var finalProduct = await GetProductAsync(client, "Sample Item A");
+        Assert.Equal(startingQuantity - 2m, finalProduct.QuantityOnHand);
+    }
+
     [Fact]
     public async Task Sync_endpoint_reconciles_inventory_when_paid_invoice_is_later_refunded()
     {

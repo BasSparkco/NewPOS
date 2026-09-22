@@ -1,4 +1,6 @@
 ﻿@using System.Security.Claims
+@inject POS.Application.Abstractions.ICurrentSession CurrentSession
+@inject POS.Application.Abstractions.IStoreAccessService StoreAccessService
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -19,11 +21,26 @@
 
             @if (User.Identity?.IsAuthenticated == true)
             {
+                var accessibleStores = await StoreAccessService.GetAccessibleStoresAsync();
                 <div class="shell-actions">
                     <a class="shell-link" asp-controller="Dashboard" asp-action="Index">Dashboard</a>
                     <a class="shell-link" asp-controller="Management" asp-action="Index">Management</a>
+                    <a class="shell-link" asp-controller="Stores" asp-action="Index">Stores</a>
                     <a class="shell-link" asp-controller="Audit" asp-action="Index">Audit log</a>
                     <a class="shell-link" asp-controller="Account" asp-action="ChangePassword">Change password</a>
+                    @if (accessibleStores.Count > 1)
+                    {
+                        <form asp-controller="Stores" asp-action="Switch" method="post" class="store-switcher">
+                            @Html.AntiForgeryToken()
+                            <input type="hidden" name="returnUrl" value="@(Context.Request.Path + Context.Request.QueryString)" />
+                            <select name="storeId" class="store-switcher__select" onchange="this.form.submit()" aria-label="Active store">
+                                @foreach (var store in accessibleStores)
+                                {
+                                    <option value="@store.Id" selected="@(store.Id == CurrentSession.StoreId ? "selected" : null)">@store.Name</option>
+                                }
+                            </select>
+                        </form>
+                    }
                     <div class="user-chip">
                         <span class="user-chip__name">@User.Identity.Name</span>
                         <span class="user-chip__role">@User.FindFirstValue(ClaimTypes.Role)</span>
