@@ -6,12 +6,14 @@ reconciliation. This is a **manual runbook** — it requires a real Windows mach
 executed yet (this environment cannot drive a WPF GUI). See "What's already proven automatically"
 below for what does not need to be repeated by hand.
 
-## Prerequisite
+## Prerequisite — done
 
-`https://pos-api-staging.sparkco.vip` must be externally reachable first — see
-[STATUS.md](../STATUS.md)'s staging deployment entry (point 9) for the current blocker (Cloudflare
-proxying breaks Traefik's ACME challenge for the wildcard subdomain) and the two options to resolve
-it. Everything below assumes that is resolved and a test tenant has been provisioned per
+`https://pos-api-staging.sparkco.vip` is externally reachable with a trusted certificate (verified
+2026-09-23 — see [STATUS.md](../STATUS.md)'s staging deployment entry, point 9). A real test tenant
+already exists from the PostgreSQL rehearsal itself: slug `rehearsal-co`, admin username `owner`,
+one store ("Main Store"), one product ("Rehearsal Product"), and 13 invoices already pushed through
+it (see STATUS.md point 7) — reuse it directly rather than provisioning a new one, unless a clean
+slate is preferred, in which case provision a fresh tenant per
 [STAGING_DEPLOYMENT.md](STAGING_DEPLOYMENT.md)'s "Seeding test data" section (tenant slug
 `staging-rehearsal`, admin username `owner`).
 
@@ -24,9 +26,11 @@ it. Everything below assumes that is resolved and a test tenant has been provisi
 2. Choose "Join an existing business."
 3. Enter:
    - API URL: `https://pos-api-staging.sparkco.vip`
-   - Business slug: `staging-rehearsal`
+   - Business slug: `rehearsal-co` (or a fresh tenant's slug, if provisioned separately)
    - Username: `owner`
-   - Password: (the one used when provisioning the tenant)
+   - Password: `RehearsalPass123!` (a disposable staging-only credential — not a real secret; the
+     tenant, its data, and this password should all be treated as throwaway fixture data, not
+     anything to keep secure long-term)
 4. Confirm the join succeeds and the app proceeds straight to the main cashier screen (no separate
    login step — `BusinessJoinService` signs the session in as part of the join). Confirm the store
    name shown matches "Main Store."
