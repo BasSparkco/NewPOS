@@ -46,10 +46,20 @@ Separate databases or customer-hosted installations may be offered later. They a
 | Users | Add TenantId and NormalizedUsername; retain credential hash and active state; add/reuse authentication version | Username uniqueness becomes tenant-scoped. Same username may exist in different tenants. |
 | Roles | Add TenantId; preserve existing PermissionsMask | Names and edits are tenant-scoped. Built-in role templates may be global definitions, but tenant role instances are independent. |
 | UserStoreAccess | TenantId, UserId, StoreId | Explicit allowed stores, with a unique tenant/user/store tuple. Existing User.StoreId can remain temporarily as the default store, not the sole authorization mechanism. |
-| Devices | Add TenantId; preserve StoreId; add/reuse enrollment and revocation metadata | Device credentials are independently revocable. A caller cannot enroll into an arbitrary store. |
+| Devices | Add TenantId; preserve StoreId; add/reuse enrollment and revocation metadata; add RegisterId, DeviceSecretHash | Device credentials are independently revocable. A caller cannot enroll into an arbitrary store. A Device is the *physical machine*; see the Registers row below for the *logical till*. |
+| Registers (new, 2026-09-21) | Id, TenantId, StoreId, Number, Name, IsActive | The logical till/register — a stable identity (number, sale/cash-session history) that outlives the physical machine bound to it. See §2.3a below; replaces the earlier assumption that Device alone could serve as "the register." |
 | Tenant currency policy | Canonical tenant base currency and rates, adapted from actual existing entities | See currency compatibility rule below. Do not invent duplicate competing settings. |
+| CashSession / CashMovement (new, 2026-09-21) | CashSession: Id, TenantId, StoreId, RegisterId, OpenedByUserId, ClosedByUserId, OpeningCashAmount, ClosingCountedAmount, ExpectedCashAmount, DiscrepancyAmount, CurrencyCode, Status, IsSharedSession. CashMovement: Id, TenantId, CashSessionId, Type (OpeningFloat/SaleReceipt/Refund/CashIn/CashOut), Amount, Method, CurrencyCode, InvoiceId, PaymentId, PerformedByUserId, ApprovedByUserId | The financial cash-drawer session on a Register. See §5a below — this is now a required milestone (T4.5), not an optional backlog item. |
 
 Use tenant-scoped roles plus explicit store access for the first release. A tenant administrator can manage their business; they are not a platform administrator. Permissions and store access must both be satisfied. Preserve the rule preventing removal of the last viable tenant administrator.
+
+### 2.3a Register vs. Device (amendment, 2026-09-21)
+
+The original plan treated `Device` as the sole "Box" concept — one row per physical machine, doubling as the register a cashier sells against. Building the cash-session work surfaced a real gap: **a register must keep its stable number and sale/cash-session history when its computer is replaced**, and `Device` alone cannot express that, since replacing hardware naturally means a new `Device` row (new enrollment, new machine name).
+
+Resolution: `Register` is the stable, logical till (`Id, StoreId, Number, Name`). `Device` remains the physical machine and now carries `RegisterId`, binding it to the logical till it currently serves. `Invoice.RegisterId` (alongside the existing `Invoice.DeviceId`) is the durable key for a sale's till — replacing a till's computer means provisioning a new `Device` bound to the *same* `Register.Id`, not a new register. `Store` is unaffected and remains the branch identifier, unchanged from the original decision in §2.3.
+
+Migration: existing installs backfill one `Register` per pre-existing `Device` (preserving today's 1:1 assumption), using an id **deterministically derived from the Device's own id** (not a random GUID) so a WPF install and its API server, which may each run this backfill independently against their own copy of the same already-synced `Devices` table, converge on the same `Register` identity without a coordinated migration run or a new sync round-trip. `Register` does not yet have its own push/pull sync surface; this deterministic convergence is a deliberate, narrower substitute for one, open for a future T4/T5 pass once cross-store register administration needs it.
 
 ### Ownership by data family
 
@@ -103,6 +113,28 @@ If existing stores that belong to one tenant use different base currencies, T0 m
 - Implement the same permission model for desktop, web and API services. A valid token never grants every action within a tenant.
 - Recheck current active status, store assignments and authentication/permission version online. Bound stale token/session privileges with an explicit invalidation mechanism.
 - Tenant administrators manage users and store assignments only inside their tenant. Platform operations need separate authorization and audit; never make every business Admin a platform Admin.
+
+### 5a. Device authentication is not a substitute for employee login (amendment, 2026-09-21)
+
+The T0 audit found that `/api/sync/*` endpoints authenticated every call as "whoever is currently signed in," including background sync — meaning there was no device-scoped credential at all, and a signed-in user's own identity was trusted uncritically for sync payload fields it should not have controlled. Resolution, now implemented:
+
+- **Two distinct credential types issued by the same JWT infrastructure, distinguished by a `token_type` claim.** A **user token** (`token_type` absent/"user") comes from `/api/auth/login`, carries the employee's identity, tenant, store and permissions, and is required for every business operation (sales, refunds, administration) and for accountability. A **device token** (`token_type=device`) comes from `/api/devices/token`, verified against a persistent secret issued once at enrollment (`Device.DeviceSecretHash`, distinct from the one-time `EnrollmentCodeHash`), carries only `tenant_id`/`store_id`/`device_id`, and authorizes background synchronization only.
+- **A device token can never reach a business-operation endpoint.** The API's default authorization policy rejects any request whose token carries `token_type=device`; a named `SyncPolicy` opts a deliberately narrow set of endpoints back in — invoice push/pull and every read-only catalog/settings/user/device/audit pull. Administrative pushes (products, categories, settings, users, devices, currency policy) stay on the default (user-only) policy, matching this section's existing rule that admin actions require online *user* authorization, not merely an online *device*.
+- **Synchronization may continue after an employee logs out**, using the device token instead of a cached user session — this is the concrete mechanism behind "device credentials authenticate the terminal for scoped background synchronization." (WPF-side: the persistent secret is generated and returned once at enrollment; wiring the background sync worker to fall back to it when no user is logged in — which requires resolving the active tenant/store from the device's own identity rather than the transient user session across every sync method — is scoped but not yet implemented; see STATUS.md.)
+- **The server validates authorization rather than trusting a submitted UserId.** The invoice-push endpoint previously resolved a pushed invoice's actor from the payload's username string, silently falling back to whichever user happened to be making the HTTP call if that lookup failed — a real misattribution path ("every business operation must retain its original actor" did not actually hold). Fixed: the payload's username must resolve to a genuine, active user of the *same tenant*, or the invoice is rejected outright (never silently reattributed to the caller). A device-authenticated push additionally cannot claim a `DeviceId` other than its own authenticated identity.
+- **Every business operation still retains its original actor and any approving manager.** `Invoice.UserId` is unchanged as the sale's actor. Where a privileged manual action benefits from a second identity's sign-off (a cash-drawer removal above a configurable threshold — see §5b), a distinct `ApprovedByUserId` is recorded and server-verified to belong to a different, sufficiently-permissioned user — never the same person self-approving.
+
+### 5b. Cash session management (amendment, 2026-09-21) — promoted to a required milestone
+
+Cash-register/session management was originally a "promoted extension" backlog candidate (ROADMAP.md), deferred behind core tenancy work. It is now **T4.5, required before the T7 pilot** — a live pilot cannot run without a real accounting of the cash drawer. Full chart-of-accounts/general-ledger accounting remains explicitly out of scope; this is a session ledger, not an accounting engine.
+
+- `CashSession` tracks: opening cash, closing count, computed expected balance, and the resulting discrepancy, scoped to one `Register` at a time (see §2.3a — not per-employee floating tills).
+- `CashMovement` rows record every cash receipt, refund, and manual addition/removal against the session, each preserving `InvoiceId`/`PaymentId` back to the originating sale where applicable — the connection to the original sale survives even though the movement is tagged to whichever session is open when the refund happens (a sale and its later refund can legitimately fall in different sessions).
+- Payment methods and currencies stay distinguishable per movement (`Method`, `CurrencyCode`); the expected-balance calculation only sums cash-method movements, so card/other-method sales do not distort the cash count.
+- **Employee logout never closes a session.** `CashSession`/`CashMovement` live in the database keyed by `Register`/user, entirely independent of `ICurrentSession`; closing a session is always its own explicit action.
+- **Configuration, not code, chooses the workflow.** A `Cash:SessionMode` store setting selects `PerCashier` (default — each cashier opens and owns their own session; clearest accountability, matching "start with fixed registers") or `PerRegister` (one shared drawer any authorized cashier can record against/close). Either mode still allows at most one *open* session per register at a time — this is a fixed-register model, not a floating-till one, per this document's explicit scope boundary (§10).
+- A manual cash removal (`CashOut`) can require a second, sufficiently-permissioned user's approval via a `Cash:RequireApprovalForCashOut` setting — off by default, so a simple single-cashier store is not forced into a workflow it does not need.
+- Recording a sale/refund's cash movement is best-effort and never blocks the sale: if no session happens to be open on that register, the payment simply is not attached to one. Whether opening a session should ever be *mandatory* before selling is a store-policy decision left open for T5.
 
 ### Offline behavior
 
@@ -189,6 +221,17 @@ Exit: an enrolled cashier can sell offline in the correct store, cannot access a
 
 Exit: two tenants and multiple stores/devices synchronize without leakage, dropped transactions or duplicate stock effects; conflicts remain visible and recoverable.
 
+### T4.5 — Cash session management (added 2026-09-21) — required before T7
+
+Promoted from the "Promoted Extensions" backlog (ROADMAP.md) to a required gate: a live pilot cannot responsibly run without a real cash-drawer accounting. See §5b for the full design. Full accounting-engine work (chart of accounts, journals, P&L) stays out of scope.
+
+- `Register`, `CashSession`, `CashMovement` entities, relationships and a store-configurable `Cash:SessionMode` (per-cashier/shared) land with T1/T4's schema work rather than waiting for T5, so the ownership model is established once rather than retrofitted.
+- Cash movements are recorded for sales/refunds automatically when a session is open, without ever blocking the sale itself.
+- Open/close/cash-in/cash-out actions are available from at least one client (WPF or Web); a manager-approval option exists for cash removals.
+- Cash-session data participates in the same tenant/store isolation guarantees as every other aggregate (T6 below extends its test matrix to cover this).
+
+Exit: a cashier can open a session, sell, take a refund, record a manual cash movement, and close the session with a correct expected-balance/discrepancy calculation; the session survives that cashier logging out mid-shift; two tenants' cash sessions never leak into each other.
+
 ### T5 — Tenant-aware administration and branch access
 
 - Adapt existing POS.Web screens, reports, products, categories, users, settings and stock ledger.
@@ -221,6 +264,10 @@ Required coverage:
 | Cached reports, exports, jobs and store switches | Correct ownership throughout. |
 | Same product sold at A1 and A2 | Shared definition, independent balances. |
 | Cross-tenant database FK insertion attempt | Constraint rejects it. |
+| Guess/reference another tenant's Register or CashSession id | No data disclosure or mutation (T4.5). |
+| Close a cash session opened under a different tenant/store | Rejected. |
+| A device token attempts a business operation (sale, refund) or an administrative sync push | Rejected regardless of the token's tenant/store claims. |
+| An invoice sync payload attributes the sale to a nonexistent or cross-tenant username | Rejected; never silently attributed to the pushing caller. |
 
 Preserve the existing sale, hold/resume, receipt, refund, permissions, currency and UI regression coverage. Security tests should target real service/endpoints and constraints, not merely assert that a property named TenantId exists.
 
@@ -271,6 +318,7 @@ multi-branch reporting. Preserve the existing desktop, sync and dashboard work.
 - [ ] T2 — Verified identity, enrollment and server-side authorization.
 - [ ] T3 — Tenant/store-bound desktop profiles and offline access.
 - [ ] T4 — Scoped, authorized and replay-safe synchronization.
+- [ ] T4.5 — Cash session management (required before T7; see §5b, §7).
 - [ ] T5 — Tenant-aware administration and store access.
 - [ ] T6 — Isolation, migration and resilience release tests.
 - [ ] T7 — Recovery rehearsal and controlled pilot.
@@ -291,9 +339,9 @@ is preserved; production username-only authentication is removed.
 
 ## 10. Scope boundaries
 
-Included: ownership, identity, store access, isolation, safe migration, offline profiles, sync adaptation, administration adaptation, tests and recovery readiness.
+Included: ownership, identity, store access, isolation, safe migration, offline profiles, sync adaptation, administration adaptation, tests, recovery readiness, and cash-session management (T4.5, promoted from backlog on 2026-09-21 — see §5b).
 
-Deferred: subscription billing automation, customer self-service signup, full platform support portal, payment processor integration, accounting engine, purchases module, IMEI/warranty workflows, stock-transfer UI, advanced branch analytics, mobile POS, restaurant features and per-store currency/price-list expansion.
+Deferred: subscription billing automation, customer self-service signup, full platform support portal, payment processor integration, full accounting engine (chart of accounts, journals, P&L/balance-sheet reporting — the cash-session ledger in §5b is a session ledger, not this), purchases module, IMEI/warranty workflows, stock-transfer UI, advanced branch analytics, mobile POS, restaurant features, per-store currency/price-list expansion, and floating/shared-till workflows beyond the fixed-register model in §5b (a store may configure per-cashier or shared sessions on a *fixed* register; a cashier's session following them between registers is not in scope).
 
 Those features remain in the main roadmap/backlog. They must inherit this ownership model when implemented. Tenant-wide data access does not itself implement branch stock transfers or guarantee operational readiness for every retail vertical.
 

@@ -17,6 +17,10 @@ internal sealed class InvoiceSyncService : IInvoiceSyncService
     private const int DefaultBatchSize = 25;
     private const string AuditLogsPullCursorSettingKey = "Sync.AuditLogsPullSinceVersion";
     private const string AuditLogsPushCursorSettingKey = "Sync.AuditLogsPushSinceVersion";
+    private const string CashSessionPullCursorSettingKey = "Sync.CashSessionPullSinceVersion";
+    private const string CashSessionPushCursorSettingKey = "Sync.CashSessionPushSinceVersion";
+    private const string RegisterPullCursorSettingKey = "Sync.RegisterPullSinceVersion";
+    private const string RegisterPushCursorSettingKey = "Sync.RegisterPushSinceVersion";
     private const string CategoryPullCursorSettingKey = "Sync.CategoryPullSinceVersion";
     private const string CategoryPushCursorSettingKey = "Sync.CategoryPushSinceVersion";
     private const string CurrencyPolicyPullCursorSettingKey = "Sync.CurrencyPolicyPullSinceVersion";
@@ -37,8 +41,10 @@ internal sealed class InvoiceSyncService : IInvoiceSyncService
     private readonly IConfiguration _configuration;
     private readonly ICurrencyService _currencyService;
     private readonly IDbContextFactory<PosDbContext> _dbFactory;
+    private const string DeviceSecretSettingKey = "Sync.DeviceSecret";
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly ICurrentSession _session;
+    private readonly ICurrentDevice _currentDevice;
     // One sync pass (InvoiceSyncBackgroundService.ExecuteAsync) calls up to 16 push/pull methods against a
     // fresh scoped InvoiceSyncService instance; caching the authorized client for this instance's lifetime
     // turns that into a single /api/auth/login call per pass instead of one per method — both far kinder to
@@ -50,18 +56,44 @@ internal sealed class InvoiceSyncService : IInvoiceSyncService
         IHttpClientFactory httpClientFactory,
         IConfiguration configuration,
         ICurrencyService currencyService,
-        ICurrentSession session)
+        ICurrentSession session,
+        ICurrentDevice currentDevice)
     {
         _dbFactory = dbFactory;
         _httpClientFactory = httpClientFactory;
         _configuration = configuration;
         _currencyService = currencyService;
         _session = session;
+        _currentDevice = currentDevice;
+    }
+
+    /// <summary>
+    /// Restores TenantId/StoreId from the local database's single Store row when no interactive user is
+    /// signed in, so the background sync worker keeps running under a device credential after logout
+    /// (tenant.md §5a — device authentication is not a substitute for employee login, but it must still
+    /// let a logged-out terminal keep syncing). A no-op once a scope already exists (interactive login,
+    /// or a previous call in this same pass already resolved it) and a genuine no-op on a fresh install
+    /// with no Store yet.
+    /// </summary>
+    public async Task EnsureSyncScopeAsync(CancellationToken cancellationToken = default)
+    {
+        if (_session.HasSyncScope)
+            return;
+
+        await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken);
+        var store = await db.Stores
+            .AsNoTracking()
+            .Where(s => !s.IsDeleted)
+            .Select(s => new { s.Id, s.TenantId })
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (store is not null)
+            _session.SetDeviceSyncScope(store.TenantId, store.Id);
     }
 
     public async Task<InvoiceSyncRunResultDto> PushUnsyncedInvoicesAsync(CancellationToken cancellationToken = default)
     {
-        if (!_session.IsAuthenticated)
+        if (!_session.HasSyncScope)
             return new InvoiceSyncRunResultDto(0, 0, 0, 0);
 
         var enabled = _configuration.GetValue<bool?>("Sync:Enabled") ?? false;
@@ -139,7 +171,7 @@ internal sealed class InvoiceSyncService : IInvoiceSyncService
 
     public async Task<AuditLogSyncPushRunResultDto> PushUpdatedAuditLogsAsync(CancellationToken cancellationToken = default)
     {
-        if (!_session.IsAuthenticated)
+        if (!_session.HasSyncScope)
             return new AuditLogSyncPushRunResultDto(0, 0, 0, 0, EmptySequenceCursor);
 
         var enabled = _configuration.GetValue<bool?>("Sync:Enabled") ?? false;
@@ -218,7 +250,7 @@ internal sealed class InvoiceSyncService : IInvoiceSyncService
 
     public async Task<CategorySyncPushRunResultDto> PushUpdatedCategoriesAsync(CancellationToken cancellationToken = default)
     {
-        if (!_session.IsAuthenticated)
+        if (!_session.HasSyncScope)
             return new CategorySyncPushRunResultDto(0, 0, 0, 0, EmptySequenceCursor);
 
         var enabled = _configuration.GetValue<bool?>("Sync:Enabled") ?? false;
@@ -295,7 +327,7 @@ internal sealed class InvoiceSyncService : IInvoiceSyncService
 
     public async Task<CurrencyPolicySyncPushRunResultDto> PushCurrencyPolicyAsync(CancellationToken cancellationToken = default)
     {
-        if (!_session.IsAuthenticated)
+        if (!_session.HasSyncScope)
             return new CurrencyPolicySyncPushRunResultDto(0, 0, 0, 0, EmptySequenceCursor);
 
         var enabled = _configuration.GetValue<bool?>("Sync:Enabled") ?? false;
@@ -352,7 +384,7 @@ internal sealed class InvoiceSyncService : IInvoiceSyncService
 
     public async Task<DeviceSyncPushRunResultDto> PushUpdatedDevicesAsync(CancellationToken cancellationToken = default)
     {
-        if (!_session.IsAuthenticated)
+        if (!_session.HasSyncScope)
             return new DeviceSyncPushRunResultDto(0, 0, 0, 0, EmptySequenceCursor);
 
         var enabled = _configuration.GetValue<bool?>("Sync:Enabled") ?? false;
@@ -434,7 +466,7 @@ internal sealed class InvoiceSyncService : IInvoiceSyncService
 
     public async Task<CategorySyncPullRunResultDto> PullRemoteCategoriesAsync(CancellationToken cancellationToken = default)
     {
-        if (!_session.IsAuthenticated)
+        if (!_session.HasSyncScope)
             return new CategorySyncPullRunResultDto(0, 0, 0, 0, EmptySequenceCursor);
 
         var enabled = _configuration.GetValue<bool?>("Sync:Enabled") ?? false;
@@ -516,7 +548,7 @@ internal sealed class InvoiceSyncService : IInvoiceSyncService
 
     public async Task<CurrencyPolicySyncPullRunResultDto> PullCurrencyPolicyAsync(CancellationToken cancellationToken = default)
     {
-        if (!_session.IsAuthenticated)
+        if (!_session.HasSyncScope)
             return new CurrencyPolicySyncPullRunResultDto(0, 0, 0, 0, EmptySequenceCursor);
 
         var enabled = _configuration.GetValue<bool?>("Sync:Enabled") ?? false;
@@ -585,7 +617,7 @@ internal sealed class InvoiceSyncService : IInvoiceSyncService
 
     public async Task<AuditLogSyncPullRunResultDto> PullRemoteAuditLogsAsync(CancellationToken cancellationToken = default)
     {
-        if (!_session.IsAuthenticated)
+        if (!_session.HasSyncScope)
             return new AuditLogSyncPullRunResultDto(0, 0, 0, 0, EmptySequenceCursor);
 
         var enabled = _configuration.GetValue<bool?>("Sync:Enabled") ?? false;
@@ -672,7 +704,7 @@ internal sealed class InvoiceSyncService : IInvoiceSyncService
 
     public async Task<DeviceSyncPullRunResultDto> PullRemoteDevicesAsync(CancellationToken cancellationToken = default)
     {
-        if (!_session.IsAuthenticated)
+        if (!_session.HasSyncScope)
             return new DeviceSyncPullRunResultDto(0, 0, 0, 0, EmptySequenceCursor);
 
         var enabled = _configuration.GetValue<bool?>("Sync:Enabled") ?? false;
@@ -740,9 +772,184 @@ internal sealed class InvoiceSyncService : IInvoiceSyncService
         }
     }
 
+    /// <summary>
+    /// Registers must sync before CashSessions (interface contract) — a CashSession's RegisterId is a
+    /// required FK on the server, and a Register created locally by <c>DeviceManagementService.
+    /// ProvisionDeviceAsync</c> (a fresh <c>Guid.NewGuid()</c>, not the deterministic backfill id) would
+    /// otherwise never reach the server at all, since Register previously had no sync surface of its own.
+    /// </summary>
+    public async Task<RegisterSyncPushRunResultDto> PushUpdatedRegistersAsync(CancellationToken cancellationToken = default)
+    {
+        if (!_session.HasSyncScope)
+            return new RegisterSyncPushRunResultDto(0, 0, 0, 0, EmptySequenceCursor);
+
+        var enabled = _configuration.GetValue<bool?>("Sync:Enabled") ?? false;
+        var apiBaseUrl = _configuration["Sync:ApiBaseUrl"]?.Trim();
+        var batchSize = Math.Max(1, _configuration.GetValue<int?>("Sync:BatchSize") ?? DefaultBatchSize);
+
+        if (!enabled || string.IsNullOrWhiteSpace(apiBaseUrl))
+            return new RegisterSyncPushRunResultDto(0, 0, 0, 0, EmptySequenceCursor);
+
+        await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken);
+        var sinceVersion = await GetCursorAsync(db, RegisterPushCursorSettingKey, EmptySequenceCursor, cancellationToken);
+        if (!TryParseSequenceSinceVersion(sinceVersion, out var sinceSequence, out var normalizedSinceVersion))
+            return new RegisterSyncPushRunResultDto(0, 0, 0, 0, EmptySequenceCursor);
+
+        var changes = await GetGuidSyncChangesAsync(
+            db,
+            SyncAggregateTypes.Register,
+            sinceSequence,
+            batchSize,
+            _session.StoreId,
+            includeGlobalRows: false,
+            cancellationToken);
+
+        if (changes.Count == 0)
+            return new RegisterSyncPushRunResultDto(0, 0, 0, 0, normalizedSinceVersion);
+
+        var registerIds = changes.Select(change => change.EntityId).ToArray();
+        var registers = await db.Registers
+            .AsNoTracking()
+            .Where(r => r.StoreId == _session.StoreId && registerIds.Contains(r.Id))
+            .Select(r => new RegisterSyncDto(r.Id, r.Number, r.Name, r.IsActive, r.SyncVersion, r.CreatedAt, r.UpdatedAt, r.IsDeleted))
+            .ToListAsync(cancellationToken);
+
+        var payload = OrderByGuidSequence(changes, registers, item => item.RegisterId);
+
+        if (payload.Count == 0)
+            return new RegisterSyncPushRunResultDto(0, 0, 0, 0, normalizedSinceVersion);
+
+        var client = await TryCreateAuthorizedClientAsync(apiBaseUrl, cancellationToken);
+        if (client is null)
+            return new RegisterSyncPushRunResultDto(payload.Count, 0, 0, payload.Count, normalizedSinceVersion);
+
+        var response = await client.PostAsJsonAsync("api/sync/registers/push", new RegisterSyncBatchDto(payload), cancellationToken);
+        if (!response.IsSuccessStatusCode)
+            return new RegisterSyncPushRunResultDto(payload.Count, 0, 0, payload.Count, normalizedSinceVersion);
+
+        var result = await response.Content.ReadFromJsonAsync<RegisterSyncPushResultDto>(cancellationToken: cancellationToken)
+            ?? new RegisterSyncPushResultDto(Array.Empty<RegisterSyncItemResultDto>());
+
+        var nextCursor = ComputeNextGuidSequenceCursor(
+            changes,
+            result.Results,
+            normalizedSinceVersion,
+            row => row.RegisterId,
+            row => row.Status);
+
+        if (!string.Equals(nextCursor, normalizedSinceVersion, StringComparison.Ordinal))
+        {
+            await UpsertCursorAsync(db, RegisterPushCursorSettingKey, nextCursor, EmptySequenceCursor, cancellationToken);
+            await db.SaveChangesAsync(cancellationToken);
+        }
+
+        var sent = result.Results.Count(x => string.Equals(x.Status, "Applied", StringComparison.OrdinalIgnoreCase));
+        var skippedCount = result.Results.Count(x => string.Equals(x.Status, "Skipped", StringComparison.OrdinalIgnoreCase));
+        var failedCount = payload.Count - sent - skippedCount;
+
+        return new RegisterSyncPushRunResultDto(payload.Count, sent, skippedCount, failedCount, nextCursor);
+    }
+
+    public async Task<RegisterSyncPullRunResultDto> PullRemoteRegistersAsync(CancellationToken cancellationToken = default)
+    {
+        if (!_session.HasSyncScope)
+            return new RegisterSyncPullRunResultDto(0, 0, 0, 0, EmptySequenceCursor);
+
+        var enabled = _configuration.GetValue<bool?>("Sync:Enabled") ?? false;
+        var apiBaseUrl = _configuration["Sync:ApiBaseUrl"]?.Trim();
+        var batchSize = Math.Max(1, _configuration.GetValue<int?>("Sync:BatchSize") ?? DefaultBatchSize);
+
+        if (!enabled || string.IsNullOrWhiteSpace(apiBaseUrl))
+            return new RegisterSyncPullRunResultDto(0, 0, 0, 0, EmptySequenceCursor);
+
+        var client = await TryCreateAuthorizedClientAsync(apiBaseUrl, cancellationToken);
+        if (client is null)
+            return new RegisterSyncPullRunResultDto(0, 0, 0, 0, EmptySequenceCursor);
+
+        await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken);
+        var sinceVersion = await GetCursorAsync(db, RegisterPullCursorSettingKey, EmptySequenceCursor, cancellationToken);
+        var pullResponse = await client.GetAsync(
+            $"api/sync/registers/pull?sinceVersion={Uri.EscapeDataString(sinceVersion)}&batchSize={batchSize}",
+            cancellationToken);
+
+        if (!pullResponse.IsSuccessStatusCode)
+            return new RegisterSyncPullRunResultDto(0, 0, 0, 0, sinceVersion);
+
+        var payload = await pullResponse.Content.ReadFromJsonAsync<RegisterSyncPullResultDto>(cancellationToken: cancellationToken)
+            ?? new RegisterSyncPullResultDto(Array.Empty<RegisterSyncDto>(), sinceVersion);
+
+        if (payload.Registers.Count == 0)
+        {
+            if (!string.Equals(payload.NextSinceVersion, sinceVersion, StringComparison.Ordinal))
+            {
+                await UpsertCursorAsync(db, RegisterPullCursorSettingKey, payload.NextSinceVersion, EmptyGuidCursor, cancellationToken);
+                await db.SaveChangesAsync(cancellationToken);
+            }
+
+            return new RegisterSyncPullRunResultDto(0, 0, 0, 0, payload.NextSinceVersion);
+        }
+
+        await using var tx = await db.Database.BeginTransactionAsync(cancellationToken);
+        try
+        {
+            var applied = 0;
+            var skipped = 0;
+            var tenantId = await GetTenantIdAsync(db, cancellationToken);
+
+            foreach (var incoming in payload.Registers)
+            {
+                var existing = await db.Registers.FirstOrDefaultAsync(r => r.Id == incoming.RegisterId, cancellationToken);
+                if (existing is not null && existing.UpdatedAt >= incoming.UpdatedAt)
+                {
+                    skipped++;
+                    continue;
+                }
+
+                if (existing is null)
+                {
+                    db.Registers.Add(new Register
+                    {
+                        Id = incoming.RegisterId,
+                        TenantId = tenantId,
+                        StoreId = _session.StoreId,
+                        Number = incoming.Number,
+                        Name = incoming.Name,
+                        IsActive = incoming.IsActive,
+                        SyncVersion = incoming.SyncVersion,
+                        CreatedAt = incoming.CreatedAt,
+                        UpdatedAt = incoming.UpdatedAt,
+                        IsDeleted = incoming.IsDeleted
+                    });
+                }
+                else
+                {
+                    existing.Number = incoming.Number;
+                    existing.Name = incoming.Name;
+                    existing.IsActive = incoming.IsActive;
+                    existing.SyncVersion = incoming.SyncVersion;
+                    existing.UpdatedAt = incoming.UpdatedAt;
+                    existing.IsDeleted = incoming.IsDeleted;
+                }
+
+                applied++;
+            }
+
+            await UpsertCursorAsync(db, RegisterPullCursorSettingKey, payload.NextSinceVersion, EmptyGuidCursor, cancellationToken);
+            await db.SaveChangesAsync(cancellationToken);
+            await tx.CommitAsync(cancellationToken);
+
+            return new RegisterSyncPullRunResultDto(payload.Registers.Count, applied, skipped, 0, payload.NextSinceVersion);
+        }
+        catch
+        {
+            await tx.RollbackAsync(cancellationToken);
+            return new RegisterSyncPullRunResultDto(payload.Registers.Count, 0, 0, payload.Registers.Count, sinceVersion);
+        }
+    }
+
     public async Task<InvoiceSyncPullRunResultDto> PullRemoteInvoicesAsync(CancellationToken cancellationToken = default)
     {
-        if (!_session.IsAuthenticated)
+        if (!_session.HasSyncScope)
             return new InvoiceSyncPullRunResultDto(0, 0, 0, 0, EmptySequenceCursor);
 
         var enabled = _configuration.GetValue<bool?>("Sync:Enabled") ?? false;
@@ -794,7 +1001,17 @@ internal sealed class InvoiceSyncService : IInvoiceSyncService
                     continue;
                 }
 
-                var userId = await ResolveInvoiceUserIdAsync(db, incoming.Username, cancellationToken);
+                var resolvedUserId = await ResolveInvoiceUserIdAsync(db, incoming.Username, cancellationToken);
+                if (resolvedUserId is null)
+                {
+                    // Username was supplied but doesn't resolve locally yet — skip rather than
+                    // misattribute; this batch's cursor still advances regardless (same eventual-
+                    // consistency behavior as the "missing product" skip case above), so this invoice
+                    // is picked up correctly on a later pass once the user has synced down.
+                    skipped++;
+                    continue;
+                }
+                var userId = resolvedUserId.Value;
                 var device = await GetOrCreateSyncDeviceAsync(db, _session.StoreId, incoming, cancellationToken);
                 var existing = await db.Invoices
                     .Include(i => i.Items)
@@ -860,9 +1077,449 @@ internal sealed class InvoiceSyncService : IInvoiceSyncService
         }
     }
 
+    /// <summary>
+    /// Pushes CashSession aggregates (header + every movement) that changed locally since the cursor —
+    /// opening, manual cash in/out (with approval), sale/refund receipts, and closing counts/discrepancy
+    /// all move as one atomic snapshot per session, the same way Invoice pushes its Items/Payments
+    /// nested. Must run after invoice push and register push (see the interface doc) so the FKs a
+    /// movement/session snapshot references already exist server-side.
+    /// </summary>
+    public async Task<CashSessionSyncPushRunResultDto> PushUpdatedCashSessionsAsync(CancellationToken cancellationToken = default)
+    {
+        if (!_session.HasSyncScope)
+            return new CashSessionSyncPushRunResultDto(0, 0, 0, 0, EmptySequenceCursor);
+
+        var enabled = _configuration.GetValue<bool?>("Sync:Enabled") ?? false;
+        var apiBaseUrl = _configuration["Sync:ApiBaseUrl"]?.Trim();
+        var batchSize = Math.Max(1, _configuration.GetValue<int?>("Sync:BatchSize") ?? DefaultBatchSize);
+
+        if (!enabled || string.IsNullOrWhiteSpace(apiBaseUrl))
+            return new CashSessionSyncPushRunResultDto(0, 0, 0, 0, EmptySequenceCursor);
+
+        await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken);
+        var sinceVersion = await GetCursorAsync(db, CashSessionPushCursorSettingKey, EmptySequenceCursor, cancellationToken);
+        if (!TryParseSequenceSinceVersion(sinceVersion, out var sinceSequence, out var normalizedSinceVersion))
+            return new CashSessionSyncPushRunResultDto(0, 0, 0, 0, EmptySequenceCursor);
+
+        var changes = await GetGuidSyncChangesAsync(
+            db,
+            SyncAggregateTypes.CashSession,
+            sinceSequence,
+            batchSize,
+            _session.StoreId,
+            includeGlobalRows: false,
+            cancellationToken);
+
+        if (changes.Count == 0)
+            return new CashSessionSyncPushRunResultDto(0, 0, 0, 0, normalizedSinceVersion);
+
+        var sessionIds = changes.Select(change => change.EntityId).ToList();
+        var sessions = await BuildCashSessionSyncDtosAsync(db, sessionIds, cancellationToken);
+
+        var payload = OrderByGuidSequence(changes, sessions, item => item.CashSessionId);
+
+        if (payload.Count == 0)
+            return new CashSessionSyncPushRunResultDto(0, 0, 0, 0, normalizedSinceVersion);
+
+        var client = await TryCreateAuthorizedClientAsync(apiBaseUrl, cancellationToken);
+        if (client is null)
+            return new CashSessionSyncPushRunResultDto(payload.Count, 0, 0, payload.Count, normalizedSinceVersion);
+
+        var response = await client.PostAsJsonAsync("api/sync/cash-sessions/push", new CashSessionSyncBatchDto(payload), cancellationToken);
+        if (!response.IsSuccessStatusCode)
+            return new CashSessionSyncPushRunResultDto(payload.Count, 0, 0, payload.Count, normalizedSinceVersion);
+
+        var result = await response.Content.ReadFromJsonAsync<CashSessionSyncPushResultDto>(cancellationToken: cancellationToken)
+            ?? new CashSessionSyncPushResultDto(Array.Empty<CashSessionSyncItemResultDto>());
+
+        var nextCursor = ComputeNextGuidSequenceCursor(
+            changes,
+            result.Results,
+            normalizedSinceVersion,
+            row => row.CashSessionId,
+            row => row.Status);
+
+        if (!string.Equals(nextCursor, normalizedSinceVersion, StringComparison.Ordinal))
+        {
+            await UpsertCursorAsync(db, CashSessionPushCursorSettingKey, nextCursor, EmptySequenceCursor, cancellationToken);
+            await db.SaveChangesAsync(cancellationToken);
+        }
+
+        var sent = result.Results.Count(x => string.Equals(x.Status, "Applied", StringComparison.OrdinalIgnoreCase));
+        var skippedCount = result.Results.Count(x => string.Equals(x.Status, "Skipped", StringComparison.OrdinalIgnoreCase));
+        var failedCount = payload.Count - sent - skippedCount;
+
+        return new CashSessionSyncPushRunResultDto(payload.Count, sent, skippedCount, failedCount, nextCursor);
+    }
+
+    public async Task<CashSessionSyncPullRunResultDto> PullRemoteCashSessionsAsync(CancellationToken cancellationToken = default)
+    {
+        if (!_session.HasSyncScope)
+            return new CashSessionSyncPullRunResultDto(0, 0, 0, 0, EmptySequenceCursor);
+
+        var enabled = _configuration.GetValue<bool?>("Sync:Enabled") ?? false;
+        var apiBaseUrl = _configuration["Sync:ApiBaseUrl"]?.Trim();
+        var batchSize = Math.Max(1, _configuration.GetValue<int?>("Sync:BatchSize") ?? DefaultBatchSize);
+
+        if (!enabled || string.IsNullOrWhiteSpace(apiBaseUrl))
+            return new CashSessionSyncPullRunResultDto(0, 0, 0, 0, EmptySequenceCursor);
+
+        var client = await TryCreateAuthorizedClientAsync(apiBaseUrl, cancellationToken);
+        if (client is null)
+            return new CashSessionSyncPullRunResultDto(0, 0, 0, 0, EmptySequenceCursor);
+
+        await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken);
+        var sinceVersion = await GetCursorAsync(db, CashSessionPullCursorSettingKey, EmptySequenceCursor, cancellationToken);
+        var pullResponse = await client.GetAsync(
+            $"api/sync/cash-sessions/pull?sinceVersion={Uri.EscapeDataString(sinceVersion)}&batchSize={batchSize}",
+            cancellationToken);
+
+        if (!pullResponse.IsSuccessStatusCode)
+            return new CashSessionSyncPullRunResultDto(0, 0, 0, 0, sinceVersion);
+
+        var payload = await pullResponse.Content.ReadFromJsonAsync<CashSessionSyncPullResultDto>(cancellationToken: cancellationToken)
+            ?? new CashSessionSyncPullResultDto(Array.Empty<CashSessionSyncDto>(), sinceVersion);
+
+        if (payload.Sessions.Count == 0)
+        {
+            if (!string.Equals(payload.NextSinceVersion, sinceVersion, StringComparison.Ordinal))
+            {
+                await UpsertCursorAsync(db, CashSessionPullCursorSettingKey, payload.NextSinceVersion, EmptyGuidCursor, cancellationToken);
+                await db.SaveChangesAsync(cancellationToken);
+            }
+
+            return new CashSessionSyncPullRunResultDto(0, 0, 0, 0, payload.NextSinceVersion);
+        }
+
+        await using var tx = await db.Database.BeginTransactionAsync(cancellationToken);
+        try
+        {
+            var applied = 0;
+            var skipped = 0;
+            var tenantId = await GetTenantIdAsync(db, cancellationToken);
+
+            foreach (var incoming in payload.Sessions)
+            {
+                // The Register FK is required server-side (and locally) — must already exist (register
+                // sync runs before this in the background service's ordering).
+                if (!await db.Registers.AnyAsync(r => r.Id == incoming.RegisterId, cancellationToken))
+                {
+                    skipped++;
+                    continue;
+                }
+
+                var openedByUserId = await ResolveCashActorUserIdAsync(db, incoming.OpenedByUserId, incoming.OpenedByUsername, cancellationToken);
+                if (openedByUserId is null)
+                {
+                    // Same rule as invoice actor resolution: never misattribute — skip and retry once
+                    // the user has synced down.
+                    skipped++;
+                    continue;
+                }
+
+                Guid? closedByUserId = null;
+                if (!string.IsNullOrWhiteSpace(incoming.ClosedByUsername) || incoming.ClosedByUserId is not null)
+                {
+                    closedByUserId = await ResolveCashActorUserIdAsync(db, incoming.ClosedByUserId, incoming.ClosedByUsername, cancellationToken);
+                    if (closedByUserId is null)
+                    {
+                        skipped++;
+                        continue;
+                    }
+                }
+
+                var existing = await db.CashSessions.FirstOrDefaultAsync(s => s.Id == incoming.CashSessionId, cancellationToken);
+
+                if (existing is null)
+                {
+                    var created = new CashSession
+                    {
+                        Id = incoming.CashSessionId,
+                        TenantId = tenantId,
+                        StoreId = _session.StoreId,
+                        RegisterId = incoming.RegisterId,
+                        OpenedByUserId = openedByUserId.Value,
+                        OpenedAt = incoming.OpenedAt,
+                        OpeningCashAmount = incoming.OpeningCashAmount,
+                        CurrencyCode = incoming.CurrencyCode,
+                        Status = incoming.Status,
+                        IsSharedSession = incoming.IsSharedSession,
+                        ClosedByUserId = closedByUserId,
+                        ClosedAt = incoming.ClosedAt,
+                        ClosingCountedAmount = incoming.ClosingCountedAmount,
+                        ExpectedCashAmount = incoming.ExpectedCashAmount,
+                        DiscrepancyAmount = incoming.DiscrepancyAmount,
+                        Notes = incoming.Notes,
+                        IsSynced = true,
+                        SyncVersion = incoming.SyncVersion,
+                        CreatedAt = incoming.CreatedAt,
+                        UpdatedAt = incoming.UpdatedAt,
+                        IsDeleted = incoming.IsDeleted
+                    };
+                    db.CashSessions.Add(created);
+                    await ReconcileCashMovementsAsync(db, created.Id, tenantId, incoming.Movements, cancellationToken);
+                    applied++;
+                    continue;
+                }
+
+                // Movements are append-only and idempotent by Id — reconcile them unconditionally, before
+                // the header's own version outcome below, so a header Conflict/Skip can never discard a
+                // legitimate movement the server already accepted from another device.
+                await ReconcileCashMovementsAsync(db, existing.Id, tenantId, incoming.Movements, cancellationToken);
+
+                if (existing.SyncVersion > incoming.SyncVersion)
+                {
+                    skipped++;
+                    continue;
+                }
+
+                if (existing.SyncVersion == incoming.SyncVersion)
+                {
+                    existing.IsSynced = true;
+                    skipped++;
+                    continue;
+                }
+
+                // incoming.SyncVersion is strictly higher than this device's own record — ordinarily
+                // "apply it," but a closed session's header is an immutable posted fact: once this device
+                // has recorded it as Closed, no incoming snapshot may reopen it or rewrite its closing
+                // figures, regardless of SyncVersion (mirrors the server-side rule in Program.cs).
+                if (existing.Status == CashSessionStatus.Closed)
+                {
+                    skipped++;
+                    continue;
+                }
+
+                existing.RegisterId = incoming.RegisterId;
+                existing.OpenedByUserId = openedByUserId.Value;
+                existing.OpenedAt = incoming.OpenedAt;
+                existing.OpeningCashAmount = incoming.OpeningCashAmount;
+                existing.CurrencyCode = incoming.CurrencyCode;
+                existing.Status = incoming.Status;
+                existing.IsSharedSession = incoming.IsSharedSession;
+                existing.ClosedByUserId = closedByUserId;
+                existing.ClosedAt = incoming.ClosedAt;
+                existing.ClosingCountedAmount = incoming.ClosingCountedAmount;
+                existing.ExpectedCashAmount = incoming.ExpectedCashAmount;
+                existing.DiscrepancyAmount = incoming.DiscrepancyAmount;
+                existing.Notes = incoming.Notes;
+                existing.IsSynced = true;
+                existing.SyncVersion = incoming.SyncVersion;
+                existing.UpdatedAt = incoming.UpdatedAt;
+                existing.IsDeleted = incoming.IsDeleted;
+
+                applied++;
+            }
+
+            await UpsertCursorAsync(db, CashSessionPullCursorSettingKey, payload.NextSinceVersion, EmptyGuidCursor, cancellationToken);
+            await db.SaveChangesAsync(cancellationToken);
+            await tx.CommitAsync(cancellationToken);
+
+            return new CashSessionSyncPullRunResultDto(payload.Sessions.Count, applied, skipped, 0, payload.NextSinceVersion);
+        }
+        catch
+        {
+            await tx.RollbackAsync(cancellationToken);
+            return new CashSessionSyncPullRunResultDto(payload.Sessions.Count, 0, 0, payload.Sessions.Count, sinceVersion);
+        }
+    }
+
+    /// <summary>
+    /// Inserts whichever incoming movements aren't already present locally by Id — movements are
+    /// append-only, so there is no update case, and re-applying the same snapshot twice (a retried push,
+    /// or the same version pulled again) can never double-record one: it's already there, so it's
+    /// skipped. Each movement's actor (and approver, if any) is resolved by username and never
+    /// misattributed; a movement whose actor doesn't resolve yet, or whose Invoice/Payment reference
+    /// hasn't synced down yet, is skipped individually — the session's own header (including its
+    /// authoritative ExpectedCashAmount/DiscrepancyAmount, computed once at close time on the
+    /// originating device) still applies, and the movement fills in on a later pass.
+    /// </summary>
+    private async Task ReconcileCashMovementsAsync(
+        PosDbContext db,
+        Guid cashSessionId,
+        Guid tenantId,
+        IReadOnlyList<CashMovementSyncDto> incomingMovements,
+        CancellationToken cancellationToken)
+    {
+        if (incomingMovements.Count == 0)
+            return;
+
+        var incomingIds = incomingMovements.Select(m => m.MovementId).ToList();
+        var existingIds = (await db.CashMovements
+                .AsNoTracking()
+                .Where(m => m.CashSessionId == cashSessionId && incomingIds.Contains(m.Id))
+                .Select(m => m.Id)
+                .ToListAsync(cancellationToken))
+            .ToHashSet();
+
+        foreach (var incoming in incomingMovements)
+        {
+            if (existingIds.Contains(incoming.MovementId))
+                continue;
+
+            if (incoming.InvoiceId is { } invoiceId && !await db.Invoices.AnyAsync(i => i.Id == invoiceId, cancellationToken))
+                continue;
+
+            if (incoming.PaymentId is { } paymentId && !await db.Payments.AnyAsync(p => p.Id == paymentId, cancellationToken))
+                continue;
+
+            var performedByUserId = await ResolveCashActorUserIdAsync(db, incoming.PerformedByUserId, incoming.PerformedByUsername, cancellationToken);
+            if (performedByUserId is null)
+                continue;
+
+            Guid? approvedByUserId = null;
+            if (!string.IsNullOrWhiteSpace(incoming.ApprovedByUsername) || incoming.ApprovedByUserId is not null)
+            {
+                approvedByUserId = await ResolveCashActorUserIdAsync(db, incoming.ApprovedByUserId, incoming.ApprovedByUsername, cancellationToken);
+                if (approvedByUserId is null)
+                    continue; // An approval must never silently become "no approver" — skip and retry.
+
+                // A resolved approver id is not itself proof of authorization — never apply a cash-out
+                // "approved" by an unauthorized or self-approving user.
+                if (!await IsAuthorizedCashApproverAsync(db, approvedByUserId.Value, performedByUserId.Value, cancellationToken))
+                    continue;
+            }
+
+            db.CashMovements.Add(new CashMovement
+            {
+                Id = incoming.MovementId,
+                TenantId = tenantId,
+                CashSessionId = cashSessionId,
+                Type = incoming.Type,
+                Amount = incoming.Amount,
+                Method = incoming.Method,
+                CurrencyCode = incoming.CurrencyCode,
+                InvoiceId = incoming.InvoiceId,
+                PaymentId = incoming.PaymentId,
+                PerformedByUserId = performedByUserId.Value,
+                ApprovedByUserId = approvedByUserId,
+                Notes = incoming.Notes,
+                CreatedAt = incoming.CreatedAt,
+                UpdatedAt = incoming.CreatedAt
+            });
+        }
+    }
+
+    /// <summary>Resolves a cash-session actor (opener/closer/performer/approver). Tries the remote
+    /// device's claimed <paramref name="userIdHint"/> first — never trusted on its own, only accepted once
+    /// verified against a real, non-deleted user of this same local store — so a later username change on
+    /// the server can never strand a session this device is still pulling. Falls back to a username match
+    /// for degenerate/pre-migration payloads with no id. Returns null (never any other fallback) when
+    /// neither resolves, so the caller can skip rather than misattribute.</summary>
+    private async Task<Guid?> ResolveCashActorUserIdAsync(PosDbContext db, Guid? userIdHint, string? username, CancellationToken cancellationToken)
+    {
+        if (userIdHint is { } id && id != Guid.Empty)
+        {
+            var byId = await db.Users
+                .AsNoTracking()
+                .Where(u => u.Id == id && u.StoreId == _session.StoreId && !u.IsDeleted)
+                .Select(u => (Guid?)u.Id)
+                .FirstOrDefaultAsync(cancellationToken);
+            if (byId is not null)
+                return byId;
+        }
+
+        if (string.IsNullOrWhiteSpace(username))
+            return null;
+
+        return await db.Users
+            .AsNoTracking()
+            .Where(u => u.StoreId == _session.StoreId && u.Username == username.Trim() && !u.IsDeleted)
+            .Select(u => (Guid?)u.Id)
+            .FirstOrDefaultAsync(cancellationToken);
+    }
+
+    /// <summary>A resolved approver id is not itself proof of authorization — mirrors
+    /// <c>CashSessionService.RecordManualMovementAsync</c>'s local rule so a pulled movement can never
+    /// apply a cash-out "approved" by an unauthorized or self-approving user.</summary>
+    private static async Task<bool> IsAuthorizedCashApproverAsync(PosDbContext db, Guid approverUserId, Guid performerUserId, CancellationToken cancellationToken)
+    {
+        if (approverUserId == performerUserId)
+            return false;
+
+        var permissions = await db.Users
+            .AsNoTracking()
+            .Where(u => u.Id == approverUserId && u.IsActive && !u.IsDeleted)
+            .Select(u => (int?)u.Role!.PermissionsMask)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        return permissions is not null && ((Permission)permissions.Value).HasFlag(Permission.ManageSettings);
+    }
+
+    private static async Task<List<CashSessionSyncDto>> BuildCashSessionSyncDtosAsync(
+        PosDbContext db,
+        IReadOnlyCollection<Guid> sessionIds,
+        CancellationToken cancellationToken)
+    {
+        var sessions = await db.CashSessions
+            .AsNoTracking()
+            .Where(s => sessionIds.Contains(s.Id))
+            .ToListAsync(cancellationToken);
+
+        if (sessions.Count == 0)
+            return new List<CashSessionSyncDto>();
+
+        var movements = await db.CashMovements
+            .AsNoTracking()
+            .Where(m => sessionIds.Contains(m.CashSessionId) && !m.IsDeleted)
+            .ToListAsync(cancellationToken);
+
+        var userIds = sessions.Select(s => s.OpenedByUserId)
+            .Concat(sessions.Where(s => s.ClosedByUserId.HasValue).Select(s => s.ClosedByUserId!.Value))
+            .Concat(movements.Select(m => m.PerformedByUserId))
+            .Concat(movements.Where(m => m.ApprovedByUserId.HasValue).Select(m => m.ApprovedByUserId!.Value))
+            .Distinct()
+            .ToList();
+        var usernames = await db.Users.AsNoTracking()
+            .Where(u => userIds.Contains(u.Id))
+            .ToDictionaryAsync(u => u.Id, u => u.Username, cancellationToken);
+
+        var movementsBySession = movements.GroupBy(m => m.CashSessionId).ToDictionary(g => g.Key, g => g.ToList());
+
+        return sessions.Select(s => new CashSessionSyncDto(
+            s.Id,
+            s.RegisterId,
+            s.SyncVersion,
+            s.OpenedByUserId,
+            usernames.GetValueOrDefault(s.OpenedByUserId, string.Empty),
+            s.OpenedAt,
+            s.OpeningCashAmount,
+            s.CurrencyCode,
+            s.Status,
+            s.IsSharedSession,
+            s.ClosedByUserId,
+            s.ClosedByUserId.HasValue ? usernames.GetValueOrDefault(s.ClosedByUserId.Value) : null,
+            s.ClosedAt,
+            s.ClosingCountedAmount,
+            s.ExpectedCashAmount,
+            s.DiscrepancyAmount,
+            s.Notes,
+            s.CreatedAt,
+            s.UpdatedAt,
+            s.IsDeleted,
+            (movementsBySession.TryGetValue(s.Id, out var sessionMovements) ? sessionMovements : new List<CashMovement>())
+                .OrderBy(m => m.CreatedAt)
+                .Select(m => new CashMovementSyncDto(
+                    m.Id,
+                    m.Type,
+                    m.Amount,
+                    m.Method,
+                    m.CurrencyCode,
+                    m.InvoiceId,
+                    m.PaymentId,
+                    m.PerformedByUserId,
+                    usernames.GetValueOrDefault(m.PerformedByUserId, string.Empty),
+                    m.ApprovedByUserId,
+                    m.ApprovedByUserId.HasValue ? usernames.GetValueOrDefault(m.ApprovedByUserId.Value) : null,
+                    m.Notes,
+                    m.CreatedAt))
+                .ToList()))
+            .ToList();
+    }
+
     public async Task<ProductSyncPushRunResultDto> PushUpdatedProductsAsync(CancellationToken cancellationToken = default)
     {
-        if (!_session.IsAuthenticated)
+        if (!_session.HasSyncScope)
             return new ProductSyncPushRunResultDto(0, 0, 0, 0, EmptySequenceCursor);
 
         var enabled = _configuration.GetValue<bool?>("Sync:Enabled") ?? false;
@@ -950,7 +1607,7 @@ internal sealed class InvoiceSyncService : IInvoiceSyncService
 
     public async Task<SettingsSyncPushRunResultDto> PushUpdatedSettingsAsync(CancellationToken cancellationToken = default)
     {
-        if (!_session.IsAuthenticated)
+        if (!_session.HasSyncScope)
             return new SettingsSyncPushRunResultDto(0, 0, 0, 0, EmptySequenceCursor);
 
         var enabled = _configuration.GetValue<bool?>("Sync:Enabled") ?? false;
@@ -1027,7 +1684,7 @@ internal sealed class InvoiceSyncService : IInvoiceSyncService
 
     public async Task<UserSyncPushRunResultDto> PushUpdatedUsersAsync(CancellationToken cancellationToken = default)
     {
-        if (!_session.IsAuthenticated)
+        if (!_session.HasSyncScope)
             return new UserSyncPushRunResultDto(0, 0, 0, 0, EmptySequenceCursor);
 
         var enabled = _configuration.GetValue<bool?>("Sync:Enabled") ?? false;
@@ -1109,7 +1766,7 @@ internal sealed class InvoiceSyncService : IInvoiceSyncService
 
     public async Task<ProductSyncPullRunResultDto> PullRemoteProductsAsync(CancellationToken cancellationToken = default)
     {
-        if (!_session.IsAuthenticated)
+        if (!_session.HasSyncScope)
             return new ProductSyncPullRunResultDto(0, 0, 0, 0, EmptySequenceCursor);
 
         var enabled = _configuration.GetValue<bool?>("Sync:Enabled") ?? false;
@@ -1194,7 +1851,7 @@ internal sealed class InvoiceSyncService : IInvoiceSyncService
 
     public async Task<SettingsSyncPullRunResultDto> PullRemoteSettingsAsync(CancellationToken cancellationToken = default)
     {
-        if (!_session.IsAuthenticated)
+        if (!_session.HasSyncScope)
             return new SettingsSyncPullRunResultDto(0, 0, 0, 0, EmptySequenceCursor);
 
         var enabled = _configuration.GetValue<bool?>("Sync:Enabled") ?? false;
@@ -1294,7 +1951,7 @@ internal sealed class InvoiceSyncService : IInvoiceSyncService
 
     public async Task<UserSyncPullRunResultDto> PullRemoteUsersAsync(CancellationToken cancellationToken = default)
     {
-        if (!_session.IsAuthenticated)
+        if (!_session.HasSyncScope)
             return new UserSyncPullRunResultDto(0, 0, 0, 0, EmptySequenceCursor);
 
         var enabled = _configuration.GetValue<bool?>("Sync:Enabled") ?? false;
@@ -1427,8 +2084,10 @@ internal sealed class InvoiceSyncService : IInvoiceSyncService
         // The API now verifies a real password on every login (Stage 4T/T2). The sync worker re-authenticates
         // as the currently signed-in local user, so it needs that same verified password — captured in memory
         // only, at login time, via ICurrentSession.SetPassword — to get its own HTTP session for these calls.
+        // No password means no interactive user is signed in right now (e.g. after logout) — fall back to
+        // this terminal's own persistent device credential instead of giving up on sync entirely.
         if (string.IsNullOrEmpty(_session.Password))
-            return null;
+            return await TryCreateDeviceAuthorizedClientAsync(apiBaseUrl, cancellationToken);
 
         var client = _httpClientFactory.CreateClient();
         client.BaseAddress = new Uri(EnsureTrailingSlash(apiBaseUrl), UriKind.Absolute);
@@ -1442,6 +2101,53 @@ internal sealed class InvoiceSyncService : IInvoiceSyncService
             return null;
 
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", login.AccessToken);
+        _cachedAuthorizedClient = client;
+        await RecordSuccessfulOnlineContactAsync(cancellationToken);
+        return client;
+    }
+
+    /// <summary>
+    /// Authenticates as this terminal itself via <c>/api/devices/token</c> (tenant.md §5a) instead of an
+    /// employee login — used when no interactive user is signed in. Requires this machine to have
+    /// completed device enrollment and to still hold its persisted secret locally (written by
+    /// <c>DeviceManagementViewModel.PersistDeviceSecretAsync</c> at enrollment time). A device token only
+    /// authorizes sync endpoints (<c>SyncPolicy</c> on the API side) — administrative pushes and
+    /// currency-policy pull stay user-only by design and will simply fail softly with this client, the
+    /// same as any other non-success response each push/pull method already tolerates.
+    /// </summary>
+    private async Task<HttpClient?> TryCreateDeviceAuthorizedClientAsync(string apiBaseUrl, CancellationToken cancellationToken)
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken);
+        var storeId = _session.StoreId;
+
+        var device = await db.Devices
+            .AsNoTracking()
+            .Where(d => d.StoreId == storeId && d.Name == _currentDevice.Name && !d.IsDeleted && !d.IsRevoked && d.EnrolledAt != null)
+            .Select(d => new { d.Id })
+            .FirstOrDefaultAsync(cancellationToken);
+        if (device is null)
+            return null;
+
+        var secret = await db.Settings
+            .AsNoTracking()
+            .Where(s => s.StoreId == storeId && s.Key == DeviceSecretSettingKey && !s.IsDeleted)
+            .Select(s => s.Value)
+            .FirstOrDefaultAsync(cancellationToken);
+        if (string.IsNullOrEmpty(secret))
+            return null;
+
+        var client = _httpClientFactory.CreateClient();
+        client.BaseAddress = new Uri(EnsureTrailingSlash(apiBaseUrl), UriKind.Absolute);
+
+        var tokenResponse = await client.PostAsJsonAsync("api/devices/token", new DeviceTokenRequest(device.Id, secret), cancellationToken);
+        if (!tokenResponse.IsSuccessStatusCode)
+            return null;
+
+        var token = await tokenResponse.Content.ReadFromJsonAsync<DeviceTokenResponse>(cancellationToken: cancellationToken);
+        if (token is null || string.IsNullOrWhiteSpace(token.AccessToken))
+            return null;
+
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token.AccessToken);
         _cachedAuthorizedClient = client;
         await RecordSuccessfulOnlineContactAsync(cancellationToken);
         return client;
@@ -1906,15 +2612,16 @@ internal sealed class InvoiceSyncService : IInvoiceSyncService
         DeviceSyncDto incoming,
         CancellationToken cancellationToken)
     {
-        var matchedByName = false;
         Device? device = await db.Devices
             .FirstOrDefaultAsync(d => d.Id == incoming.DeviceId && d.StoreId == storeId, cancellationToken);
 
         if (device is null)
         {
+            // No row under this exact Id — a device with the same display Name may already exist (the
+            // unique (StoreId, Name) index allows only one row per name), so find it to update in place
+            // rather than violating that constraint with a second row of the same name.
             device = await db.Devices
                 .FirstOrDefaultAsync(d => d.StoreId == storeId && d.Name == incoming.Name && !d.IsDeleted, cancellationToken);
-            matchedByName = device is not null;
         }
 
         if (device is not null && device.UpdatedAt > incoming.UpdatedAt)
@@ -1930,10 +2637,10 @@ internal sealed class InvoiceSyncService : IInvoiceSyncService
             };
             db.Devices.Add(device);
         }
-        else if (matchedByName && device.Id != incoming.DeviceId)
-        {
-            device.Id = incoming.DeviceId;
-        }
+        // Never reassign an existing row's Id to match incoming.DeviceId — see the matching comment in
+        // POS.Api/Program.cs's copy of this method for why (it would dangle every FK already pointing
+        // at that row's original Id). A name-matched row keeps its own Id and just gets its fields
+        // refreshed below.
 
         device.Name = string.IsNullOrWhiteSpace(incoming.Name) ? "Unknown Device" : incoming.Name.Trim();
         device.SyncVersion = incoming.SyncVersion <= 0 ? 1 : incoming.SyncVersion;
@@ -1952,18 +2659,26 @@ internal sealed class InvoiceSyncService : IInvoiceSyncService
         return device;
     }
 
-    private async Task<Guid> ResolveInvoiceUserIdAsync(PosDbContext db, string? username, CancellationToken cancellationToken)
+    /// <summary>
+    /// Resolves a pulled invoice's original actor by username. Returns null — never a fallback to
+    /// whichever local user happens to be running sync right now — when a username was supplied but
+    /// doesn't (yet) resolve locally, mirroring the server-side fix to the same misattribution class in
+    /// <c>/api/sync/invoices/push</c>: a competing claim (the remote username) must never be silently
+    /// overridden by the caller's own identity. The caller must skip applying that invoice rather than
+    /// misattribute it — it resolves correctly on a later pass once the user syncs down (users pull
+    /// before invoices pull in the background service's ordering). Only the no-username case (no
+    /// competing claim to override) legitimately falls back to the local session's user.
+    /// </summary>
+    private async Task<Guid?> ResolveInvoiceUserIdAsync(PosDbContext db, string? username, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(username))
             return _session.UserId;
 
-        var userId = await db.Users
+        return await db.Users
             .AsNoTracking()
             .Where(u => u.StoreId == _session.StoreId && u.Username == username.Trim() && !u.IsDeleted)
             .Select(u => (Guid?)u.Id)
             .FirstOrDefaultAsync(cancellationToken);
-
-        return userId ?? _session.UserId;
     }
 
     private async Task<Guid?> ResolveAuditLogUserIdAsync(PosDbContext db, string? username, CancellationToken cancellationToken)
@@ -2337,4 +3052,6 @@ internal sealed class InvoiceSyncService : IInvoiceSyncService
     private sealed record SequenceGuidChange(long Sequence, Guid EntityId);
     private sealed record SequenceKeyChange(long Sequence, string EntityKey);
     private sealed record LoginResponse(string AccessToken);
+    private sealed record DeviceTokenRequest(Guid DeviceId, string Secret);
+    private sealed record DeviceTokenResponse(string AccessToken, DateTime ExpiresAtUtc);
 }

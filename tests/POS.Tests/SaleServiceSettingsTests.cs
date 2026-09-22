@@ -79,6 +79,7 @@ public class SaleServiceSettingsTests
     public async Task Vat_exclusive_adds_tax_on_top_of_subtotal_and_charges_it_on_completion()
     {
         await using var host = await TestServiceHost.CreateAsync();
+        await host.OpenDefaultCashSessionAsync();
 
         await host.ExecuteScopeAsync(async services =>
         {
@@ -117,6 +118,7 @@ public class SaleServiceSettingsTests
     public async Task Vat_inclusive_charges_only_the_stored_price_with_no_tax_added()
     {
         await using var host = await TestServiceHost.CreateAsync();
+        await host.OpenDefaultCashSessionAsync();
 
         await host.ExecuteScopeAsync(async services =>
         {

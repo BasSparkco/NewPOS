@@ -175,6 +175,38 @@ Share this with whoever is setting up that register — it will not be shown aga
   <data name="Devices_RevokedFormat" xml:space="preserve"><value>Device '{0}' revoked.</value></data>
   <data name="Devices_CodeRequired" xml:space="preserve"><value>Enrollment code is required.</value></data>
   <data name="Devices_EnrolledThisMachine" xml:space="preserve"><value>This machine is now enrolled.</value></data>
+  <data name="CashSession_Title" xml:space="preserve"><value>Cash Session</value></data>
+  <data name="CashSession_Header" xml:space="preserve"><value>Cash session</value></data>
+  <data name="CashSession_SummaryHeader" xml:space="preserve"><value>Running totals</value></data>
+  <data name="CashSession_SummaryTotalsFormat" xml:space="preserve"><value>Opening {0:0.##} {1}  •  Sales {2:0.##} {3}  •  Refunds {4:0.##} {5}  •  Cash in {6:0.##} {7}  •  Cash out {8:0.##} {9}  •  Expected {10:0.##} {11}</value></data>
+  <data name="CashSession_NoRegister" xml:space="preserve"><value>This machine is not bound to a register yet. Provision or enroll it from the Devices screen first.</value></data>
+  <data name="CashSession_OpenHeader" xml:space="preserve"><value>Open a session</value></data>
+  <data name="CashSession_OpenHint" xml:space="preserve"><value>Count the float in the drawer and enter it below to open this register's cash session.</value></data>
+  <data name="CashSession_OpeningAmountLabel" xml:space="preserve"><value>Opening float amount</value></data>
+  <data name="CashSession_OpenButton" xml:space="preserve"><value>Open session</value></data>
+  <data name="CashSession_ManualHeader" xml:space="preserve"><value>Record cash in / out</value></data>
+  <data name="CashSession_AmountLabel" xml:space="preserve"><value>Amount</value></data>
+  <data name="CashSession_NotesLabel" xml:space="preserve"><value>Notes (optional)</value></data>
+  <data name="CashSession_ApproverLabel" xml:space="preserve"><value>Approving manager's username (cash out only, if required)</value></data>
+  <data name="CashSession_CashInButton" xml:space="preserve"><value>Cash in</value></data>
+  <data name="CashSession_CashOutButton" xml:space="preserve"><value>Cash out</value></data>
+  <data name="CashSession_CloseHeader" xml:space="preserve"><value>Close this session</value></data>
+  <data name="CashSession_CloseHint" xml:space="preserve"><value>Count the drawer and enter the total. The expected amount and any discrepancy are computed automatically.</value></data>
+  <data name="CashSession_ClosingAmountLabel" xml:space="preserve"><value>Counted amount</value></data>
+  <data name="CashSession_CloseButton" xml:space="preserve"><value>Close session</value></data>
+  <data name="CashSession_ColTime" xml:space="preserve"><value>Time</value></data>
+  <data name="CashSession_ColType" xml:space="preserve"><value>Type</value></data>
+  <data name="CashSession_ColAmount" xml:space="preserve"><value>Amount</value></data>
+  <data name="CashSession_ColMethod" xml:space="preserve"><value>Method</value></data>
+  <data name="CashSession_ColUser" xml:space="preserve"><value>User</value></data>
+  <data name="CashSession_ColNotes" xml:space="preserve"><value>Notes</value></data>
+  <data name="CashSession_InvalidAmount" xml:space="preserve"><value>Enter a valid, non-negative amount.</value></data>
+  <data name="CashSession_Opened" xml:space="preserve"><value>Cash session opened.</value></data>
+  <data name="CashSession_ConfirmClose" xml:space="preserve"><value>Close this cash session? This cannot be undone.</value></data>
+  <data name="CashSession_ClosedFormat" xml:space="preserve"><value>Session closed. Discrepancy: {0:0.##} {1}</value></data>
+  <data name="CashSession_ApproverNotFound" xml:space="preserve"><value>No active user with that username was found at this store.</value></data>
+  <data name="CashSession_CashInRecorded" xml:space="preserve"><value>Cash in recorded.</value></data>
+  <data name="CashSession_CashOutRecorded" xml:space="preserve"><value>Cash out recorded.</value></data>
   <data name="ProductMgmt_Title" xml:space="preserve"><value>Products &amp; categories</value></data>
   <data name="ProductMgmt_NewCategory" xml:space="preserve"><value>New category:</value></data>
   <data name="ProductMgmt_AddCategory" xml:space="preserve"><value>Add category</value></data>

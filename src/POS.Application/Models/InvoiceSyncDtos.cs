@@ -337,3 +337,96 @@ public sealed record SettingSyncDto(
     DateTime CreatedAt,
     DateTime UpdatedAt,
     bool IsDeleted);
+
+public sealed record RegisterSyncDto(
+    Guid RegisterId,
+    int Number,
+    string Name,
+    bool IsActive,
+    int SyncVersion,
+    DateTime CreatedAt,
+    DateTime UpdatedAt,
+    bool IsDeleted);
+
+public sealed record RegisterSyncBatchDto(IReadOnlyList<RegisterSyncDto> Registers);
+
+public sealed record RegisterSyncItemResultDto(Guid RegisterId, string Status, DateTime ServerUpdatedAt, string? ErrorMessage);
+
+public sealed record RegisterSyncPushResultDto(IReadOnlyList<RegisterSyncItemResultDto> Results);
+
+public sealed record RegisterSyncPullResultDto(IReadOnlyList<RegisterSyncDto> Registers, string NextSinceVersion);
+
+public sealed record RegisterSyncPushRunResultDto(int Attempted, int Sent, int Skipped, int Failed, string NextSinceVersion);
+
+public sealed record RegisterSyncPullRunResultDto(int Received, int Applied, int Skipped, int Failed, string NextSinceVersion);
+
+/// <summary>
+/// One ledger entry nested under a <see cref="CashSessionSyncDto"/> aggregate. Movements are append-only
+/// (never edited/deleted after creation), so — unlike invoice lines/payments — reconciling them on apply
+/// only ever needs to insert whichever incoming movements aren't already present locally by
+/// <see cref="MovementId"/>; there is no update/remove case to handle.
+/// </summary>
+public sealed record CashMovementSyncDto(
+    Guid MovementId,
+    CashMovementType Type,
+    decimal Amount,
+    PaymentMethod Method,
+    string CurrencyCode,
+    Guid? InvoiceId,
+    Guid? PaymentId,
+    /// <summary>The originating device's own local id for the performer, sent alongside the username so a
+    /// later username change can never strand this row: the apply side verifies the id resolves to a real,
+    /// active, tenant/store-scoped user before trusting it (never accepted on its own — an id that doesn't
+    /// resolve locally falls back to the username, and a genuinely unresolvable actor still skips the
+    /// movement rather than misattributing it), then falls back to the username. Neither field alone is
+    /// treated as proof of identity or authorization.</summary>
+    Guid PerformedByUserId,
+    string PerformedByUsername,
+    Guid? ApprovedByUserId,
+    string? ApprovedByUsername,
+    string? Notes,
+    DateTime CreatedAt);
+
+/// <summary>
+/// The full CashSession aggregate — header fields plus every movement recorded against it — synced as
+/// one atomic unit, the same way an Invoice carries its Items/Payments. SyncVersion-based conflict
+/// precedence (like Invoice, not the UpdatedAt-based rule used for simpler aggregates) so a Closed
+/// session's history can never be overwritten by a stale Open snapshot from another node.
+/// </summary>
+public sealed record CashSessionSyncDto(
+    Guid CashSessionId,
+    Guid RegisterId,
+    int SyncVersion,
+    /// <summary>See <see cref="CashMovementSyncDto.PerformedByUserId"/> for why both an id hint and a
+    /// username are carried — an id-only lookup preserves the actor's identity across a later username
+    /// change, but is only trusted once verified against a real, active, tenant/store-scoped user.</summary>
+    Guid OpenedByUserId,
+    string OpenedByUsername,
+    DateTime OpenedAt,
+    decimal OpeningCashAmount,
+    string CurrencyCode,
+    CashSessionStatus Status,
+    bool IsSharedSession,
+    Guid? ClosedByUserId,
+    string? ClosedByUsername,
+    DateTime? ClosedAt,
+    decimal? ClosingCountedAmount,
+    decimal? ExpectedCashAmount,
+    decimal? DiscrepancyAmount,
+    string? Notes,
+    DateTime CreatedAt,
+    DateTime UpdatedAt,
+    bool IsDeleted,
+    IReadOnlyList<CashMovementSyncDto> Movements);
+
+public sealed record CashSessionSyncBatchDto(IReadOnlyList<CashSessionSyncDto> Sessions);
+
+public sealed record CashSessionSyncItemResultDto(Guid CashSessionId, string Status, int ServerSyncVersion, string? ErrorMessage);
+
+public sealed record CashSessionSyncPushResultDto(IReadOnlyList<CashSessionSyncItemResultDto> Results);
+
+public sealed record CashSessionSyncPullResultDto(IReadOnlyList<CashSessionSyncDto> Sessions, string NextSinceVersion);
+
+public sealed record CashSessionSyncPushRunResultDto(int Attempted, int Sent, int Skipped, int Failed, string NextSinceVersion);
+
+public sealed record CashSessionSyncPullRunResultDto(int Received, int Applied, int Skipped, int Failed, string NextSinceVersion);

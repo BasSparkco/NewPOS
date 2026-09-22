@@ -13,8 +13,12 @@ internal sealed class ApiCurrentSession : ICurrentSession
     public string BaseCurrencyCode { get; private set; } = "USD";
     public string? CurrencySymbol { get; private set; }
     public bool IsAuthenticated => UserId != Guid.Empty && StoreId != Guid.Empty;
+    public bool HasSyncScope => StoreId != Guid.Empty;
     public string? Password { get; private set; }
     public DateTime? LastOnlineContactUtc { get; private set; }
+
+    // Device-scoped background sync (WPF-only concept) never runs against a per-request API session.
+    public void SetDeviceSyncScope(Guid tenantId, Guid storeId) { }
 
     public void Set(Guid tenantId, Guid userId, Guid storeId, string username, string roleName, int permissionsMask, string baseCurrencyCode, string? currencySymbol)
     {

@@ -97,6 +97,7 @@ public class ApiIntegrationTests
         Assert.Equal(5m, afterTax.Summary.TaxPercent);
         Assert.True(afterTax.Summary.Total > 0m);
 
+        await OpenCashSessionForInvoiceAsync(factory, opened.InvoiceId);
         var completion = await PostAndReadAsync<CompleteCashSaleResponse>(
             client,
             $"/api/sales/{opened.InvoiceId}/complete/cash",
@@ -140,6 +141,7 @@ public class ApiIntegrationTests
             $"/api/sales/{secondSale.InvoiceId}/lines",
             new AddSaleLineRequest(product.Id, 2m));
 
+        await OpenCashSessionForInvoiceAsync(factory, secondSale.InvoiceId);
         var paid = await PostAndReadAsync<CompleteCashSaleResponse>(
             client,
             $"/api/sales/{secondSale.InvoiceId}/complete/cash",
@@ -165,6 +167,7 @@ public class ApiIntegrationTests
             $"/api/sales/{sale.InvoiceId}/lines",
             new AddSaleLineRequest(product.Id, 1m));
 
+        await OpenCashSessionForInvoiceAsync(factory, sale.InvoiceId);
         await PostAndReadAsync<CompleteCashSaleResponse>(
             client,
             $"/api/sales/{sale.InvoiceId}/complete/cash",
@@ -1000,6 +1003,288 @@ public class ApiIntegrationTests
         Assert.False(incomingExists);
     }
 
+    /// <summary>
+    /// Stage 4T/T4.5 follow-up: CashSession/CashMovement previously had no sync surface at all — this
+    /// exercises the full contract end to end against the real API: Register must sync first (a fresh
+    /// device-generated register id, not one the server already happens to know), the CashSession
+    /// aggregate (header + nested movements) pushes and pulls as one unit with usernames resolved rather
+    /// than trusted, a retried push of the same snapshot never double-records the movement, and a stale
+    /// (lower-SyncVersion) replay can never resurrect a since-closed session's history.
+    /// </summary>
+    [Fact]
+    public async Task Cash_session_sync_pushes_the_full_aggregate_is_idempotent_and_preserves_closed_history()
+    {
+        using var factory = new ApiTestFactory();
+        using var client = factory.CreateClient();
+
+        await AuthorizeAsync(client);
+
+        var registerId = Guid.NewGuid();
+        var now = DateTime.UtcNow;
+
+        var registerPush = await PostAndReadAsync<RegisterSyncPushResultDto>(client, "/api/sync/registers/push", new RegisterSyncBatchDto(
+        [
+            new RegisterSyncDto(registerId, 7, "Remote Register", true, 1, now.AddMinutes(-30), now.AddMinutes(-30), false)
+        ]));
+        Assert.Equal("Applied", Assert.Single(registerPush.Results).Status);
+
+        var sessionId = Guid.NewGuid();
+        var movementId = Guid.NewGuid();
+
+        var openSnapshot = new CashSessionSyncDto(
+            sessionId, registerId, 2, Guid.Empty, "admin", now.AddMinutes(-20), 200m, "ILS", CashSessionStatus.Open, false,
+            null, null, null, null, null, null, null, now.AddMinutes(-20), now.AddMinutes(-10), false,
+            [new CashMovementSyncDto(movementId, CashMovementType.CashIn, 50m, PaymentMethod.Cash, "ILS", null, null, Guid.Empty, "admin", null, null, "Float top-up", now.AddMinutes(-10))]);
+
+        var firstPush = await PostAndReadAsync<CashSessionSyncPushResultDto>(client, "/api/sync/cash-sessions/push", new CashSessionSyncBatchDto([openSnapshot]));
+        Assert.Equal("Applied", Assert.Single(firstPush.Results).Status);
+
+        // A retried push of the exact same snapshot (e.g. a lost response) must not double-record it.
+        var retryPush = await PostAndReadAsync<CashSessionSyncPushResultDto>(client, "/api/sync/cash-sessions/push", new CashSessionSyncBatchDto([openSnapshot]));
+        Assert.Equal("Skipped", Assert.Single(retryPush.Results).Status);
+
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var dbFactory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<PosDbContext>>();
+            await using var db = await dbFactory.CreateDbContextAsync();
+            Assert.Equal(1, await db.CashMovements.CountAsync(m => m.CashSessionId == sessionId));
+        }
+
+        // A pull (as a second device would see it) reconstructs the aggregate, resolving the actor by
+        // username rather than trusting a raw cross-device id.
+        var pull = await client.GetFromJsonAsync<CashSessionSyncPullResultDto>("/api/sync/cash-sessions/pull?sinceVersion=0&batchSize=25");
+        Assert.NotNull(pull);
+        var pulledSession = Assert.Single(pull!.Sessions, s => s.CashSessionId == sessionId);
+        Assert.Equal("admin", pulledSession.OpenedByUsername);
+        Assert.Single(pulledSession.Movements, m => m.MovementId == movementId && m.PerformedByUsername == "admin");
+
+        var closeSnapshot = openSnapshot with
+        {
+            SyncVersion = 3,
+            Status = CashSessionStatus.Closed,
+            ClosedByUsername = "admin",
+            ClosedAt = now,
+            ClosingCountedAmount = 250m,
+            ExpectedCashAmount = 250m,
+            DiscrepancyAmount = 0m,
+            UpdatedAt = now
+        };
+        var closePush = await PostAndReadAsync<CashSessionSyncPushResultDto>(client, "/api/sync/cash-sessions/push", new CashSessionSyncBatchDto([closeSnapshot]));
+        Assert.Equal("Applied", Assert.Single(closePush.Results).Status);
+
+        // A stale (older-versioned) Open snapshot arriving afterward — e.g. from a device that hadn't
+        // heard about the close yet — must never resurrect a closed session's history.
+        var staleReplay = await PostAndReadAsync<CashSessionSyncPushResultDto>(client, "/api/sync/cash-sessions/push", new CashSessionSyncBatchDto([openSnapshot]));
+        Assert.Equal("Conflict", Assert.Single(staleReplay.Results).Status);
+
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var dbFactory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<PosDbContext>>();
+            await using var db = await dbFactory.CreateDbContextAsync();
+            var stored = await db.CashSessions.AsNoTracking().SingleAsync(s => s.Id == sessionId);
+            Assert.Equal(CashSessionStatus.Closed, stored.Status);
+            Assert.Equal(250m, stored.ClosingCountedAmount);
+        }
+    }
+
+    /// <summary>
+    /// Reconciled with the project owner (2026-09-21): version precedence must never let a device that
+    /// missed a close resurrect the session. A device that went offline before learning about a close can
+    /// still independently bump its own local SyncVersion (e.g. by queuing further, now-invalid, writes
+    /// before the app itself would normally block them, or via a corrupted/replayed payload) — proving the
+    /// server rejects such a payload outright, rather than treating "higher version" as "more authoritative,"
+    /// is the actual regression guard for "must not reopen a closed session."
+    /// </summary>
+    [Fact]
+    public async Task Cash_session_sync_never_reopens_a_closed_session_even_with_a_higher_sync_version()
+    {
+        using var factory = new ApiTestFactory();
+        using var client = factory.CreateClient();
+        await AuthorizeAsync(client);
+
+        var registerId = await PushRegisterAsync(client, 21);
+        var sessionId = Guid.NewGuid();
+        var now = DateTime.UtcNow;
+
+        var openSnapshot = new CashSessionSyncDto(
+            sessionId, registerId, 1, Guid.Empty, "admin", now.AddMinutes(-20), 100m, "ILS", CashSessionStatus.Open, false,
+            null, null, null, null, null, null, null, now.AddMinutes(-20), now.AddMinutes(-20), false, []);
+        Assert.Equal("Applied", Assert.Single((await PostAndReadAsync<CashSessionSyncPushResultDto>(
+            client, "/api/sync/cash-sessions/push", new CashSessionSyncBatchDto([openSnapshot]))).Results).Status);
+
+        var closeSnapshot = openSnapshot with
+        {
+            SyncVersion = 2, Status = CashSessionStatus.Closed, ClosedByUsername = "admin", ClosedAt = now,
+            ClosingCountedAmount = 100m, ExpectedCashAmount = 100m, DiscrepancyAmount = 0m, UpdatedAt = now
+        };
+        Assert.Equal("Applied", Assert.Single((await PostAndReadAsync<CashSessionSyncPushResultDto>(
+            client, "/api/sync/cash-sessions/push", new CashSessionSyncBatchDto([closeSnapshot]))).Results).Status);
+
+        // A payload claiming a higher version than the server has ever seen, but still Open — the
+        // "reopen" attempt this test exists to catch.
+        var reopenAttempt = openSnapshot with { SyncVersion = 3, OpeningCashAmount = 999m, UpdatedAt = now };
+        var reopenResult = await PostAndReadAsync<CashSessionSyncPushResultDto>(
+            client, "/api/sync/cash-sessions/push", new CashSessionSyncBatchDto([reopenAttempt]));
+        Assert.Equal("Conflict", Assert.Single(reopenResult.Results).Status);
+
+        await using var scope = factory.Services.CreateAsyncScope();
+        var dbFactory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<PosDbContext>>();
+        await using var db = await dbFactory.CreateDbContextAsync();
+        var stored = await db.CashSessions.AsNoTracking().SingleAsync(s => s.Id == sessionId);
+        Assert.Equal(CashSessionStatus.Closed, stored.Status);
+        Assert.Equal(100m, stored.OpeningCashAmount);
+    }
+
+    /// <summary>
+    /// Movements are append-only and idempotent by Id — they must never be discarded just because the
+    /// header they arrived alongside was Skipped (a version tie) or Conflicted (a stale header). Verifies
+    /// both branches directly against the real endpoint, not just the "Applied" happy path already covered
+    /// by the round-trip test above.
+    /// </summary>
+    [Fact]
+    public async Task Cash_session_sync_never_discards_a_movement_because_the_header_was_skipped_or_conflicted()
+    {
+        using var factory = new ApiTestFactory();
+        using var client = factory.CreateClient();
+        await AuthorizeAsync(client);
+
+        var registerId = await PushRegisterAsync(client, 22);
+        var sessionId = Guid.NewGuid();
+        var now = DateTime.UtcNow;
+        var movementA = Guid.NewGuid();
+        var movementB = Guid.NewGuid();
+        var movementC = Guid.NewGuid();
+
+        CashMovementSyncDto Movement(Guid id, decimal amount, DateTime at) => new(
+            id, CashMovementType.CashIn, amount, PaymentMethod.Cash, "ILS", null, null, Guid.Empty, "admin", null, null, null, at);
+
+        var v2WithA = new CashSessionSyncDto(
+            sessionId, registerId, 2, Guid.Empty, "admin", now.AddMinutes(-20), 100m, "ILS", CashSessionStatus.Open, false,
+            null, null, null, null, null, null, null, now.AddMinutes(-20), now.AddMinutes(-15), false,
+            [Movement(movementA, 10m, now.AddMinutes(-15))]);
+        Assert.Equal("Applied", Assert.Single((await PostAndReadAsync<CashSessionSyncPushResultDto>(
+            client, "/api/sync/cash-sessions/push", new CashSessionSyncBatchDto([v2WithA]))).Results).Status);
+
+        // Same SyncVersion as what the server already has (a version tie → "Skipped" for the header), but
+        // this payload also carries a movement the server has never seen. It must still be recorded.
+        var v2WithAandB = v2WithA with { Movements = [.. v2WithA.Movements, Movement(movementB, 20m, now.AddMinutes(-14))] };
+        var skipResult = await PostAndReadAsync<CashSessionSyncPushResultDto>(
+            client, "/api/sync/cash-sessions/push", new CashSessionSyncBatchDto([v2WithAandB]));
+        Assert.Equal("Skipped", Assert.Single(skipResult.Results).Status);
+
+        // A stale (lower-version) payload — "Conflict" for the header — carrying yet another new movement.
+        var v1WithC = v2WithA with { SyncVersion = 1, Movements = [Movement(movementC, 30m, now.AddMinutes(-16))] };
+        var conflictResult = await PostAndReadAsync<CashSessionSyncPushResultDto>(
+            client, "/api/sync/cash-sessions/push", new CashSessionSyncBatchDto([v1WithC]));
+        Assert.Equal("Conflict", Assert.Single(conflictResult.Results).Status);
+
+        await using var scope = factory.Services.CreateAsyncScope();
+        var dbFactory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<PosDbContext>>();
+        await using var db = await dbFactory.CreateDbContextAsync();
+        var recordedIds = await db.CashMovements.AsNoTracking().Where(m => m.CashSessionId == sessionId).Select(m => m.Id).ToListAsync();
+        Assert.Contains(movementA, recordedIds);
+        Assert.Contains(movementB, recordedIds);
+        Assert.Contains(movementC, recordedIds);
+    }
+
+    /// <summary>
+    /// A resolved approver id/username is not itself proof of authorization. Neither a self-approval nor an
+    /// approval attributed to a user who lacks ManageSettings may be recorded — mirrors
+    /// CashSessionService.RecordManualMovementAsync's local rule, now also enforced against a sync payload
+    /// that could otherwise smuggle in an unauthorized "approval" from a compromised or buggy client.
+    /// </summary>
+    [Fact]
+    public async Task Cash_session_sync_rejects_a_cash_out_movement_with_a_self_approval_or_an_unauthorized_approver()
+    {
+        using var factory = new ApiTestFactory();
+        using var client = factory.CreateClient();
+        await AuthorizeAsync(client);
+
+        var registerId = await PushRegisterAsync(client, 23);
+        var sessionId = Guid.NewGuid();
+        var now = DateTime.UtcNow;
+        var selfApprovedId = Guid.NewGuid();
+        var unauthorizedApproverId = Guid.NewGuid();
+        var legitimateId = Guid.NewGuid();
+
+        var session = new CashSessionSyncDto(
+            sessionId, registerId, 2, Guid.Empty, "admin", now.AddMinutes(-20), 500m, "ILS", CashSessionStatus.Open, false,
+            null, null, null, null, null, null, null, now.AddMinutes(-20), now.AddMinutes(-10), false,
+            [
+                // Self-approval: performer and approver are the same person.
+                new CashMovementSyncDto(selfApprovedId, CashMovementType.CashOut, 50m, PaymentMethod.Cash, "ILS", null, null,
+                    Guid.Empty, "admin", Guid.Empty, "admin", null, now.AddMinutes(-10)),
+                // A real second user, but one with no ManageSettings permission (the seeded demo Cashier).
+                new CashMovementSyncDto(unauthorizedApproverId, CashMovementType.CashOut, 60m, PaymentMethod.Cash, "ILS", null, null,
+                    Guid.Empty, "admin", Guid.Empty, "cashier", null, now.AddMinutes(-9)),
+                // A legitimate approval — different person, ManageSettings-permitted admin — must still work.
+                new CashMovementSyncDto(legitimateId, CashMovementType.CashOut, 10m, PaymentMethod.Cash, "ILS", null, null,
+                    Guid.Empty, "cashier", Guid.Empty, "admin", null, now.AddMinutes(-8))
+            ]);
+
+        var result = await PostAndReadAsync<CashSessionSyncPushResultDto>(client, "/api/sync/cash-sessions/push", new CashSessionSyncBatchDto([session]));
+        Assert.Equal("Applied", Assert.Single(result.Results).Status);
+
+        await using var scope = factory.Services.CreateAsyncScope();
+        var dbFactory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<PosDbContext>>();
+        await using var db = await dbFactory.CreateDbContextAsync();
+        var recordedIds = await db.CashMovements.AsNoTracking().Where(m => m.CashSessionId == sessionId).Select(m => m.Id).ToListAsync();
+        Assert.DoesNotContain(selfApprovedId, recordedIds);
+        Assert.DoesNotContain(unauthorizedApproverId, recordedIds);
+        Assert.Contains(legitimateId, recordedIds);
+    }
+
+    /// <summary>
+    /// Actor resolution must preserve historical identity across a username change: the id a device
+    /// already knows locally is tried first (and only trusted once verified against a real, active,
+    /// tenant/store-scoped user), so a rename between when a movement was recorded offline and when it
+    /// finally syncs can never strand it the way a username-only lookup would.
+    /// </summary>
+    [Fact]
+    public async Task Cash_session_sync_resolves_the_actor_by_id_when_the_username_no_longer_matches()
+    {
+        using var factory = new ApiTestFactory();
+        using var client = factory.CreateClient();
+        await AuthorizeAsync(client);
+
+        await using var scope = factory.Services.CreateAsyncScope();
+        var dbFactory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<PosDbContext>>();
+        Guid adminId;
+        await using (var db = await dbFactory.CreateDbContextAsync())
+        {
+            adminId = await db.Users.AsNoTracking().Where(u => u.Username == "admin").Select(u => u.Id).SingleAsync();
+        }
+
+        var registerId = await PushRegisterAsync(client, 24);
+        var sessionId = Guid.NewGuid();
+        var now = DateTime.UtcNow;
+
+        // The username the offline device last knew no longer exists server-side (simulating a rename),
+        // but the id it captured at write time still identifies the same real, active tenant user.
+        var session = new CashSessionSyncDto(
+            sessionId, registerId, 1, adminId, "old-renamed-username", now, 100m, "ILS", CashSessionStatus.Open, false,
+            null, null, null, null, null, null, null, now, now, false, []);
+
+        var result = await PostAndReadAsync<CashSessionSyncPushResultDto>(client, "/api/sync/cash-sessions/push", new CashSessionSyncBatchDto([session]));
+        Assert.Equal("Applied", Assert.Single(result.Results).Status);
+
+        await using var verifyDb = await dbFactory.CreateDbContextAsync();
+        var stored = await verifyDb.CashSessions.AsNoTracking().SingleAsync(s => s.Id == sessionId);
+        Assert.Equal(adminId, stored.OpenedByUserId);
+    }
+
+    private static async Task<Guid> PushRegisterAsync(HttpClient client, int number)
+    {
+        var registerId = Guid.NewGuid();
+        var now = DateTime.UtcNow;
+        var result = await PostAndReadAsync<RegisterSyncPushResultDto>(client, "/api/sync/registers/push", new RegisterSyncBatchDto(
+        [
+            new RegisterSyncDto(registerId, number, $"Register {number}", true, 1, now.AddMinutes(-30), now.AddMinutes(-30), false)
+        ]));
+        Assert.Equal("Applied", Assert.Single(result.Results).Status);
+        return registerId;
+    }
+
     [Fact]
     public async Task Sync_settings_push_endpoint_applies_snapshot_on_server()
     {
@@ -1149,6 +1434,154 @@ public class ApiIntegrationTests
         Assert.True(string.Equals(response.Status, "Applied", StringComparison.Ordinal), response.ErrorMessage ?? "Expected an applied currency policy snapshot.");
     }
 
+    /// <summary>
+    /// T4 fix: <c>/api/sync/categories/pull</c> previously took no <see cref="ClaimsPrincipal"/> at all,
+    /// and the shared sequence-cursor helper's null-storeId branch (Category is a tenant-wide aggregate)
+    /// filtered by nothing but that null StoreId — meaning any authenticated caller from any tenant could
+    /// pull every OTHER tenant's categories too. Proves it with two real, independently-provisioned
+    /// tenants rather than assuming from reading the code.
+    /// </summary>
+    [Fact]
+    public async Task Categories_pull_never_leaks_another_tenants_categories()
+    {
+        const string provisioningSecret = "test-provisioning-secret";
+
+        using var factory = new ApiTestFactory(new Dictionary<string, string?>
+        {
+            ["Platform:ProvisioningSecret"] = provisioningSecret
+        });
+        using var client = factory.CreateClient();
+
+        await AuthorizeAsync(client);
+        var bootstrapCategories = await client.GetFromJsonAsync<List<CategoryResponse>>("/api/catalog/categories");
+        var bootstrapCategoryId = Assert.Single(bootstrapCategories!, c => c.Name == "General").Id;
+
+        var provisionResponse = await SendWithSecretAsync(
+            client,
+            new ProvisionTenantRequest("Second Business", "second-business", "Main Store", "owner", "OwnerPassword1!"),
+            provisioningSecret);
+        await ReadRequiredAsync<ProvisionTenantResponse>(provisionResponse);
+
+        using var secondTenantClient = factory.CreateClient();
+        var secondLogin = await PostAndReadAsync<LoginResponse>(
+            secondTenantClient, "/api/auth/login", new LoginRequest("owner", "OwnerPassword1!", "second-business"));
+        secondTenantClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", secondLogin.AccessToken);
+
+        var pull = await secondTenantClient.GetFromJsonAsync<CategorySyncPullResultDto>("/api/sync/categories/pull?sinceVersion=0&batchSize=100");
+        Assert.NotNull(pull);
+        Assert.DoesNotContain(pull!.Categories, c => c.CategoryId == bootstrapCategoryId);
+    }
+
+    /// <summary>
+    /// Sync isolation review (2026-09-21): a product push's nested CategoryId reference was resolved
+    /// (`EnsureCategoryAsync`) by Id alone, with no TenantId filter — so tenant A pushing a product whose
+    /// CategoryId happened to equal a real category belonging to tenant B would overwrite tenant B's
+    /// category Name/UpdatedAt in place, a genuine cross-tenant *write* through a nested reference (worse
+    /// than a read leak). Fixed by scoping the lookup to the caller's own tenant; a colliding id now fails
+    /// the push (primary-key conflict on insert) instead of silently corrupting the other tenant's row.
+    /// </summary>
+    [Fact]
+    public async Task Product_push_cannot_overwrite_another_tenants_category_via_a_colliding_categoryId()
+    {
+        const string provisioningSecret = "test-provisioning-secret";
+        using var factory = new ApiTestFactory(new Dictionary<string, string?>
+        {
+            ["Platform:ProvisioningSecret"] = provisioningSecret
+        });
+        using var client = factory.CreateClient();
+        await AuthorizeAsync(client);
+
+        await SendWithSecretAsync(
+            client,
+            new ProvisionTenantRequest("Second Business", "second-business", "Main Store", "owner", "OwnerPassword1!"),
+            provisioningSecret);
+
+        using var secondTenantClient = factory.CreateClient();
+        var secondLogin = await PostAndReadAsync<LoginResponse>(
+            secondTenantClient, "/api/auth/login", new LoginRequest("owner", "OwnerPassword1!", "second-business"));
+        secondTenantClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", secondLogin.AccessToken);
+
+        var now = DateTime.UtcNow;
+        var sharedCategoryId = Guid.NewGuid();
+        var categoryPush = await PostAndReadAsync<CategorySyncPushResultDto>(secondTenantClient, "/api/sync/categories/push", new CategorySyncBatchDto(
+        [
+            new CategorySyncDto(sharedCategoryId, "Tenant B Category", now, now, false)
+        ]));
+        Assert.Equal("Applied", Assert.Single(categoryPush.Results).Status);
+
+        // Tenant A now pushes a product whose CategoryId collides with tenant B's real category id. The
+        // tenant-scoped lookup can no longer find (and silently overwrite) tenant B's row, so the insert
+        // of a *new* category under that same id collides on the primary key — the whole batched
+        // SaveChangesAsync throws and the request fails outright (transaction rolls back, nothing
+        // commits). This is a blunter failure mode than a clean per-item "Failed" result — a single
+        // colliding item currently aborts its whole push batch rather than only itself, a known rough
+        // edge tracked in STATUS.md — but it is a *safe* one: the request fails closed, and no
+        // cross-tenant corruption occurs, which is the property this test exists to prove.
+        var productPushResponse = await client.PostAsJsonAsync("/api/sync/products/push", new ProductSyncBatchDto(
+        [
+            new ProductSyncDto(Guid.NewGuid(), "Hijack Attempt", null, 10m, 5m, sharedCategoryId, "Hijacked Name",
+                0m, true, null, now, now, false)
+        ]));
+        Assert.False(productPushResponse.IsSuccessStatusCode);
+
+        await using var scope = factory.Services.CreateAsyncScope();
+        var dbFactory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<PosDbContext>>();
+        await using var db = await dbFactory.CreateDbContextAsync();
+        var category = await db.Categories.AsNoTracking().SingleAsync(c => c.Id == sharedCategoryId);
+        Assert.Equal("Tenant B Category", category.Name);
+    }
+
+    /// <summary>
+    /// Sync isolation review (2026-09-21): an invoice push's nested line ProductId reference was validated
+    /// for existence with no TenantId filter, so a line could reference another tenant's product id and be
+    /// accepted. Fixed by scoping the existence check to the caller's own tenant.
+    /// </summary>
+    [Fact]
+    public async Task Invoice_push_rejects_a_line_referencing_another_tenants_product()
+    {
+        const string provisioningSecret = "test-provisioning-secret";
+        using var factory = new ApiTestFactory(new Dictionary<string, string?>
+        {
+            ["Platform:ProvisioningSecret"] = provisioningSecret
+        });
+        using var client = factory.CreateClient();
+        await AuthorizeAsync(client);
+
+        await SendWithSecretAsync(
+            client,
+            new ProvisionTenantRequest("Second Business", "second-business", "Main Store", "owner", "OwnerPassword1!"),
+            provisioningSecret);
+
+        using var secondTenantClient = factory.CreateClient();
+        var secondLogin = await PostAndReadAsync<LoginResponse>(
+            secondTenantClient, "/api/auth/login", new LoginRequest("owner", "OwnerPassword1!", "second-business"));
+        secondTenantClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", secondLogin.AccessToken);
+
+        var now = DateTime.UtcNow;
+        var otherTenantProductId = Guid.NewGuid();
+        var categoryId = Guid.NewGuid();
+        var productPush = await PostAndReadAsync<ProductSyncPushResultDto>(secondTenantClient, "/api/sync/products/push", new ProductSyncBatchDto(
+        [
+            new ProductSyncDto(otherTenantProductId, "Tenant B Product", null, 20m, 10m, categoryId, "Tenant B Category",
+                5m, true, null, now, now, false)
+        ]));
+        Assert.Equal("Applied", Assert.Single(productPush.Results).Status);
+
+        var invoiceId = Guid.NewGuid();
+        var invoicePush = await PostAndReadAsync<InvoiceSyncPushResultDto>(client, "/api/sync/invoices/push", new InvoiceSyncBatchDto(
+        [
+            new InvoiceSyncInvoiceDto(invoiceId, null, null, 1, InvoiceStatus.Paid, 20m, 0m, "ILS", null, now, now,
+                [new InvoiceSyncLineDto(Guid.NewGuid(), otherTenantProductId, 1m, 20m, 0m, 20m, now, now, false)],
+                [], "admin")
+        ]));
+        Assert.Equal("Failed", Assert.Single(invoicePush.Results).Status);
+
+        await using var scope = factory.Services.CreateAsyncScope();
+        var dbFactory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<PosDbContext>>();
+        await using var db = await dbFactory.CreateDbContextAsync();
+        Assert.False(await db.Invoices.AsNoTracking().AnyAsync(i => i.Id == invoiceId));
+    }
+
     [Fact]
     public async Task Platform_tenant_provisioning_is_disabled_without_a_configured_secret()
     {
@@ -1200,6 +1633,113 @@ public class ApiIntegrationTests
         Assert.False(string.IsNullOrWhiteSpace(bootstrapLogin.AccessToken));
     }
 
+    [Fact]
+    public async Task Device_token_authenticates_sync_but_is_rejected_from_business_operations()
+    {
+        using var factory = new ApiTestFactory();
+        using var client = factory.CreateClient();
+        await AuthorizeAsync(client);
+
+        const string deviceSecret = "correct-horse-battery-staple-device";
+        var deviceId = Guid.NewGuid();
+
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var dbFactory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<PosDbContext>>();
+            await using var db = await dbFactory.CreateDbContextAsync();
+            var store = await db.Stores.AsNoTracking().SingleAsync();
+            var now = DateTime.UtcNow;
+            db.Devices.Add(new Device
+            {
+                Id = deviceId,
+                TenantId = store.TenantId,
+                StoreId = store.Id,
+                Name = "Enrolled Sync Device",
+                SyncVersion = 1,
+                EnrolledAt = now,
+                DeviceSecretHash = BCrypt.Net.BCrypt.HashPassword(deviceSecret),
+                IsRevoked = false,
+                CreatedAt = now,
+                UpdatedAt = now
+            });
+            await db.SaveChangesAsync();
+        }
+
+        // Wrong secret is rejected.
+        var wrongSecret = await client.PostAsJsonAsync("/api/devices/token", new DeviceTokenRequest(deviceId, "not-the-secret"));
+        Assert.Equal(HttpStatusCode.Unauthorized, wrongSecret.StatusCode);
+
+        var tokenResponse = await PostAndReadAsync<DeviceTokenResponse>(client, "/api/devices/token", new DeviceTokenRequest(deviceId, deviceSecret));
+        Assert.False(string.IsNullOrWhiteSpace(tokenResponse.AccessToken));
+
+        using var deviceClient = factory.CreateClient();
+        deviceClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", tokenResponse.AccessToken);
+
+        // Background sync (pull) keeps working on a device-only credential — this is the whole point:
+        // synchronization may continue after the employee who was using this terminal logs out.
+        var pull = await deviceClient.GetAsync("/api/sync/invoices/pull");
+        Assert.True(pull.IsSuccessStatusCode, $"Status={pull.StatusCode}; Body={await pull.Content.ReadAsStringAsync()}");
+
+        // But it is never a substitute for an employee login on an actual business operation.
+        var saleAttempt = await deviceClient.PostAsync("/api/sales/open", JsonContent.Create(new { }));
+        Assert.Equal(HttpStatusCode.Forbidden, saleAttempt.StatusCode);
+
+        // Nor for an administrative sync push, which still requires a real permissioned user.
+        var now2 = DateTime.UtcNow;
+        var settingsAttempt = await deviceClient.PostAsJsonAsync("/api/sync/settings/push", new SettingsSyncBatchRequest(
+        [new SettingSyncRequest("ReceiptFooterText", "Tampered by device token", now2, now2, false)]));
+        Assert.Equal(HttpStatusCode.Forbidden, settingsAttempt.StatusCode);
+
+        // A revoked device can no longer obtain a token at all.
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var dbFactory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<PosDbContext>>();
+            await using var db = await dbFactory.CreateDbContextAsync();
+            var device = await db.Devices.SingleAsync(d => d.Id == deviceId);
+            device.IsRevoked = true;
+            await db.SaveChangesAsync();
+        }
+
+        var revokedAttempt = await client.PostAsJsonAsync("/api/devices/token", new DeviceTokenRequest(deviceId, deviceSecret));
+        Assert.Equal(HttpStatusCode.Unauthorized, revokedAttempt.StatusCode);
+    }
+
+    [Fact]
+    public async Task Invoice_push_rejects_an_invoice_attributed_to_a_nonexistent_username_instead_of_misattributing_it()
+    {
+        using var factory = new ApiTestFactory();
+        using var client = factory.CreateClient();
+        await AuthorizeAsync(client);
+        var product = await GetProductAsync(client, "Sample Item A");
+
+        var invoiceId = Guid.NewGuid();
+        var lineId = Guid.NewGuid();
+        var paymentId = Guid.NewGuid();
+        var deviceId = Guid.NewGuid();
+        var now = DateTime.UtcNow;
+
+        // "admin" is authenticated and pushing, but this invoice's OWN record claims a different,
+        // nonexistent cashier rang it up. The server must not silently attribute it to "admin" (the
+        // caller) — every business operation must retain its original actor, or be rejected outright.
+        var push = await PostAndReadAsync<InvoiceSyncPushResultResponse>(client, "/api/sync/invoices/push", new InvoiceSyncBatchRequest(
+        [
+            new InvoiceSyncInvoiceRequest(
+                invoiceId, deviceId, "Impersonation Test Device", 1, (int)InvoiceStatus.Paid, 20m, 0m, "USD", null, now, now,
+                [new InvoiceSyncLineRequest(lineId, product.Id, 2m, 10m, 0m, 20m, now, now, false)],
+                [new InvoiceSyncPaymentRequest(paymentId, 20m, 0, now, now, now, false)],
+                Username: "a-cashier-who-does-not-exist")
+        ]));
+
+        var result = Assert.Single(push.Results);
+        Assert.Equal("Failed", result.Status);
+
+        var lookup = await client.GetAsync($"/api/sales/{invoiceId}");
+        Assert.Equal(HttpStatusCode.NotFound, lookup.StatusCode);
+    }
+
+    private sealed record DeviceTokenRequest(Guid DeviceId, string Secret);
+    private sealed record DeviceTokenResponse(string AccessToken, DateTime ExpiresAtUtc);
+
     private static async Task<HttpResponseMessage> SendWithSecretAsync(HttpClient client, object body, string secret)
     {
         using var request = new HttpRequestMessage(HttpMethod.Post, "/api/platform/tenants")
@@ -1221,6 +1761,52 @@ public class ApiIntegrationTests
         var products = await client.GetFromJsonAsync<List<ProductResponse>>($"/api/catalog/products?query={Uri.EscapeDataString(name)}");
         Assert.NotNull(products);
         return Assert.Single(products, p => p.Name == name);
+    }
+
+    /// <summary>
+    /// Cash sale/refund completion now requires an open, authorized cash session on the invoice's
+    /// register (tenant.md §5b) — opens one directly via the DB rather than through a REST endpoint
+    /// (there isn't one; cash-session management is a WPF-only surface today) so existing sale-lifecycle
+    /// API tests keep exercising the sale/refund endpoints themselves rather than session bootstrapping.
+    /// Shared-mode so it doesn't matter which authenticated user in the test ends up completing the sale.
+    /// </summary>
+    private static async Task OpenCashSessionForInvoiceAsync(ApiTestFactory factory, Guid invoiceId)
+    {
+        await using var scope = factory.Services.CreateAsyncScope();
+        var dbFactory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<PosDbContext>>();
+        await using var db = await dbFactory.CreateDbContextAsync();
+
+        var invoice = await db.Invoices.AsNoTracking()
+            .Where(i => i.Id == invoiceId)
+            .Select(i => new { i.RegisterId, i.TenantId, i.StoreId, i.Currency })
+            .SingleAsync();
+        Assert.NotNull(invoice.RegisterId);
+
+        var alreadyOpen = await db.CashSessions.AnyAsync(
+            s => s.RegisterId == invoice.RegisterId && s.Status == CashSessionStatus.Open && !s.IsDeleted);
+        if (alreadyOpen)
+            return;
+
+        var now = DateTime.UtcNow;
+        var userId = await db.Users.AsNoTracking().Where(u => u.TenantId == invoice.TenantId).Select(u => u.Id).FirstAsync();
+
+        db.CashSessions.Add(new CashSession
+        {
+            Id = Guid.NewGuid(),
+            TenantId = invoice.TenantId,
+            StoreId = invoice.StoreId,
+            RegisterId = invoice.RegisterId!.Value,
+            OpenedByUserId = userId,
+            OpenedAt = now,
+            OpeningCashAmount = 10000m,
+            CurrencyCode = invoice.Currency,
+            Status = CashSessionStatus.Open,
+            IsSharedSession = true,
+            SyncVersion = 1,
+            CreatedAt = now,
+            UpdatedAt = now
+        });
+        await db.SaveChangesAsync();
     }
 
     private static async Task<T> PostAndReadAsync<T>(HttpClient client, string url, object body)

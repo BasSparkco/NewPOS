@@ -175,6 +175,38 @@
   <data name="Devices_RevokedFormat" xml:space="preserve"><value>הוסרה הרשאת המכשיר '{0}'.</value></data>
   <data name="Devices_CodeRequired" xml:space="preserve"><value>נדרש קוד שיוך.</value></data>
   <data name="Devices_EnrolledThisMachine" xml:space="preserve"><value>המכשיר הזה משויך כעת.</value></data>
+  <data name="CashSession_Title" xml:space="preserve"><value>משמרת קופה</value></data>
+  <data name="CashSession_Header" xml:space="preserve"><value>משמרת קופה</value></data>
+  <data name="CashSession_SummaryHeader" xml:space="preserve"><value>סיכום שוטף</value></data>
+  <data name="CashSession_SummaryTotalsFormat" xml:space="preserve"><value>פתיחה {0:0.##} {1}  •  מכירות {2:0.##} {3}  •  זיכויים {4:0.##} {5}  •  הכנסת מזומן {6:0.##} {7}  •  הוצאת מזומן {8:0.##} {9}  •  צפוי {10:0.##} {11}</value></data>
+  <data name="CashSession_NoRegister" xml:space="preserve"><value>מכשיר זה עדיין לא משויך לקופה. יש להקצות או לשייך אותו ממסך המכשירים תחילה.</value></data>
+  <data name="CashSession_OpenHeader" xml:space="preserve"><value>פתיחת משמרת</value></data>
+  <data name="CashSession_OpenHint" xml:space="preserve"><value>ספרו את הקופה הקטנה בעודף והזינו למטה כדי לפתוח את משמרת הקופה.</value></data>
+  <data name="CashSession_OpeningAmountLabel" xml:space="preserve"><value>סכום פתיחה</value></data>
+  <data name="CashSession_OpenButton" xml:space="preserve"><value>פתח משמרת</value></data>
+  <data name="CashSession_ManualHeader" xml:space="preserve"><value>רישום הכנסה / הוצאת מזומן</value></data>
+  <data name="CashSession_AmountLabel" xml:space="preserve"><value>סכום</value></data>
+  <data name="CashSession_NotesLabel" xml:space="preserve"><value>הערות (אופציונלי)</value></data>
+  <data name="CashSession_ApproverLabel" xml:space="preserve"><value>שם משתמש של המנהל המאשר (להוצאת מזומן בלבד, אם נדרש)</value></data>
+  <data name="CashSession_CashInButton" xml:space="preserve"><value>הכנסת מזומן</value></data>
+  <data name="CashSession_CashOutButton" xml:space="preserve"><value>הוצאת מזומן</value></data>
+  <data name="CashSession_CloseHeader" xml:space="preserve"><value>סגירת משמרת זו</value></data>
+  <data name="CashSession_CloseHint" xml:space="preserve"><value>ספרו את תכולת הקופה והזינו את הסכום. הסכום הצפוי וכל פער מחושבים אוטומטית.</value></data>
+  <data name="CashSession_ClosingAmountLabel" xml:space="preserve"><value>סכום שנספר</value></data>
+  <data name="CashSession_CloseButton" xml:space="preserve"><value>סגור משמרת</value></data>
+  <data name="CashSession_ColTime" xml:space="preserve"><value>שעה</value></data>
+  <data name="CashSession_ColType" xml:space="preserve"><value>סוג</value></data>
+  <data name="CashSession_ColAmount" xml:space="preserve"><value>סכום</value></data>
+  <data name="CashSession_ColMethod" xml:space="preserve"><value>אמצעי</value></data>
+  <data name="CashSession_ColUser" xml:space="preserve"><value>משתמש</value></data>
+  <data name="CashSession_ColNotes" xml:space="preserve"><value>הערות</value></data>
+  <data name="CashSession_InvalidAmount" xml:space="preserve"><value>הזינו סכום תקין שאינו שלילי.</value></data>
+  <data name="CashSession_Opened" xml:space="preserve"><value>משמרת הקופה נפתחה.</value></data>
+  <data name="CashSession_ConfirmClose" xml:space="preserve"><value>לסגור את משמרת הקופה הזו? לא ניתן לבטל פעולה זו.</value></data>
+  <data name="CashSession_ClosedFormat" xml:space="preserve"><value>המשמרת נסגרה. פער: {0:0.##} {1}</value></data>
+  <data name="CashSession_ApproverNotFound" xml:space="preserve"><value>לא נמצא משתמש פעיל בשם זה בחנות זו.</value></data>
+  <data name="CashSession_CashInRecorded" xml:space="preserve"><value>הכנסת המזומן נרשמה.</value></data>
+  <data name="CashSession_CashOutRecorded" xml:space="preserve"><value>הוצאת המזומן נרשמה.</value></data>
   <data name="ProductMgmt_Title" xml:space="preserve"><value>מוצרים וקטגוריות</value></data>
   <data name="ProductMgmt_NewCategory" xml:space="preserve"><value>קטגוריה חדשה:</value></data>
   <data name="ProductMgmt_AddCategory" xml:space="preserve"><value>הוסף קטגוריה</value></data>

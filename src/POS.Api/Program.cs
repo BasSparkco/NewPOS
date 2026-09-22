@@ -25,10 +25,18 @@ const string StoreIdClaim = "store_id";
 const string CurrencyCodeClaim = "currency_code";
 const string CurrencySymbolClaim = "currency_symbol";
 const string PermissionsClaim = "permissions";
+const string TokenTypeClaim = "token_type";
+const string DeviceIdClaim = "device_id";
+const string DeviceTokenType = "device";
 const string ProcessRefundsPolicy = "Permission:ProcessRefunds";
 const string ManageUsersPolicy = "Permission:ManageUsers";
 const string ManageSettingsPolicy = "Permission:ManageSettings";
 const string ManageProductsPolicy = "Permission:ManageProducts";
+// Device credentials (tenant.md Stage 4T) authenticate a terminal for background synchronization
+// only — never a business operation. The default policy therefore rejects a device token outright;
+// this policy is applied explicitly to the handful of sync endpoints that must keep working after an
+// employee logs out (invoice push/pull and read-only catalog/settings/user/device/audit pulls).
+const string SyncPolicy = "Sync:DeviceOrUser";
 const string LoginRateLimitPolicy = "login";
 const string DevelopmentSigningKey = "local-development-signing-key-1234567890";
 
@@ -45,6 +53,11 @@ var signingKey = jwtSection["SigningKey"];
 var expiryMinutes = int.TryParse(jwtSection["AccessTokenMinutes"], out var configuredExpiry)
     ? configuredExpiry
     : 120;
+// Device tokens live longer than a user login: they authenticate unattended background sync, which
+// must keep working between a store's opening and closing without needing a human present to re-auth.
+var deviceTokenExpiryMinutes = int.TryParse(jwtSection["DeviceTokenMinutes"], out var configuredDeviceExpiry)
+    ? configuredDeviceExpiry
+    : 1440;
 
 if (string.IsNullOrWhiteSpace(signingKey))
     throw new InvalidOperationException("Jwt:SigningKey is required. Configure it via appsettings or environment variables.");
@@ -107,6 +120,16 @@ builder.Services.AddAuthorization(options =>
         policy.RequireAssertion(ctx => GetPermissions(ctx.User).HasFlag(Permission.ManageSettings)));
     options.AddPolicy(ManageProductsPolicy, policy =>
         policy.RequireAssertion(ctx => GetPermissions(ctx.User).HasFlag(Permission.ManageProducts)));
+
+    // A device token authenticates the terminal for background sync only (tenant.md Stage 4T): it must
+    // never substitute for an employee login on a business operation (sales, refunds, administration).
+    // Every endpoint using the bare RequireAuthorization() default therefore rejects a device token;
+    // SyncPolicy is opted into explicitly by the handful of endpoints that should keep working with one.
+    options.DefaultPolicy = new Microsoft.AspNetCore.Authorization.AuthorizationPolicyBuilder()
+        .RequireAuthenticatedUser()
+        .RequireAssertion(ctx => ctx.User.FindFirstValue(TokenTypeClaim) != DeviceTokenType)
+        .Build();
+    options.AddPolicy(SyncPolicy, policy => policy.RequireAuthenticatedUser());
 });
 builder.Services.AddRateLimiter(options =>
 {
@@ -311,6 +334,61 @@ app.MapPost("/api/auth/login", async (
         session.CurrencySymbol));
 }).RequireRateLimiting(LoginRateLimitPolicy);
 
+app.MapPost("/api/devices/token", async (
+    DeviceTokenRequest request,
+    IDbContextFactory<PosDbContext> dbFactory,
+    CancellationToken cancellationToken) =>
+{
+    if (string.IsNullOrWhiteSpace(request.Secret))
+        return Results.Unauthorized();
+
+    await using var db = await dbFactory.CreateDbContextAsync(cancellationToken);
+    var device = await db.Devices
+        .AsNoTracking()
+        .FirstOrDefaultAsync(d => d.Id == request.DeviceId && !d.IsDeleted, cancellationToken);
+
+    // Same generic-failure shape for "no such device", "not enrolled", "revoked" and "wrong secret" —
+    // this is a credential check, so it must not let a caller distinguish those cases (tenant.md §5).
+    if (device is null || device.IsRevoked || string.IsNullOrEmpty(device.DeviceSecretHash))
+        return Results.Unauthorized();
+
+    bool secretMatches;
+    try
+    {
+        secretMatches = BCrypt.Net.BCrypt.Verify(request.Secret, device.DeviceSecretHash);
+    }
+    catch (BCrypt.Net.SaltParseException)
+    {
+        secretMatches = false;
+    }
+
+    if (!secretMatches)
+        return Results.Unauthorized();
+
+    var now = DateTime.UtcNow;
+    var expiresAt = now.AddMinutes(deviceTokenExpiryMinutes);
+    var claims = new List<Claim>
+    {
+        new(TenantIdClaim, device.TenantId.ToString()),
+        new(StoreIdClaim, device.StoreId.ToString()),
+        new(DeviceIdClaim, device.Id.ToString()),
+        new(TokenTypeClaim, DeviceTokenType)
+    };
+
+    var tokenDescriptor = new SecurityTokenDescriptor
+    {
+        Subject = new ClaimsIdentity(claims),
+        Issuer = issuer,
+        Audience = audience,
+        Expires = expiresAt,
+        SigningCredentials = new SigningCredentials(securityKey, SecurityAlgorithms.HmacSha256)
+    };
+    var tokenHandler = new JwtSecurityTokenHandler();
+    var token = tokenHandler.CreateToken(tokenDescriptor);
+
+    return Results.Ok(new DeviceTokenResponse(tokenHandler.WriteToken(token), expiresAt));
+}).RequireRateLimiting(LoginRateLimitPolicy);
+
 app.MapGet("/api/auth/me", (ClaimsPrincipal user) =>
 {
     if (user.Identity?.IsAuthenticated != true)
@@ -369,8 +447,12 @@ catalogApi.MapGet("/products", async (string? query, Guid? categoryId, IProductC
 var salesApi = app.MapGroup("/api/sales")
     .RequireAuthorization();
 
-var syncApi = app.MapGroup("/api/sync")
-    .RequireAuthorization();
+// No blanket RequireAuthorization() here — ASP.NET Core combines (ANDs) a group-level authorization
+// requirement with each endpoint's own, so a bare group-level policy would silently re-impose the
+// user-only DefaultPolicy underneath SyncPolicy and defeat device-token sync entirely. Every endpoint
+// below declares its own explicit policy instead (SyncPolicy, a ManageXPolicy, or the bare user-only
+// default via .RequireAuthorization()).
+var syncApi = app.MapGroup("/api/sync");
 
 salesApi.MapPost("/open", async (ISaleService sales, CancellationToken cancellationToken) =>
 {
@@ -592,8 +674,16 @@ syncApi.MapPost("/invoices/push", async (
     CancellationToken cancellationToken) =>
 {
     var storeId = TryParseGuid(user.FindFirstValue(StoreIdClaim));
-    var userId = TryParseGuid(user.FindFirstValue(ClaimTypes.NameIdentifier));
-    if (storeId is null || userId is null)
+    if (storeId is null)
+        return Results.Unauthorized();
+
+    // A device token (background sync continuing after an employee logs out) has no "current user"
+    // claim at all — the invoice's own recorded username is then the only signal for who rang up that
+    // historical sale, and it is verified against real tenant users below rather than trusted outright.
+    var isDeviceAuthenticated = string.Equals(user.FindFirstValue(TokenTypeClaim), DeviceTokenType, StringComparison.Ordinal);
+    var authenticatedUserId = TryParseGuid(user.FindFirstValue(ClaimTypes.NameIdentifier));
+    var authenticatedDeviceId = TryParseGuid(user.FindFirstValue(DeviceIdClaim));
+    if (!isDeviceAuthenticated && authenticatedUserId is null)
         return Results.Unauthorized();
 
     if (request.Invoices.Count == 0)
@@ -615,9 +705,12 @@ syncApi.MapPost("/invoices/push", async (
                 continue;
             }
 
+            // Tenant-scoped: an invoice line referencing another tenant's product id (however it got
+            // there — a client bug, a replayed payload, or a deliberate guess) must be rejected exactly
+            // like a missing product, never silently accepted as a cross-tenant reference.
             var serverProductIds = await db.Products
                 .AsNoTracking()
-                .Where(p => !p.IsDeleted)
+                .Where(p => !p.IsDeleted && p.TenantId == tenantId)
                 .Select(p => p.Id)
                 .ToListAsync(cancellationToken);
             var missingProductId = incoming.Lines.Count > 0 && incoming.Lines
@@ -632,7 +725,20 @@ syncApi.MapPost("/invoices/push", async (
                 continue;
             }
 
-            var invoiceUserId = await ResolveInvoiceUserIdAsync(db, storeId.Value, userId.Value, incoming.Username, cancellationToken);
+            var invoiceUserId = await ResolveInvoiceUserIdAsync(db, tenantId, storeId.Value, authenticatedUserId, incoming.Username, cancellationToken);
+            if (invoiceUserId is null)
+            {
+                results.Add(new InvoiceSyncInvoiceResultDto(incoming.InvoiceId, "Failed", 0, "Could not verify a tenant user for this invoice."));
+                continue;
+            }
+
+            if (isDeviceAuthenticated && incoming.DeviceId is { } claimedDeviceId && authenticatedDeviceId is not null && claimedDeviceId != authenticatedDeviceId)
+            {
+                results.Add(new InvoiceSyncInvoiceResultDto(incoming.InvoiceId, "Failed", 0, "A device credential cannot push an invoice attributed to a different device."));
+                continue;
+            }
+
+            var resolvedUserId = invoiceUserId.Value;
             var device = await GetOrCreateSyncDeviceAsync(db, tenantId, storeId.Value, incoming, cancellationToken);
             var existing = await db.Invoices
                 .Include(i => i.Items)
@@ -641,13 +747,13 @@ syncApi.MapPost("/invoices/push", async (
 
             if (existing is null)
             {
-                var created = CreateInvoiceFromSync(incoming, tenantId, storeId.Value, invoiceUserId, device.Id);
+                var created = CreateInvoiceFromSync(incoming, tenantId, storeId.Value, resolvedUserId, device.Id);
                 db.Invoices.Add(created);
                 await ReconcileInvoiceInventoryAsync(
                     db,
                     tenantId,
                     storeId.Value,
-                    invoiceUserId,
+                    resolvedUserId,
                     created.Id,
                     incoming.UpdatedAt,
                     new Dictionary<Guid, decimal>(),
@@ -670,12 +776,12 @@ syncApi.MapPost("/invoices/push", async (
             }
 
             var previousInventoryEffect = BuildInventoryEffect(existing.Status, existing.Items);
-            ApplyInvoiceSnapshot(existing, incoming, invoiceUserId, device.Id);
+            ApplyInvoiceSnapshot(existing, incoming, resolvedUserId, device.Id);
             await ReconcileInvoiceInventoryAsync(
                 db,
                 tenantId,
                 storeId.Value,
-                invoiceUserId,
+                resolvedUserId,
                 existing.Id,
                 incoming.UpdatedAt,
                 previousInventoryEffect,
@@ -693,7 +799,7 @@ syncApi.MapPost("/invoices/push", async (
     await tx.CommitAsync(cancellationToken);
 
     return Results.Ok(new InvoiceSyncPushResultDto(results));
-});
+}).RequireAuthorization(SyncPolicy);
 
 syncApi.MapGet("/invoices/pull", async (
     ClaimsPrincipal user,
@@ -712,7 +818,8 @@ syncApi.MapGet("/invoices/pull", async (
     var take = Math.Clamp(batchSize ?? 25, 1, 100);
 
     await using var db = await dbFactory.CreateDbContextAsync(cancellationToken);
-    var changes = await GetGuidSyncChangesAsync(db, SyncAggregateTypes.Invoice, sinceSequence, take, storeId.Value, includeGlobalRows: false, cancellationToken);
+    var tenantId = await ResolveTenantIdAsync(db, storeId.Value, cancellationToken);
+    var changes = await GetGuidSyncChangesAsync(db, SyncAggregateTypes.Invoice, sinceSequence, take, tenantId, storeId.Value, includeGlobalRows: false, cancellationToken);
     var invoices = await ProjectInvoiceSyncInvoices(
             db.Invoices
                 .AsNoTracking()
@@ -726,25 +833,215 @@ syncApi.MapGet("/invoices/pull", async (
         : FormatSequenceSinceVersion(changes[^1].Sequence);
 
     return Results.Ok(new InvoiceSyncPullResultDto(orderedInvoices, nextSinceVersion));
-});
+}).RequireAuthorization(SyncPolicy);
 
-syncApi.MapGet("/categories/pull", async (
+syncApi.MapPost("/cash-sessions/push", async (
+    ClaimsPrincipal user,
+    CashSessionSyncBatchDto request,
+    IDbContextFactory<PosDbContext> dbFactory,
+    CancellationToken cancellationToken) =>
+{
+    var storeId = TryParseGuid(user.FindFirstValue(StoreIdClaim));
+    if (storeId is null)
+        return Results.Unauthorized();
+
+    if (request.Sessions.Count == 0)
+        return Results.Ok(new CashSessionSyncPushResultDto(Array.Empty<CashSessionSyncItemResultDto>()));
+
+    await using var db = await dbFactory.CreateDbContextAsync(cancellationToken);
+    await using var tx = await db.Database.BeginTransactionAsync(cancellationToken);
+    var tenantId = await ResolveTenantIdAsync(db, storeId.Value, cancellationToken);
+
+    var results = new List<CashSessionSyncItemResultDto>(request.Sessions.Count);
+
+    foreach (var incoming in request.Sessions)
+    {
+        try
+        {
+            if (incoming.SyncVersion <= 0)
+            {
+                results.Add(new CashSessionSyncItemResultDto(incoming.CashSessionId, "Failed", 0, "SyncVersion must be positive."));
+                continue;
+            }
+
+            if (!await db.Registers.AnyAsync(r => r.Id == incoming.RegisterId && r.StoreId == storeId.Value, cancellationToken))
+            {
+                results.Add(new CashSessionSyncItemResultDto(incoming.CashSessionId, "Failed", 0, "Register does not exist on the server yet."));
+                continue;
+            }
+
+            var openedByUserId = await ResolveCashActorUserIdAsync(db, tenantId, storeId.Value, incoming.OpenedByUserId, incoming.OpenedByUsername, cancellationToken);
+            if (openedByUserId is null)
+            {
+                results.Add(new CashSessionSyncItemResultDto(incoming.CashSessionId, "Failed", 0, "Could not verify a tenant user for OpenedByUsername."));
+                continue;
+            }
+
+            Guid? closedByUserId = null;
+            if (!string.IsNullOrWhiteSpace(incoming.ClosedByUsername) || incoming.ClosedByUserId is not null)
+            {
+                closedByUserId = await ResolveCashActorUserIdAsync(db, tenantId, storeId.Value, incoming.ClosedByUserId, incoming.ClosedByUsername, cancellationToken);
+                if (closedByUserId is null)
+                {
+                    results.Add(new CashSessionSyncItemResultDto(incoming.CashSessionId, "Failed", 0, "Could not verify a tenant user for ClosedByUsername."));
+                    continue;
+                }
+            }
+
+            var existing = await db.CashSessions.FirstOrDefaultAsync(s => s.Id == incoming.CashSessionId && s.StoreId == storeId.Value, cancellationToken);
+
+            if (existing is null)
+            {
+                var created = new CashSession
+                {
+                    Id = incoming.CashSessionId,
+                    TenantId = tenantId,
+                    StoreId = storeId.Value,
+                    RegisterId = incoming.RegisterId,
+                    OpenedByUserId = openedByUserId.Value,
+                    OpenedAt = incoming.OpenedAt,
+                    OpeningCashAmount = incoming.OpeningCashAmount,
+                    CurrencyCode = incoming.CurrencyCode,
+                    Status = incoming.Status,
+                    IsSharedSession = incoming.IsSharedSession,
+                    ClosedByUserId = closedByUserId,
+                    ClosedAt = incoming.ClosedAt,
+                    ClosingCountedAmount = incoming.ClosingCountedAmount,
+                    ExpectedCashAmount = incoming.ExpectedCashAmount,
+                    DiscrepancyAmount = incoming.DiscrepancyAmount,
+                    Notes = incoming.Notes,
+                    IsSynced = true,
+                    SyncVersion = incoming.SyncVersion,
+                    CreatedAt = incoming.CreatedAt,
+                    UpdatedAt = incoming.UpdatedAt,
+                    IsDeleted = incoming.IsDeleted
+                };
+                db.CashSessions.Add(created);
+                await ReconcileCashMovementsAsync(db, created.Id, tenantId, storeId.Value, incoming.Movements, cancellationToken);
+                results.Add(new CashSessionSyncItemResultDto(incoming.CashSessionId, "Applied", incoming.SyncVersion, null));
+                continue;
+            }
+
+            // Movements are append-only and idempotent by Id — reconcile them unconditionally, before the
+            // header's own version outcome is decided below, so a header Conflict/Skip can never discard a
+            // legitimate movement another write already committed against this same session.
+            await ReconcileCashMovementsAsync(db, existing.Id, tenantId, storeId.Value, incoming.Movements, cancellationToken);
+
+            if (existing.SyncVersion > incoming.SyncVersion)
+            {
+                results.Add(new CashSessionSyncItemResultDto(incoming.CashSessionId, "Conflict", existing.SyncVersion, "Server has a newer cash session version."));
+                continue;
+            }
+
+            if (existing.SyncVersion == incoming.SyncVersion)
+            {
+                results.Add(new CashSessionSyncItemResultDto(incoming.CashSessionId, "Skipped", existing.SyncVersion, null));
+                continue;
+            }
+
+            // incoming.SyncVersion is strictly higher than what the server has recorded — ordinarily this
+            // means "apply it." But a closed session's header is an immutable posted fact (tenant.md §6
+            // rule 9): a higher-versioned payload that still claims to be reachable here can only mean a
+            // device fell out of sync with the close itself (e.g. it never received the close before going
+            // offline again), never a legitimate later edit, since a locally closed session accepts no
+            // further application writes. Reject rather than reopen it or rewrite its closing figures.
+            if (existing.Status == CashSessionStatus.Closed)
+            {
+                results.Add(new CashSessionSyncItemResultDto(incoming.CashSessionId, "Conflict", existing.SyncVersion,
+                    "Cash session is already closed; its header cannot be reopened or modified."));
+                continue;
+            }
+
+            existing.RegisterId = incoming.RegisterId;
+            existing.OpenedByUserId = openedByUserId.Value;
+            existing.OpenedAt = incoming.OpenedAt;
+            existing.OpeningCashAmount = incoming.OpeningCashAmount;
+            existing.CurrencyCode = incoming.CurrencyCode;
+            existing.Status = incoming.Status;
+            existing.IsSharedSession = incoming.IsSharedSession;
+            existing.ClosedByUserId = closedByUserId;
+            existing.ClosedAt = incoming.ClosedAt;
+            existing.ClosingCountedAmount = incoming.ClosingCountedAmount;
+            existing.ExpectedCashAmount = incoming.ExpectedCashAmount;
+            existing.DiscrepancyAmount = incoming.DiscrepancyAmount;
+            existing.Notes = incoming.Notes;
+            existing.IsSynced = true;
+            existing.SyncVersion = incoming.SyncVersion;
+            existing.UpdatedAt = incoming.UpdatedAt;
+            existing.IsDeleted = incoming.IsDeleted;
+
+            results.Add(new CashSessionSyncItemResultDto(incoming.CashSessionId, "Applied", incoming.SyncVersion, null));
+        }
+        catch (Exception ex)
+        {
+            results.Add(new CashSessionSyncItemResultDto(incoming.CashSessionId, "Failed", 0, ex.Message));
+        }
+    }
+
+    await db.SaveChangesAsync(cancellationToken);
+    await tx.CommitAsync(cancellationToken);
+
+    return Results.Ok(new CashSessionSyncPushResultDto(results));
+}).RequireAuthorization(SyncPolicy);
+
+syncApi.MapGet("/cash-sessions/pull", async (
+    ClaimsPrincipal user,
     string? sinceVersion,
     int? batchSize,
     IDbContextFactory<PosDbContext> dbFactory,
     CancellationToken cancellationToken) =>
 {
+    var storeId = TryParseGuid(user.FindFirstValue(StoreIdClaim));
+    if (storeId is null)
+        return Results.Unauthorized();
+
     if (!TryParseSequenceSinceVersion(sinceVersion, out var sinceSequence, out var normalizedSinceVersion))
         return Results.BadRequest(new ApiErrorResponse("sinceVersion is invalid."));
 
     var take = Math.Clamp(batchSize ?? 25, 1, 100);
 
     await using var db = await dbFactory.CreateDbContextAsync(cancellationToken);
-    var changes = await GetGuidSyncChangesAsync(db, SyncAggregateTypes.Category, sinceSequence, take, null, includeGlobalRows: false, cancellationToken);
+    var tenantId = await ResolveTenantIdAsync(db, storeId.Value, cancellationToken);
+    var changes = await GetGuidSyncChangesAsync(db, SyncAggregateTypes.CashSession, sinceSequence, take, tenantId, storeId.Value, includeGlobalRows: false, cancellationToken);
+    var sessionIds = changes.Select(c => c.EntityId).ToList();
+    var sessions = await BuildCashSessionSyncDtosAsync(db, storeId.Value, sessionIds, cancellationToken);
+
+    var orderedSessions = OrderByGuidSequence(changes, sessions, s => s.CashSessionId);
+
+    var nextSinceVersion = changes.Count == 0
+        ? normalizedSinceVersion
+        : FormatSequenceSinceVersion(changes[^1].Sequence);
+
+    return Results.Ok(new CashSessionSyncPullResultDto(orderedSessions, nextSinceVersion));
+}).RequireAuthorization(SyncPolicy);
+
+syncApi.MapGet("/categories/pull", async (
+    ClaimsPrincipal user,
+    string? sinceVersion,
+    int? batchSize,
+    IDbContextFactory<PosDbContext> dbFactory,
+    CancellationToken cancellationToken) =>
+{
+    // Category is a tenant-wide aggregate (StoreId is always null in its SyncChange rows — see
+    // PosDbContext.CapturePendingSyncChanges), so this endpoint needs a real tenant context to scope by
+    // — previously it took no ClaimsPrincipal at all, and GetGuidSyncChangesAsync's null-storeId branch
+    // had no tenant filter either, so any authenticated caller could pull every tenant's categories.
+    var storeId = TryParseGuid(user.FindFirstValue(StoreIdClaim));
+    if (storeId is null)
+        return Results.Unauthorized();
+
+    if (!TryParseSequenceSinceVersion(sinceVersion, out var sinceSequence, out var normalizedSinceVersion))
+        return Results.BadRequest(new ApiErrorResponse("sinceVersion is invalid."));
+
+    var take = Math.Clamp(batchSize ?? 25, 1, 100);
+
+    await using var db = await dbFactory.CreateDbContextAsync(cancellationToken);
+    var tenantId = await ResolveTenantIdAsync(db, storeId.Value, cancellationToken);
+    var changes = await GetGuidSyncChangesAsync(db, SyncAggregateTypes.Category, sinceSequence, take, tenantId, null, includeGlobalRows: false, cancellationToken);
     var categories = await ProjectCategorySyncItems(
             db.Categories
                 .AsNoTracking()
-                .Where(c => changes.Select(change => change.EntityId).Contains(c.Id)))
+                .Where(c => c.TenantId == tenantId && changes.Select(change => change.EntityId).Contains(c.Id)))
         .ToListAsync(cancellationToken);
 
     var orderedCategories = OrderByGuidSequence(changes, categories, category => category.CategoryId);
@@ -754,7 +1051,7 @@ syncApi.MapGet("/categories/pull", async (
         : FormatSequenceSinceVersion(changes[^1].Sequence);
 
     return Results.Ok(new CategorySyncPullResultDto(orderedCategories, nextSinceVersion));
-});
+}).RequireAuthorization(SyncPolicy);
 
 syncApi.MapGet("/products/pull", async (
     ClaimsPrincipal user,
@@ -773,11 +1070,12 @@ syncApi.MapGet("/products/pull", async (
     var take = Math.Clamp(batchSize ?? 25, 1, 100);
 
     await using var db = await dbFactory.CreateDbContextAsync(cancellationToken);
-    var changes = await GetGuidSyncChangesAsync(db, SyncAggregateTypes.Product, sinceSequence, take, null, includeGlobalRows: false, cancellationToken);
+    var tenantId = await ResolveTenantIdAsync(db, storeId.Value, cancellationToken);
+    var changes = await GetGuidSyncChangesAsync(db, SyncAggregateTypes.Product, sinceSequence, take, tenantId, null, includeGlobalRows: false, cancellationToken);
     var products = await ProjectProductSyncItems(
             db.Products
                 .AsNoTracking()
-                .Where(p => changes.Select(change => change.EntityId).Contains(p.Id)),
+                .Where(p => p.TenantId == tenantId && changes.Select(change => change.EntityId).Contains(p.Id)),
             db,
             storeId.Value)
         .ToListAsync(cancellationToken);
@@ -789,7 +1087,7 @@ syncApi.MapGet("/products/pull", async (
         : FormatSequenceSinceVersion(changes[^1].Sequence);
 
     return Results.Ok(new ProductSyncPullResultDto(orderedProducts, nextSinceVersion));
-});
+}).RequireAuthorization(SyncPolicy);
 
 syncApi.MapGet("/settings/pull", async (
     ClaimsPrincipal user,
@@ -808,7 +1106,8 @@ syncApi.MapGet("/settings/pull", async (
     var take = Math.Clamp(batchSize ?? 25, 1, 100);
 
     await using var db = await dbFactory.CreateDbContextAsync(cancellationToken);
-    var changes = await GetKeySyncChangesAsync(db, SyncAggregateTypes.Setting, sinceSequence, take, storeId.Value, includeGlobalRows: false, cancellationToken);
+    var tenantId = await ResolveTenantIdAsync(db, storeId.Value, cancellationToken);
+    var changes = await GetKeySyncChangesAsync(db, SyncAggregateTypes.Setting, sinceSequence, take, tenantId, storeId.Value, includeGlobalRows: false, cancellationToken);
     var settings = await ProjectSettingSyncItems(
             db.Settings
                 .AsNoTracking()
@@ -824,7 +1123,7 @@ syncApi.MapGet("/settings/pull", async (
         : FormatSequenceSinceVersion(changes[^1].Sequence);
 
     return Results.Ok(new SettingsSyncPullResultDto(orderedSettings, nextSinceVersion));
-});
+}).RequireAuthorization(SyncPolicy);
 
 syncApi.MapGet("/users/pull", async (
     ClaimsPrincipal user,
@@ -843,7 +1142,8 @@ syncApi.MapGet("/users/pull", async (
     var take = Math.Clamp(batchSize ?? 25, 1, 100);
 
     await using var db = await dbFactory.CreateDbContextAsync(cancellationToken);
-    var changes = await GetGuidSyncChangesAsync(db, SyncAggregateTypes.User, sinceSequence, take, storeId.Value, includeGlobalRows: false, cancellationToken);
+    var tenantId = await ResolveTenantIdAsync(db, storeId.Value, cancellationToken);
+    var changes = await GetGuidSyncChangesAsync(db, SyncAggregateTypes.User, sinceSequence, take, tenantId, storeId.Value, includeGlobalRows: false, cancellationToken);
     var users = await ProjectUserSyncItems(
             db.Users
                 .AsNoTracking()
@@ -857,7 +1157,7 @@ syncApi.MapGet("/users/pull", async (
         : FormatSequenceSinceVersion(changes[^1].Sequence);
 
     return Results.Ok(new UserSyncPullResultDto(orderedUsers, nextSinceVersion));
-});
+}).RequireAuthorization(SyncPolicy);
 
 syncApi.MapGet("/devices/pull", async (
     ClaimsPrincipal user,
@@ -876,7 +1176,8 @@ syncApi.MapGet("/devices/pull", async (
     var take = Math.Clamp(batchSize ?? 25, 1, 100);
 
     await using var db = await dbFactory.CreateDbContextAsync(cancellationToken);
-    var changes = await GetGuidSyncChangesAsync(db, SyncAggregateTypes.Device, sinceSequence, take, storeId.Value, includeGlobalRows: false, cancellationToken);
+    var tenantId = await ResolveTenantIdAsync(db, storeId.Value, cancellationToken);
+    var changes = await GetGuidSyncChangesAsync(db, SyncAggregateTypes.Device, sinceSequence, take, tenantId, storeId.Value, includeGlobalRows: false, cancellationToken);
     var devices = await ProjectDeviceSyncItems(
             db.Devices
                 .AsNoTracking()
@@ -890,7 +1191,110 @@ syncApi.MapGet("/devices/pull", async (
         : FormatSequenceSinceVersion(changes[^1].Sequence);
 
     return Results.Ok(new DeviceSyncPullResultDto(orderedDevices, nextSinceVersion));
-});
+}).RequireAuthorization(SyncPolicy);
+
+syncApi.MapGet("/registers/pull", async (
+    ClaimsPrincipal user,
+    string? sinceVersion,
+    int? batchSize,
+    IDbContextFactory<PosDbContext> dbFactory,
+    CancellationToken cancellationToken) =>
+{
+    var storeId = TryParseGuid(user.FindFirstValue(StoreIdClaim));
+    if (storeId is null)
+        return Results.Unauthorized();
+
+    if (!TryParseSequenceSinceVersion(sinceVersion, out var sinceSequence, out var normalizedSinceVersion))
+        return Results.BadRequest(new ApiErrorResponse("sinceVersion is invalid."));
+
+    var take = Math.Clamp(batchSize ?? 25, 1, 100);
+
+    await using var db = await dbFactory.CreateDbContextAsync(cancellationToken);
+    var tenantId = await ResolveTenantIdAsync(db, storeId.Value, cancellationToken);
+    var changes = await GetGuidSyncChangesAsync(db, SyncAggregateTypes.Register, sinceSequence, take, tenantId, storeId.Value, includeGlobalRows: false, cancellationToken);
+    var registers = await db.Registers
+            .AsNoTracking()
+            .Where(r => r.StoreId == storeId.Value && changes.Select(change => change.EntityId).Contains(r.Id))
+            .Select(r => new RegisterSyncDto(r.Id, r.Number, r.Name, r.IsActive, r.SyncVersion, r.CreatedAt, r.UpdatedAt, r.IsDeleted))
+        .ToListAsync(cancellationToken);
+
+    var orderedRegisters = OrderByGuidSequence(changes, registers, register => register.RegisterId);
+
+    var nextSinceVersion = changes.Count == 0
+        ? normalizedSinceVersion
+        : FormatSequenceSinceVersion(changes[^1].Sequence);
+
+    return Results.Ok(new RegisterSyncPullResultDto(orderedRegisters, nextSinceVersion));
+}).RequireAuthorization(SyncPolicy);
+
+syncApi.MapPost("/registers/push", async (
+    ClaimsPrincipal user,
+    RegisterSyncBatchDto request,
+    IDbContextFactory<PosDbContext> dbFactory,
+    CancellationToken cancellationToken) =>
+{
+    var storeId = TryParseGuid(user.FindFirstValue(StoreIdClaim));
+    if (storeId is null)
+        return Results.Unauthorized();
+
+    if (request.Registers.Count == 0)
+        return Results.Ok(new RegisterSyncPushResultDto(Array.Empty<RegisterSyncItemResultDto>()));
+
+    await using var db = await dbFactory.CreateDbContextAsync(cancellationToken);
+    await using var tx = await db.Database.BeginTransactionAsync(cancellationToken);
+    var tenantId = await ResolveTenantIdAsync(db, storeId.Value, cancellationToken);
+
+    var results = new List<RegisterSyncItemResultDto>(request.Registers.Count);
+
+    foreach (var incoming in request.Registers)
+    {
+        try
+        {
+            var existing = await db.Registers.FirstOrDefaultAsync(r => r.Id == incoming.RegisterId && r.StoreId == storeId.Value, cancellationToken);
+            if (existing is not null && existing.UpdatedAt >= incoming.UpdatedAt)
+            {
+                results.Add(new RegisterSyncItemResultDto(incoming.RegisterId, "Skipped", existing.UpdatedAt, null));
+                continue;
+            }
+
+            if (existing is null)
+            {
+                db.Registers.Add(new Register
+                {
+                    Id = incoming.RegisterId,
+                    TenantId = tenantId,
+                    StoreId = storeId.Value,
+                    Number = incoming.Number,
+                    Name = incoming.Name,
+                    IsActive = incoming.IsActive,
+                    SyncVersion = incoming.SyncVersion,
+                    CreatedAt = incoming.CreatedAt,
+                    UpdatedAt = incoming.UpdatedAt,
+                    IsDeleted = incoming.IsDeleted
+                });
+            }
+            else
+            {
+                existing.Number = incoming.Number;
+                existing.Name = incoming.Name;
+                existing.IsActive = incoming.IsActive;
+                existing.SyncVersion = incoming.SyncVersion;
+                existing.UpdatedAt = incoming.UpdatedAt;
+                existing.IsDeleted = incoming.IsDeleted;
+            }
+
+            results.Add(new RegisterSyncItemResultDto(incoming.RegisterId, "Applied", incoming.UpdatedAt, null));
+        }
+        catch (Exception ex)
+        {
+            results.Add(new RegisterSyncItemResultDto(incoming.RegisterId, "Failed", DateTime.UtcNow, ex.Message));
+        }
+    }
+
+    await db.SaveChangesAsync(cancellationToken);
+    await tx.CommitAsync(cancellationToken);
+    return Results.Ok(new RegisterSyncPushResultDto(results));
+}).RequireAuthorization(ManageSettingsPolicy);
 
 syncApi.MapGet("/audit-logs/pull", async (
     ClaimsPrincipal user,
@@ -909,7 +1313,8 @@ syncApi.MapGet("/audit-logs/pull", async (
     var take = Math.Clamp(batchSize ?? 25, 1, 100);
 
     await using var db = await dbFactory.CreateDbContextAsync(cancellationToken);
-    var changes = await GetGuidSyncChangesAsync(db, SyncAggregateTypes.AuditLog, sinceSequence, take, storeId.Value, includeGlobalRows: false, cancellationToken);
+    var tenantId = await ResolveTenantIdAsync(db, storeId.Value, cancellationToken);
+    var changes = await GetGuidSyncChangesAsync(db, SyncAggregateTypes.AuditLog, sinceSequence, take, tenantId, storeId.Value, includeGlobalRows: false, cancellationToken);
     var auditLogs = await ProjectAuditLogSyncItems(
             db.AuditLogs
                 .AsNoTracking()
@@ -925,7 +1330,7 @@ syncApi.MapGet("/audit-logs/pull", async (
         : FormatSequenceSinceVersion(changes[^1].Sequence);
 
     return Results.Ok(new AuditLogSyncPullResultDto(orderedAuditLogs, nextSinceVersion));
-});
+}).RequireAuthorization(SyncPolicy);
 
 syncApi.MapPost("/audit-logs/push", async (
     ClaimsPrincipal user,
@@ -986,7 +1391,7 @@ syncApi.MapPost("/audit-logs/push", async (
     await db.SaveChangesAsync(cancellationToken);
     await tx.CommitAsync(cancellationToken);
     return Results.Ok(new AuditLogSyncPushResultDto(results));
-});
+}).RequireAuthorization(SyncPolicy);
 
 syncApi.MapPost("/devices/push", async (
     ClaimsPrincipal user,
@@ -1046,9 +1451,11 @@ syncApi.MapGet("/currency-policy/pull", async (
         return Results.BadRequest(new ApiErrorResponse("sinceVersion is invalid."));
 
     await using var db = await dbFactory.CreateDbContextAsync(cancellationToken);
+    var tenantId = await ResolveTenantIdAsync(db, storeId.Value, cancellationToken);
     var nextSequence = await db.SyncChanges
         .AsNoTracking()
         .Where(c => c.AggregateType == SyncAggregateTypes.CurrencyPolicy
+                 && c.TenantId == tenantId
                  && c.Id > sinceSequence
                  && (c.StoreId == null || c.StoreId == storeId.Value))
         .OrderByDescending(c => c.Id)
@@ -1063,7 +1470,7 @@ syncApi.MapGet("/currency-policy/pull", async (
     return Results.Ok(new CurrencyPolicySyncPullResultDto(
         new CurrencyPolicySyncDto(policy.StoreId, policy.BaseCurrencyId, currentUpdatedAt, policy.Currencies),
         FormatSequenceSinceVersion(nextSequence.Value)));
-});
+}).RequireAuthorization();
 
 syncApi.MapPost("/currency-policy/push", async (
     ClaimsPrincipal user,
@@ -1153,7 +1560,7 @@ syncApi.MapPost("/products/push", async (
             await EnsureCategoryAsync(db, tenantId, incoming.CategoryId, incoming.CategoryName, incoming.CreatedAt, incoming.UpdatedAt, cancellationToken);
 
             var existing = await db.Products
-                .FirstOrDefaultAsync(p => p.Id == incoming.ProductId, cancellationToken);
+                .FirstOrDefaultAsync(p => p.Id == incoming.ProductId && p.TenantId == tenantId, cancellationToken);
 
             if (existing is not null && existing.UpdatedAt >= incoming.UpdatedAt)
             {
@@ -1188,16 +1595,25 @@ syncApi.MapPost("/products/push", async (
 }).RequireAuthorization(ManageProductsPolicy);
 
 syncApi.MapPost("/categories/push", async (
+    ClaimsPrincipal user,
     CategorySyncBatchDto request,
     IDbContextFactory<PosDbContext> dbFactory,
     CancellationToken cancellationToken) =>
 {
+    // Previously derived tenant via ResolveSoleTenantIdAsync (an explicit "no auth context available"
+    // fallback documented in docs/TENANT_T0_AUDIT.md finding #6 — only correct for a single-tenant
+    // deployment). The endpoint has required a real JWT (ManageProductsPolicy) all along, so its
+    // claims are the actual, correct source of tenant scope — this was the T4 fix that note called for.
+    var storeId = TryParseGuid(user.FindFirstValue(StoreIdClaim));
+    if (storeId is null)
+        return Results.Unauthorized();
+
     if (request.Categories.Count == 0)
         return Results.Ok(new CategorySyncPushResultDto(Array.Empty<CategorySyncItemResultDto>()));
 
     await using var db = await dbFactory.CreateDbContextAsync(cancellationToken);
     await using var tx = await db.Database.BeginTransactionAsync(cancellationToken);
-    var tenantId = await ResolveSoleTenantIdAsync(db, cancellationToken);
+    var tenantId = await ResolveTenantIdAsync(db, storeId.Value, cancellationToken);
 
     var results = new List<CategorySyncItemResultDto>(request.Categories.Count);
 
@@ -1211,7 +1627,7 @@ syncApi.MapPost("/categories/push", async (
                 continue;
             }
 
-            var existing = await db.Categories.FirstOrDefaultAsync(c => c.Id == incoming.CategoryId, cancellationToken);
+            var existing = await db.Categories.FirstOrDefaultAsync(c => c.Id == incoming.CategoryId && c.TenantId == tenantId, cancellationToken);
             if (existing is not null && existing.UpdatedAt >= incoming.UpdatedAt)
             {
                 results.Add(new CategorySyncItemResultDto(incoming.CategoryId, "Skipped", existing.UpdatedAt, null));
@@ -1479,11 +1895,12 @@ static async Task<List<SequenceGuidChange>> GetGuidSyncChangesAsync(
     string aggregateType,
     long sinceSequence,
     int take,
+    Guid tenantId,
     Guid? storeId,
     bool includeGlobalRows,
     CancellationToken cancellationToken)
 {
-    var changes = await BuildSyncChangeQuery(db.SyncChanges.AsNoTracking(), aggregateType, sinceSequence, storeId, includeGlobalRows)
+    var changes = await BuildSyncChangeQuery(db.SyncChanges.AsNoTracking(), aggregateType, sinceSequence, tenantId, storeId, includeGlobalRows)
         .Where(c => c.EntityId != null)
         .OrderBy(c => c.Id)
         .Take(take)
@@ -1502,11 +1919,12 @@ static async Task<List<SequenceKeyChange>> GetKeySyncChangesAsync(
     string aggregateType,
     long sinceSequence,
     int take,
+    Guid tenantId,
     Guid? storeId,
     bool includeGlobalRows,
     CancellationToken cancellationToken)
 {
-    var changes = await BuildSyncChangeQuery(db.SyncChanges.AsNoTracking(), aggregateType, sinceSequence, storeId, includeGlobalRows)
+    var changes = await BuildSyncChangeQuery(db.SyncChanges.AsNoTracking(), aggregateType, sinceSequence, tenantId, storeId, includeGlobalRows)
         .Where(c => c.EntityKey != null)
         .OrderBy(c => c.Id)
         .Take(take)
@@ -1520,14 +1938,25 @@ static async Task<List<SequenceKeyChange>> GetKeySyncChangesAsync(
         .ToList();
 }
 
+/// <summary>
+/// Every sync-change row carries a <see cref="SyncChange.TenantId"/> (never null), so filtering on it
+/// unconditionally — not just via <paramref name="storeId"/> — is what actually enforces tenant
+/// isolation for a tenant-wide aggregate (Category, Product, CurrencyPolicy — recorded with
+/// <c>StoreId = null</c>). Before this filter existed, <paramref name="storeId"/> alone could not
+/// distinguish "no store, tenant-wide" from "no store, ANY tenant": a real cross-tenant data leak where
+/// one tenant's pull of a null-storeId aggregate silently included every other tenant's rows too. For a
+/// store-scoped aggregate this is a no-op (a Store already belongs to exactly one Tenant), so this never
+/// changes behavior for those — it only closes the gap for the null-storeId case.
+/// </summary>
 static IQueryable<SyncChange> BuildSyncChangeQuery(
     IQueryable<SyncChange> query,
     string aggregateType,
     long sinceSequence,
+    Guid tenantId,
     Guid? storeId,
     bool includeGlobalRows)
 {
-    query = query.Where(c => c.AggregateType == aggregateType && c.Id > sinceSequence);
+    query = query.Where(c => c.AggregateType == aggregateType && c.Id > sinceSequence && c.TenantId == tenantId);
 
     if (storeId is null)
         return query.Where(c => c.StoreId == null);
@@ -1707,15 +2136,6 @@ static async Task<Guid> ResolveTenantIdAsync(PosDbContext db, Guid storeId, Canc
         .FirstOrDefaultAsync(cancellationToken)
     ?? Guid.Empty;
 
-// The categories/push endpoint has no auth context to derive a tenant from (see Stage 4T audit finding #6
-// in docs/TENANT_T0_AUDIT.md) — falls back to the sole bootstrap tenant until T4 adds real per-request scope.
-static async Task<Guid> ResolveSoleTenantIdAsync(PosDbContext db, CancellationToken cancellationToken) =>
-    await db.Tenants
-        .AsNoTracking()
-        .OrderBy(t => t.CreatedAt)
-        .Select(t => t.Id)
-        .FirstOrDefaultAsync(cancellationToken);
-
 static async Task EnsureCategoryAsync(
     PosDbContext db,
     Guid tenantId,
@@ -1725,7 +2145,11 @@ static async Task EnsureCategoryAsync(
     DateTime updatedAt,
     CancellationToken cancellationToken)
 {
-    var existing = await db.Categories.FirstOrDefaultAsync(c => c.Id == categoryId, cancellationToken);
+    // Tenant-scoped lookup: a product push referencing another tenant's CategoryId (a nested-reference
+    // isolation gap — the id alone was previously trusted) must never overwrite that foreign category's
+    // Name/UpdatedAt in place. If the id genuinely belongs to another tenant, the insert below fails on
+    // the primary key instead — a safe rejection, not a silent cross-tenant write.
+    var existing = await db.Categories.FirstOrDefaultAsync(c => c.Id == categoryId && c.TenantId == tenantId, cancellationToken);
     if (existing is null)
     {
         existing = new Category
@@ -1759,15 +2183,16 @@ static async Task<Device> UpsertDeviceSnapshotAsync(
     DeviceSyncDto incoming,
     CancellationToken cancellationToken)
 {
-    var matchedByName = false;
     Device? device = await db.Devices
         .FirstOrDefaultAsync(d => d.Id == incoming.DeviceId && d.StoreId == storeId, cancellationToken);
 
     if (device is null)
     {
+        // No row under this exact Id — a device with the same display Name may already exist (the
+        // unique (StoreId, Name) index allows only one row per name), so find it to update in place
+        // rather than violating that constraint with a second row of the same name.
         device = await db.Devices
             .FirstOrDefaultAsync(d => d.StoreId == storeId && d.Name == incoming.Name && !d.IsDeleted, cancellationToken);
-        matchedByName = device is not null;
     }
 
     if (device is not null && device.UpdatedAt > incoming.UpdatedAt)
@@ -1783,10 +2208,12 @@ static async Task<Device> UpsertDeviceSnapshotAsync(
         };
         db.Devices.Add(device);
     }
-    else if (matchedByName && device.Id != incoming.DeviceId)
-    {
-        device.Id = incoming.DeviceId;
-    }
+    // Never reassign an existing row's Id to match incoming.DeviceId, even when it was matched by
+    // Name — every FK already pointing at this row's original Id (Invoices.DeviceId, Register
+    // bindings, cash-session history) would silently dangle if we repointed it, and an
+    // unauthenticated/buggy payload that merely shares a display Name must not be able to repoint an
+    // existing device's identity. A name-matched row keeps its own Id and just gets its fields
+    // refreshed below; only a genuinely new row is created under incoming.DeviceId.
 
     device.Name = string.IsNullOrWhiteSpace(incoming.Name) ? "Unknown Device" : incoming.Name.Trim();
     device.SyncVersion = incoming.SyncVersion <= 0 ? 1 : incoming.SyncVersion;
@@ -2305,23 +2732,237 @@ static async Task<Device> GetOrCreateFallbackDeviceAsync(
     return created;
 }
 
-static async Task<Guid> ResolveInvoiceUserIdAsync(
+// The pushed invoice's own recorded username is who actually rang up that historical sale — locally
+// authenticated at creation time — and stays authoritative even when whoever/whatever is running this
+// sync pass right now is someone else (a different cashier, an unattended device credential, or a
+// later online reconciliation). Trusting it outright was the real gap (tenant.md: "the server must
+// validate authorization rather than trust a submitted UserId") — fixed by requiring it to resolve to
+// a genuine, active user of the SAME tenant/store, and rejecting the invoice outright (never silently
+// re-attributing it to whoever happens to be pushing) when it does not.
+static async Task<Guid?> ResolveInvoiceUserIdAsync(
     PosDbContext db,
+    Guid tenantId,
     Guid storeId,
-    Guid fallbackUserId,
+    Guid? authenticatedUserId,
     string? username,
     CancellationToken cancellationToken)
 {
     if (string.IsNullOrWhiteSpace(username))
-        return fallbackUserId;
+        return authenticatedUserId;
 
-    var userId = await db.Users
+    // Present but unresolvable (deleted/renamed/inactive user, cross-tenant string, client bug) is
+    // deliberately NOT a fallback-to-caller case: silently reattributing the sale to whoever happens
+    // to be pushing right now would be the exact misattribution this validation exists to prevent.
+    return await db.Users
         .AsNoTracking()
-        .Where(u => u.StoreId == storeId && u.Username == username.Trim() && !u.IsDeleted)
+        .Where(u => u.TenantId == tenantId && u.StoreId == storeId && u.Username == username.Trim() && u.IsActive && !u.IsDeleted)
         .Select(u => (Guid?)u.Id)
         .FirstOrDefaultAsync(cancellationToken);
+}
 
-    return userId ?? fallbackUserId;
+/// <summary>Resolves a cash-session actor (opener/closer/performer/approver) by username, scoped to the
+/// pushing tenant/store. Never falls back to any other identity — null means "reject," matching the same
+/// non-negotiable rule <see cref="ResolveInvoiceUserIdAsync"/> applies to a present-but-unresolvable
+/// invoice username.</summary>
+/// <summary>
+/// Resolves a cash-session actor (opener/closer/performer/approver). Tries the claimed <paramref
+/// name="userIdHint"/> first — never trusted on its own, only accepted once it is verified to belong to a
+/// real, active, non-deleted user of this same tenant/store — so a later username change (renaming the
+/// same person) can never strand an offline device's pending push. Falls back to a username match for
+/// degenerate/pre-migration payloads that carry no id. Returns null (never a fallback to any other
+/// identity) when neither resolves, so the caller can skip rather than misattribute.
+/// </summary>
+static async Task<Guid?> ResolveCashActorUserIdAsync(
+    PosDbContext db,
+    Guid tenantId,
+    Guid storeId,
+    Guid? userIdHint,
+    string? username,
+    CancellationToken cancellationToken)
+{
+    if (userIdHint is { } id && id != Guid.Empty)
+    {
+        var byId = await db.Users
+            .AsNoTracking()
+            .Where(u => u.Id == id && u.TenantId == tenantId && u.StoreId == storeId && u.IsActive && !u.IsDeleted)
+            .Select(u => (Guid?)u.Id)
+            .FirstOrDefaultAsync(cancellationToken);
+        if (byId is not null)
+            return byId;
+    }
+
+    if (string.IsNullOrWhiteSpace(username))
+        return null;
+
+    return await db.Users
+        .AsNoTracking()
+        .Where(u => u.TenantId == tenantId && u.StoreId == storeId && u.Username == username.Trim() && u.IsActive && !u.IsDeleted)
+        .Select(u => (Guid?)u.Id)
+        .FirstOrDefaultAsync(cancellationToken);
+}
+
+/// <summary>
+/// A resolved approver id is not itself proof of authorization — verifies the approver is a different
+/// person from the performer and currently holds <see cref="Permission.ManageSettings"/> (the same rule
+/// <c>CashSessionService.RecordManualMovementAsync</c> enforces for a local write), so a sync payload can
+/// never smuggle in a cash-out "approved" by an unauthorized or self-approving user.
+/// </summary>
+static async Task<bool> IsAuthorizedCashApproverAsync(PosDbContext db, Guid approverUserId, Guid performerUserId, CancellationToken cancellationToken)
+{
+    if (approverUserId == performerUserId)
+        return false;
+
+    var permissions = await db.Users
+        .AsNoTracking()
+        .Where(u => u.Id == approverUserId && u.IsActive && !u.IsDeleted)
+        .Select(u => (int?)u.Role!.PermissionsMask)
+        .FirstOrDefaultAsync(cancellationToken);
+
+    return permissions is not null && ((Permission)permissions.Value).HasFlag(Permission.ManageSettings);
+}
+
+/// <summary>Inserts whichever incoming movements aren't already present by Id — see the matching client-
+/// side comment in InvoiceSyncService.cs for why append-only movements need no update/remove case, and
+/// why an unresolved actor/approver or missing Invoice/Payment reference skips just that one movement
+/// rather than failing the whole session (whose own header, including the authoritative
+/// ExpectedCashAmount/DiscrepancyAmount computed once at close time, still applies).</summary>
+static async Task ReconcileCashMovementsAsync(
+    PosDbContext db,
+    Guid cashSessionId,
+    Guid tenantId,
+    Guid storeId,
+    IReadOnlyList<CashMovementSyncDto> incomingMovements,
+    CancellationToken cancellationToken)
+{
+    if (incomingMovements.Count == 0)
+        return;
+
+    var incomingIds = incomingMovements.Select(m => m.MovementId).ToList();
+    var existingIds = (await db.CashMovements
+            .AsNoTracking()
+            .Where(m => m.CashSessionId == cashSessionId && incomingIds.Contains(m.Id))
+            .Select(m => m.Id)
+            .ToListAsync(cancellationToken))
+        .ToHashSet();
+
+    foreach (var incoming in incomingMovements)
+    {
+        if (existingIds.Contains(incoming.MovementId))
+            continue;
+
+        if (incoming.InvoiceId is { } invoiceId && !await db.Invoices.AnyAsync(i => i.Id == invoiceId, cancellationToken))
+            continue;
+
+        if (incoming.PaymentId is { } paymentId && !await db.Payments.AnyAsync(p => p.Id == paymentId, cancellationToken))
+            continue;
+
+        var performedByUserId = await ResolveCashActorUserIdAsync(db, tenantId, storeId, incoming.PerformedByUserId, incoming.PerformedByUsername, cancellationToken);
+        if (performedByUserId is null)
+            continue;
+
+        Guid? approvedByUserId = null;
+        if (!string.IsNullOrWhiteSpace(incoming.ApprovedByUsername) || incoming.ApprovedByUserId is not null)
+        {
+            approvedByUserId = await ResolveCashActorUserIdAsync(db, tenantId, storeId, incoming.ApprovedByUserId, incoming.ApprovedByUsername, cancellationToken);
+            if (approvedByUserId is null)
+                continue;
+
+            // A resolved approver id is not itself proof of authorization — an unauthorized or
+            // self-approving "approval" must never be silently accepted into the ledger.
+            if (!await IsAuthorizedCashApproverAsync(db, approvedByUserId.Value, performedByUserId.Value, cancellationToken))
+                continue;
+        }
+
+        db.CashMovements.Add(new CashMovement
+        {
+            Id = incoming.MovementId,
+            TenantId = tenantId,
+            CashSessionId = cashSessionId,
+            Type = incoming.Type,
+            Amount = incoming.Amount,
+            Method = incoming.Method,
+            CurrencyCode = incoming.CurrencyCode,
+            InvoiceId = incoming.InvoiceId,
+            PaymentId = incoming.PaymentId,
+            PerformedByUserId = performedByUserId.Value,
+            ApprovedByUserId = approvedByUserId,
+            Notes = incoming.Notes,
+            CreatedAt = incoming.CreatedAt,
+            UpdatedAt = incoming.CreatedAt
+        });
+    }
+}
+
+static async Task<List<CashSessionSyncDto>> BuildCashSessionSyncDtosAsync(
+    PosDbContext db,
+    Guid storeId,
+    IReadOnlyCollection<Guid> sessionIds,
+    CancellationToken cancellationToken)
+{
+    var sessions = await db.CashSessions
+        .AsNoTracking()
+        .Where(s => s.StoreId == storeId && sessionIds.Contains(s.Id))
+        .ToListAsync(cancellationToken);
+
+    if (sessions.Count == 0)
+        return new List<CashSessionSyncDto>();
+
+    var movements = await db.CashMovements
+        .AsNoTracking()
+        .Where(m => sessionIds.Contains(m.CashSessionId) && !m.IsDeleted)
+        .ToListAsync(cancellationToken);
+
+    var userIds = sessions.Select(s => s.OpenedByUserId)
+        .Concat(sessions.Where(s => s.ClosedByUserId.HasValue).Select(s => s.ClosedByUserId!.Value))
+        .Concat(movements.Select(m => m.PerformedByUserId))
+        .Concat(movements.Where(m => m.ApprovedByUserId.HasValue).Select(m => m.ApprovedByUserId!.Value))
+        .Distinct()
+        .ToList();
+    var usernames = await db.Users.AsNoTracking()
+        .Where(u => userIds.Contains(u.Id))
+        .ToDictionaryAsync(u => u.Id, u => u.Username, cancellationToken);
+
+    var movementsBySession = movements.GroupBy(m => m.CashSessionId).ToDictionary(g => g.Key, g => g.ToList());
+
+    return sessions.Select(s => new CashSessionSyncDto(
+        s.Id,
+        s.RegisterId,
+        s.SyncVersion,
+        s.OpenedByUserId,
+        usernames.GetValueOrDefault(s.OpenedByUserId, string.Empty),
+        s.OpenedAt,
+        s.OpeningCashAmount,
+        s.CurrencyCode,
+        s.Status,
+        s.IsSharedSession,
+        s.ClosedByUserId,
+        s.ClosedByUserId.HasValue ? usernames.GetValueOrDefault(s.ClosedByUserId.Value) : null,
+        s.ClosedAt,
+        s.ClosingCountedAmount,
+        s.ExpectedCashAmount,
+        s.DiscrepancyAmount,
+        s.Notes,
+        s.CreatedAt,
+        s.UpdatedAt,
+        s.IsDeleted,
+        (movementsBySession.TryGetValue(s.Id, out var sessionMovements) ? sessionMovements : new List<CashMovement>())
+            .OrderBy(m => m.CreatedAt)
+            .Select(m => new CashMovementSyncDto(
+                m.Id,
+                m.Type,
+                m.Amount,
+                m.Method,
+                m.CurrencyCode,
+                m.InvoiceId,
+                m.PaymentId,
+                m.PerformedByUserId,
+                usernames.GetValueOrDefault(m.PerformedByUserId, string.Empty),
+                m.ApprovedByUserId,
+                m.ApprovedByUserId.HasValue ? usernames.GetValueOrDefault(m.ApprovedByUserId.Value) : null,
+                m.Notes,
+                m.CreatedAt))
+            .ToList()))
+        .ToList();
 }
 
 static IResult MapSaleError(Exception exception)
@@ -2338,6 +2979,8 @@ static IResult MapSaleError(Exception exception)
 internal sealed record SequenceGuidChange(long Sequence, Guid EntityId);
 internal sealed record SequenceKeyChange(long Sequence, string EntityKey);
 internal sealed record LoginRequest(string Username, string Password, string? TenantSlug = null);
+internal sealed record DeviceTokenRequest(Guid DeviceId, string Secret);
+internal sealed record DeviceTokenResponse(string AccessToken, DateTime ExpiresAtUtc);
 internal sealed record ProvisionTenantRequest(string TenantName, string TenantSlug, string StoreName, string AdminUsername, string AdminPassword, string BaseCurrencyCode = "ILS");
 internal sealed record ProvisionTenantResponse(Guid TenantId, Guid StoreId, Guid AdminUserId);
 internal sealed record AddSaleLineRequest(Guid ProductId, decimal Quantity);

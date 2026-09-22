@@ -1,0 +1,145 @@
+<Window x:Class="POS.Wpf.Windows.CashSessionWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:conv="clr-namespace:POS.Wpf.Converters"
+        Title="Cash Session"
+        Height="640" Width="920"
+        MinHeight="540" MinWidth="760"
+        ResizeMode="CanResizeWithGrip"
+        WindowStartupLocation="CenterOwner"
+        Background="{StaticResource BgTertiaryBrush}">
+
+    <Window.Resources>
+        <conv:InverseBoolToVisibilityConverter x:Key="InvBoolVis"/>
+    </Window.Resources>
+
+    <Grid Margin="16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <StackPanel Grid.Row="0" Margin="0,0,0,12">
+            <TextBlock x:Name="HeaderTb" FontSize="20" FontWeight="SemiBold" Foreground="{StaticResource TextPrimaryBrush}"/>
+            <TextBlock x:Name="RegisterTb" Margin="0,4,0,0" Foreground="{StaticResource TextSecondaryBrush}" Text="{Binding RegisterLabel}"/>
+        </StackPanel>
+
+        <Grid Grid.Row="1">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="16"/>
+                <ColumnDefinition Width="340"/>
+            </Grid.ColumnDefinitions>
+
+            <!-- Movements ledger -->
+            <Border Grid.Column="0"
+                    Background="{StaticResource BgPrimaryBrush}"
+                    BorderBrush="{StaticResource PanelBorderBrush}"
+                    BorderThickness="0.5"
+                    CornerRadius="8"
+                    ClipToBounds="True">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+
+                    <StackPanel Grid.Row="0" Margin="14,12,14,8" Visibility="{Binding HasOpenSession, Converter={StaticResource BoolToVis}}">
+                        <TextBlock x:Name="SummaryHeaderTb" FontSize="13" FontWeight="SemiBold" Foreground="{StaticResource TextPrimaryBrush}"/>
+                        <TextBlock Margin="0,4,0,0" Foreground="{StaticResource TextSecondaryBrush}" TextWrapping="Wrap" FontSize="12" Text="{Binding SummaryTotalsText}"/>
+                    </StackPanel>
+
+                    <DataGrid Grid.Row="1"
+                              ItemsSource="{Binding Movements}"
+                              AutoGenerateColumns="False"
+                              IsReadOnly="True"
+                              CanUserAddRows="False"
+                              HeadersVisibility="Column"
+                              GridLinesVisibility="Horizontal"
+                              BorderThickness="0"
+                              Background="{StaticResource BgPrimaryBrush}"
+                              RowBackground="{StaticResource BgPrimaryBrush}"
+                              AlternatingRowBackground="{StaticResource BgSecondaryBrush}">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn x:Name="ColTime" Binding="{Binding CreatedAt, StringFormat={}{0:HH:mm}}" Width="70"/>
+                            <DataGridTextColumn x:Name="ColType" Binding="{Binding Type}" Width="110"/>
+                            <DataGridTextColumn x:Name="ColAmount" Binding="{Binding Amount, StringFormat={}{0:0.##}}" Width="90"/>
+                            <DataGridTextColumn x:Name="ColMethod" Binding="{Binding Method}" Width="90"/>
+                            <DataGridTextColumn x:Name="ColUser" Binding="{Binding PerformedByUsername}" Width="110"/>
+                            <DataGridTextColumn x:Name="ColNotes" Binding="{Binding Notes}" Width="*"/>
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </Grid>
+            </Border>
+
+            <!-- Actions panel -->
+            <Border Grid.Column="2"
+                    Background="{StaticResource BgPrimaryBrush}"
+                    BorderBrush="{StaticResource PanelBorderBrush}"
+                    BorderThickness="0.5"
+                    CornerRadius="8"
+                    Padding="16">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                <StackPanel>
+
+                    <!-- No register bound to this machine -->
+                    <TextBlock x:Name="NoRegisterTb"
+                               Foreground="{StaticResource TextTertiaryBrush}"
+                               TextWrapping="Wrap"
+                               Visibility="{Binding HasRegister, Converter={StaticResource InvBoolVis}}"/>
+
+                    <!-- Open a session -->
+                    <StackPanel Visibility="{Binding CanOpenSession, Converter={StaticResource BoolToVis}}">
+                        <TextBlock x:Name="OpenHeaderTb" FontSize="14" FontWeight="SemiBold" Foreground="{StaticResource TextPrimaryBrush}"/>
+                        <TextBlock x:Name="OpenHintTb" Margin="0,4,0,8" Foreground="{StaticResource TextTertiaryBrush}" FontSize="11" TextWrapping="Wrap"/>
+                        <TextBlock x:Name="OpeningAmountLbl" Margin="0,10,0,4" Foreground="{StaticResource TextSecondaryBrush}"/>
+                        <TextBox Text="{Binding OpeningAmountText, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource PosTextBox}"/>
+                        <Button x:Name="OpenBtn" Margin="0,12,0,0" Style="{StaticResource AccentButton}" Command="{Binding OpenSessionCommand}"/>
+                    </StackPanel>
+
+                    <!-- Session is open -->
+                    <StackPanel Visibility="{Binding HasOpenSession, Converter={StaticResource BoolToVis}}">
+                        <TextBlock x:Name="ManualHeaderTb" FontSize="13" FontWeight="SemiBold" Foreground="{StaticResource TextPrimaryBrush}"/>
+                        <TextBlock x:Name="ManualAmountLbl" Margin="0,10,0,4" Foreground="{StaticResource TextSecondaryBrush}"/>
+                        <TextBox Text="{Binding ManualAmountText, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource PosTextBox}"/>
+                        <TextBlock x:Name="ManualNotesLbl" Margin="0,8,0,4" Foreground="{StaticResource TextSecondaryBrush}"/>
+                        <TextBox Text="{Binding ManualNotes, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource PosTextBox}"/>
+                        <TextBlock x:Name="ApproverLbl" Margin="0,8,0,4" Foreground="{StaticResource TextSecondaryBrush}"/>
+                        <TextBox Text="{Binding ApproverUsername, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource PosTextBox}"/>
+                        <Grid Margin="0,12,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="8"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <Button x:Name="CashInBtn" Grid.Column="0" Style="{StaticResource AccentButton}" Command="{Binding CashInCommand}"/>
+                            <Button x:Name="CashOutBtn" Grid.Column="2" Style="{StaticResource GhostButton}" Command="{Binding CashOutCommand}"/>
+                        </Grid>
+
+                        <Border BorderBrush="{StaticResource PanelBorderBrush}" BorderThickness="0,1,0,0" Margin="0,20,0,16"/>
+
+                        <TextBlock x:Name="CloseHeaderTb" FontSize="13" FontWeight="SemiBold" Foreground="{StaticResource TextPrimaryBrush}"/>
+                        <TextBlock x:Name="CloseHintTb" Margin="0,4,0,8" Foreground="{StaticResource TextTertiaryBrush}" FontSize="11" TextWrapping="Wrap"/>
+                        <TextBlock x:Name="ClosingAmountLbl" Margin="0,6,0,4" Foreground="{StaticResource TextSecondaryBrush}"/>
+                        <TextBox Text="{Binding ClosingCountedAmountText, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource PosTextBox}"/>
+                        <TextBlock x:Name="ClosingNotesLbl" Margin="0,8,0,4" Foreground="{StaticResource TextSecondaryBrush}"/>
+                        <TextBox Text="{Binding ClosingNotes, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource PosTextBox}"/>
+                        <Button x:Name="CloseSessionBtn" Margin="0,12,0,0" Style="{StaticResource GhostButton}" Command="{Binding CloseSessionCommand}"/>
+                    </StackPanel>
+
+                </StackPanel>
+                </ScrollViewer>
+            </Border>
+        </Grid>
+
+        <DockPanel Grid.Row="2" Margin="0,12,0,0" LastChildFill="False">
+            <TextBlock Text="{Binding StatusText}" VerticalAlignment="Center" Foreground="{StaticResource TextSecondaryBrush}"/>
+            <Button x:Name="WindowCloseBtn"
+                    DockPanel.Dock="Right"
+                    Width="90"
+                    Style="{StaticResource GhostButton}"
+                    Click="Close_Click"/>
+        </DockPanel>
+    </Grid>
+</Window>

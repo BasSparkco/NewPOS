@@ -16,6 +16,7 @@ public class PosDbContext : DbContext
     public DbSet<Tenant> Tenants => Set<Tenant>();
     public DbSet<Store> Stores => Set<Store>();
     public DbSet<Device> Devices => Set<Device>();
+    public DbSet<Register> Registers => Set<Register>();
     public DbSet<Currency> Currencies => Set<Currency>();
     public DbSet<TenantCurrencyRate> TenantCurrencyRates => Set<TenantCurrencyRate>();
     public DbSet<Category> Categories => Set<Category>();
@@ -31,6 +32,26 @@ public class PosDbContext : DbContext
     public DbSet<Invoice> Invoices => Set<Invoice>();
     public DbSet<InvoiceItem> InvoiceItems => Set<InvoiceItem>();
     public DbSet<Payment> Payments => Set<Payment>();
+    public DbSet<CashSession> CashSessions => Set<CashSession>();
+    public DbSet<CashMovement> CashMovements => Set<CashMovement>();
+
+    /// <summary>
+    /// Saves changes without recording sync-change rows for them. For one-time structural backfills
+    /// of historical data (see <see cref="RegisterBackfill"/>) that must not be replayed through the
+    /// ordinary sync engine as if they were fresh business edits.
+    /// </summary>
+    public int SaveChangesWithoutSyncCapture()
+    {
+        _writingSyncChanges = true;
+        try
+        {
+            return base.SaveChanges(true);
+        }
+        finally
+        {
+            _writingSyncChanges = false;
+        }
+    }
 
     public override int SaveChanges(bool acceptAllChangesOnSuccess)
     {
@@ -72,6 +93,20 @@ public class PosDbContext : DbContext
             {
                 case AuditLog auditLog:
                     pending.Add(new PendingSyncChange(auditLog.TenantId, auditLog.StoreId, SyncAggregateTypes.AuditLog, auditLog.Id, null));
+                    break;
+
+                // Movements never trigger their own sync-change row — like InvoiceItem/Payment under
+                // Invoice, a CashMovement is nested under its CashSession aggregate. Every write path
+                // that adds a movement (open/close/manual/sale/refund) must also touch the parent
+                // CashSession itself (bumping UpdatedAt/SyncVersion) — which is exactly what the
+                // optimistic-concurrency guard against a racing close already requires, so this falls
+                // out "for free" alongside that mechanism rather than needing separate wiring here.
+                case CashSession cashSession:
+                    pending.Add(new PendingSyncChange(cashSession.TenantId, cashSession.StoreId, SyncAggregateTypes.CashSession, cashSession.Id, null));
+                    break;
+
+                case Register register:
+                    pending.Add(new PendingSyncChange(register.TenantId, register.StoreId, SyncAggregateTypes.Register, register.Id, null));
                     break;
 
                 case Category category:

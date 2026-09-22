@@ -102,6 +102,8 @@ public partial class App : System.Windows.Application
                 services.AddTransient<UserManagementWindow>();
                 services.AddTransient<DeviceManagementViewModel>();
                 services.AddTransient<DeviceManagementWindow>();
+                services.AddTransient<CashSessionViewModel>();
+                services.AddTransient<CashSessionWindow>();
                 services.AddTransient<ChangePasswordViewModel>();
                 services.AddTransient<ChangePasswordWindow>();
                 services.AddTransient<SetupViewModel>();
@@ -134,7 +136,13 @@ public partial class App : System.Windows.Application
             // normal LoginWindow flow below, unchanged from every existing install's experience.
         }
 
-        var login = _host.Services.GetRequiredService<LoginWindow>();
+        ShowLoginThenMainWindow();
+    }
+
+    /// <summary>Shows LoginWindow; on success, shows MainWindow. Re-entered every time an employee logs out.</summary>
+    private void ShowLoginThenMainWindow()
+    {
+        var login = _host!.Services.GetRequiredService<LoginWindow>();
         login.Topmost = true;
         if (login.ShowDialog() != true)
         {
@@ -161,8 +169,36 @@ public partial class App : System.Windows.Application
     private void ShowMainWindow()
     {
         var main = _host!.Services.GetRequiredService<MainWindow>();
+        var loggingOut = false;
+
+        if (main.DataContext is MainViewModel viewModel)
+        {
+            viewModel.LogoutRequested += (_, _) =>
+            {
+                loggingOut = true;
+                main.Close();
+            };
+        }
+
+        // Explicit-shutdown throughout: a plain window close (X button, Alt+F4) exits the app via the
+        // Closed handler below, while a Logout click sets `loggingOut` first and returns to LoginWindow
+        // instead — clearing only the in-memory session, never any open CashSession (that lives in the
+        // database, keyed by Register/user, and survives exactly as tenant.md's Stage 4T work requires).
+        main.Closed += (_, _) =>
+        {
+            if (loggingOut)
+            {
+                _host.Services.GetRequiredService<ICurrentSession>().Clear();
+                ShowLoginThenMainWindow();
+            }
+            else
+            {
+                Shutdown();
+            }
+        };
+
         MainWindow = main;
-        ShutdownMode = ShutdownMode.OnMainWindowClose;
+        ShutdownMode = ShutdownMode.OnExplicitShutdown;
         main.Show();
         main.Activate();
     }

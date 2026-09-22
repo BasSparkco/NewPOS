@@ -68,6 +68,7 @@ public class AuditLogTests
     public async Task Refund_writes_invoice_refunded_audit_row()
     {
         await using var host = await TestServiceHost.CreateAsync();
+        await host.OpenDefaultCashSessionAsync();
 
         await host.ExecuteScopeAsync(async services =>
         {

@@ -140,6 +140,234 @@ public class InvoiceSyncServiceTests
         });
     }
 
+    // Stage 4T/T4.5 follow-up: once the interactive user logs out, ICurrentSession.Clear() wipes
+    // Password/StoreId/TenantId — the sync worker must still be able to keep running under this
+    // terminal's own enrolled device credential (tenant.md §5a) rather than stopping entirely.
+    [Fact]
+    public async Task Push_unsynced_invoices_authenticates_with_the_device_token_endpoint_after_logout_when_this_machine_is_enrolled()
+    {
+        string? capturedDeviceIdRaw = null;
+        string? capturedSecret = null;
+        var loginAttempted = false;
+
+        var handler = new FakeSyncHttpMessageHandler(async (request, cancellationToken) =>
+        {
+            if (request.RequestUri?.AbsolutePath == "/api/auth/login")
+            {
+                loginAttempted = true;
+                return new HttpResponseMessage(HttpStatusCode.Unauthorized);
+            }
+
+            if (request.RequestUri?.AbsolutePath == "/api/devices/token")
+            {
+                var body = await request.Content!.ReadFromJsonAsync<DeviceTokenRequestBody>(cancellationToken: cancellationToken);
+                capturedDeviceIdRaw = body?.DeviceId.ToString("N");
+                capturedSecret = body?.Secret;
+                return new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = JsonContent.Create(new { accessToken = "device-token", expiresAtUtc = DateTime.UtcNow.AddHours(24) })
+                };
+            }
+
+            if (request.RequestUri?.AbsolutePath == "/api/sync/invoices/push")
+            {
+                return new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = JsonContent.Create(new InvoiceSyncPushResultDto(Array.Empty<InvoiceSyncInvoiceResultDto>()))
+                };
+            }
+
+            return new HttpResponseMessage(HttpStatusCode.NotFound);
+        });
+
+        await using var host = await TestServiceHost.CreateAsync(
+            new Dictionary<string, string?>
+            {
+                ["Sync:Enabled"] = "true",
+                ["Sync:ApiBaseUrl"] = "https://sync.example.test",
+                ["Sync:BatchSize"] = "10"
+            },
+            services =>
+            {
+                services.RemoveAll<IHttpClientFactory>();
+                services.AddSingleton<IHttpClientFactory>(new FakeHttpClientFactory(handler));
+            });
+
+        const string deviceSecret = "correct-horse-battery-staple";
+        Guid deviceId;
+
+        await host.ExecuteScopeAsync(async services =>
+        {
+            var catalog = services.GetRequiredService<IProductCatalogService>();
+            var sales = services.GetRequiredService<ISaleService>();
+
+            var product = await catalog.CreateProductAsync(new ProductEditDto
+            {
+                Name = "Device Token Sync Item",
+                Price = 9m,
+                Cost = 3m,
+                CategoryId = host.CategoryId,
+                InitialStock = 20m,
+                IsActive = true
+            });
+
+            // Starting a sale auto-provisions this machine's own Device row (named after
+            // TestCurrentDevice.Name, "POS.Tests") — reuse it rather than insert a second row, which
+            // would collide with the unique (StoreId, Name) index.
+            var invoiceId = await sales.StartNewSaleAsync();
+            await sales.AddOrMergeLineAsync(invoiceId, product.Id, 1m);
+
+            var dbFactory = services.GetRequiredService<IDbContextFactory<PosDbContext>>();
+            await using var db = await dbFactory.CreateDbContextAsync();
+            var now = DateTime.UtcNow;
+
+            var device = await db.Devices.SingleAsync(d => d.StoreId == host.StoreId && d.Name == "POS.Tests");
+            device.EnrolledAt = now;
+            device.IsRevoked = false;
+            device.DeviceSecretHash = "irrelevant-to-the-client";
+            deviceId = device.Id;
+
+            db.Settings.Add(new POS.Core.Entities.Setting
+            {
+                Id = Guid.NewGuid(),
+                TenantId = host.TenantId,
+                StoreId = host.StoreId,
+                Key = "Sync.DeviceSecret",
+                Value = deviceSecret,
+                CreatedAt = now,
+                UpdatedAt = now
+            });
+            await db.SaveChangesAsync();
+
+            // Simulate the real WPF logout path: ICurrentSession.Clear() wipes identity, password and
+            // scope — the background sync worker's next pass must recover on its own.
+            host.Session.Clear();
+            Assert.False(host.Session.IsAuthenticated);
+            Assert.False(host.Session.HasSyncScope);
+
+            var sync = services.GetRequiredService<IInvoiceSyncService>();
+            await sync.EnsureSyncScopeAsync();
+
+            Assert.True(host.Session.HasSyncScope);
+            Assert.False(host.Session.IsAuthenticated);
+            Assert.Equal(host.StoreId, host.Session.StoreId);
+
+            var summary = await sync.PushUnsyncedInvoicesAsync();
+
+            // The point of this test is that the push was actually attempted through a device-issued
+            // token instead of silently giving up after logout — not the server's own reconciliation
+            // logic (covered elsewhere), so the fake server's empty result list is enough to prove the
+            // call reached /api/sync/invoices/push at all (Attempted == 1) via the device credential.
+            Assert.False(loginAttempted);
+            Assert.Equal(deviceId.ToString("N"), capturedDeviceIdRaw);
+            Assert.Equal(deviceSecret, capturedSecret);
+            Assert.Equal(1, summary.Attempted);
+        });
+    }
+
+    private sealed record DeviceTokenRequestBody(Guid DeviceId, string Secret);
+
+    // Mirrors the already-fixed server-side actor-misattribution fix for /api/sync/invoices/push: a
+    // pulled invoice whose username doesn't (yet) resolve locally must never be silently applied under
+    // whichever local user happens to be running sync — it must be skipped and picked up correctly on a
+    // later pass instead.
+    [Fact]
+    public async Task Pull_remote_invoices_skips_rather_than_misattributes_when_the_username_does_not_resolve_locally()
+    {
+        var remoteInvoiceId = Guid.NewGuid();
+        var remoteDeviceId = Guid.NewGuid();
+        var now = DateTime.UtcNow;
+        InvoiceSyncPullResultDto? results = null;
+
+        var handler = new FakeSyncHttpMessageHandler((request, _) =>
+        {
+            if (request.RequestUri?.AbsolutePath == "/api/auth/login")
+            {
+                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = JsonContent.Create(new { accessToken = "test-token" })
+                });
+            }
+
+            if (request.RequestUri?.AbsolutePath == "/api/sync/invoices/pull")
+            {
+                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = JsonContent.Create(results)
+                });
+            }
+
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.NotFound));
+        });
+
+        await using var host = await TestServiceHost.CreateAsync(
+            new Dictionary<string, string?>
+            {
+                ["Sync:Enabled"] = "true",
+                ["Sync:ApiBaseUrl"] = "https://sync.example.test",
+                ["Sync:BatchSize"] = "10"
+            },
+            services =>
+            {
+                services.RemoveAll<IHttpClientFactory>();
+                services.AddSingleton<IHttpClientFactory>(new FakeHttpClientFactory(handler));
+            });
+
+        await host.ExecuteScopeAsync(async services =>
+        {
+            var catalog = services.GetRequiredService<IProductCatalogService>();
+            var sync = services.GetRequiredService<IInvoiceSyncService>();
+            var dbFactory = services.GetRequiredService<IDbContextFactory<PosDbContext>>();
+
+            var product = await catalog.CreateProductAsync(new ProductEditDto
+            {
+                Name = "Pull Misattribution Item",
+                Price = 20m,
+                Cost = 8m,
+                CategoryId = host.CategoryId,
+                InitialStock = 10m,
+                IsActive = true
+            });
+
+            var nextSinceVersion = $"{now.Ticks}:{remoteInvoiceId:N}";
+            results = new InvoiceSyncPullResultDto(
+            [
+                new InvoiceSyncInvoiceDto(
+                    remoteInvoiceId,
+                    remoteDeviceId,
+                    "Remote Register",
+                    1,
+                    InvoiceStatus.Paid,
+                    20m,
+                    0m,
+                    "USD",
+                    null,
+                    now.AddMinutes(-5),
+                    now,
+                    new List<InvoiceSyncLineDto>
+                    {
+                        new(Guid.NewGuid(), product.Id, 1m, 20m, 0m, 20m, now.AddMinutes(-5), now, false)
+                    },
+                    new List<InvoiceSyncPaymentDto>
+                    {
+                        new(Guid.NewGuid(), 20m, PaymentMethod.Cash, now, now, now, false)
+                    },
+                    "someone-who-does-not-exist-locally")
+            ], nextSinceVersion);
+
+            var summary = await sync.PullRemoteInvoicesAsync();
+
+            Assert.Equal(1, summary.Received);
+            Assert.Equal(0, summary.Applied);
+            Assert.Equal(1, summary.Skipped);
+            Assert.Equal(0, summary.Failed);
+
+            await using var db = await dbFactory.CreateDbContextAsync();
+            var invoiceExists = await db.Invoices.AsNoTracking().AnyAsync(i => i.Id == remoteInvoiceId);
+            Assert.False(invoiceExists, "The invoice must not be silently created and misattributed to the local session's user.");
+        });
+    }
+
     private sealed record LoginRequestBody(string? Username, string? Password);
 
     [Fact]
@@ -1857,6 +2085,273 @@ public class InvoiceSyncServiceTests
 
             Assert.Equal(nextSinceVersion, pullCursor);
             Assert.Equal(expectedPushSequence?.ToString(), pushCursor);
+        });
+    }
+
+    [Fact]
+    public async Task Push_updated_cash_sessions_sends_the_full_aggregate_with_resolved_usernames()
+    {
+        CashSessionSyncPushResultDto results = new(Array.Empty<CashSessionSyncItemResultDto>());
+        var captured = new List<CashSessionSyncDto>();
+
+        var handler = new FakeSyncHttpMessageHandler(async (request, _) =>
+        {
+            if (request.RequestUri?.AbsolutePath == "/api/auth/login")
+            {
+                return new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = JsonContent.Create(new { accessToken = "test-token" })
+                };
+            }
+
+            if (request.RequestUri?.AbsolutePath == "/api/sync/cash-sessions/push")
+            {
+                var body = await request.Content!.ReadFromJsonAsync<CashSessionSyncBatchDto>();
+                captured = body!.Sessions.ToList();
+                results = new CashSessionSyncPushResultDto(captured
+                    .Select(s => new CashSessionSyncItemResultDto(s.CashSessionId, "Applied", s.SyncVersion, null))
+                    .ToList());
+
+                return new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = JsonContent.Create(results)
+                };
+            }
+
+            // Registers/Invoices push (they run earlier in a real pass) aren't exercised by this test —
+            // only PushUpdatedCashSessionsAsync is called directly, so nothing else should be hit.
+            return new HttpResponseMessage(HttpStatusCode.NotFound);
+        });
+
+        await using var host = await TestServiceHost.CreateAsync(
+            new Dictionary<string, string?>
+            {
+                ["Sync:Enabled"] = "true",
+                ["Sync:ApiBaseUrl"] = "https://sync.example.test",
+                ["Sync:BatchSize"] = "10"
+            },
+            services =>
+            {
+                services.RemoveAll<IHttpClientFactory>();
+                services.AddSingleton<IHttpClientFactory>(new FakeHttpClientFactory(handler));
+            });
+
+        await host.ExecuteScopeAsync(async services =>
+        {
+            var sales = services.GetRequiredService<ISaleService>();
+            var cashSessions = services.GetRequiredService<ICashSessionService>();
+            var sync = services.GetRequiredService<IInvoiceSyncService>();
+            var dbFactory = services.GetRequiredService<IDbContextFactory<PosDbContext>>();
+
+            var invoiceId = await sales.StartNewSaleAsync();
+            await using var db = await dbFactory.CreateDbContextAsync();
+            var registerId = await db.Invoices.AsNoTracking().Where(i => i.Id == invoiceId).Select(i => i.RegisterId).SingleAsync();
+            Assert.NotNull(registerId);
+            await sales.CancelInvoiceAsync(invoiceId);
+
+            var (openSuccess, openError, session) = await cashSessions.OpenSessionAsync(registerId!.Value, 100m);
+            Assert.True(openSuccess, openError);
+
+            var (cashInOk, cashInError) = await cashSessions.RecordManualMovementAsync(session!.Id, CashMovementType.CashIn, 40m, "Float top-up");
+            Assert.True(cashInOk, cashInError);
+
+            var summary = await sync.PushUpdatedCashSessionsAsync();
+
+            Assert.Equal(1, summary.Attempted);
+            Assert.Equal(1, summary.Sent);
+            Assert.Equal(0, summary.Failed);
+
+            var pushed = Assert.Single(captured);
+            Assert.Equal(session.Id, pushed.CashSessionId);
+            Assert.Equal(registerId, pushed.RegisterId);
+            Assert.Equal("admin", pushed.OpenedByUsername);
+            Assert.Equal(100m, pushed.OpeningCashAmount);
+            Assert.Equal(2, pushed.Movements.Count); // OpeningFloat + CashIn
+            Assert.Contains(pushed.Movements, m => m.Type == CashMovementType.CashIn && m.Amount == 40m && m.PerformedByUsername == "admin");
+            Assert.Contains(pushed.Movements, m => m.Type == CashMovementType.OpeningFloat && m.Amount == 100m);
+        });
+    }
+
+    [Fact]
+    public async Task Pull_remote_cash_sessions_applies_the_aggregate_and_skips_rather_than_misattributes_an_unresolved_actor()
+    {
+        var resolvableRegisterId = Guid.Empty;
+        CashSessionSyncPullResultDto? results = null;
+        var now = DateTime.UtcNow;
+        var resolvableSessionId = Guid.NewGuid();
+        var resolvableMovementId = Guid.NewGuid();
+        var unresolvableSessionId = Guid.NewGuid();
+
+        var handler = new FakeSyncHttpMessageHandler((request, _) =>
+        {
+            if (request.RequestUri?.AbsolutePath == "/api/auth/login")
+            {
+                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = JsonContent.Create(new { accessToken = "test-token" })
+                });
+            }
+
+            if (request.RequestUri?.AbsolutePath == "/api/sync/cash-sessions/pull")
+            {
+                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = JsonContent.Create(results)
+                });
+            }
+
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.NotFound));
+        });
+
+        await using var host = await TestServiceHost.CreateAsync(
+            new Dictionary<string, string?>
+            {
+                ["Sync:Enabled"] = "true",
+                ["Sync:ApiBaseUrl"] = "https://sync.example.test",
+                ["Sync:BatchSize"] = "10"
+            },
+            services =>
+            {
+                services.RemoveAll<IHttpClientFactory>();
+                services.AddSingleton<IHttpClientFactory>(new FakeHttpClientFactory(handler));
+            });
+
+        await host.ExecuteScopeAsync(async services =>
+        {
+            var sales = services.GetRequiredService<ISaleService>();
+            var sync = services.GetRequiredService<IInvoiceSyncService>();
+            var dbFactory = services.GetRequiredService<IDbContextFactory<PosDbContext>>();
+
+            // A local register must already exist (register sync runs before cash-session sync in a
+            // real pass) — this test calls PullRemoteCashSessionsAsync directly, so create one directly.
+            var invoiceId = await sales.StartNewSaleAsync();
+            await using var db = await dbFactory.CreateDbContextAsync();
+            resolvableRegisterId = (await db.Invoices.AsNoTracking().Where(i => i.Id == invoiceId).Select(i => i.RegisterId).SingleAsync())!.Value;
+            await sales.CancelInvoiceAsync(invoiceId);
+
+            var nextSinceVersion = $"{now.Ticks}";
+            results = new CashSessionSyncPullResultDto(
+            [
+                // Resolvable — "admin" exists locally (the seeded baseline user).
+                new CashSessionSyncDto(
+                    resolvableSessionId, resolvableRegisterId, 2, Guid.Empty, "admin", now.AddMinutes(-20), 150m, "USD",
+                    CashSessionStatus.Open, false, null, null, null, null, null, null, null,
+                    now.AddMinutes(-20), now.AddMinutes(-10), false,
+                    [new CashMovementSyncDto(resolvableMovementId, CashMovementType.CashIn, 30m, PaymentMethod.Cash, "USD", null, null, Guid.Empty, "admin", null, null, null, now.AddMinutes(-10))]),
+                // Unresolvable actor — must be skipped, never misattributed to whoever is running sync.
+                new CashSessionSyncDto(
+                    unresolvableSessionId, resolvableRegisterId, 2, Guid.Empty, "someone-who-does-not-exist-locally", now, 50m, "USD",
+                    CashSessionStatus.Open, false, null, null, null, null, null, null, null,
+                    now, now, false, [])
+            ], nextSinceVersion);
+
+            var summary = await sync.PullRemoteCashSessionsAsync();
+
+            Assert.Equal(2, summary.Received);
+            Assert.Equal(1, summary.Applied);
+            Assert.Equal(1, summary.Skipped);
+            Assert.Equal(0, summary.Failed);
+
+            var storedResolvable = await db.CashSessions.AsNoTracking().SingleAsync(s => s.Id == resolvableSessionId);
+            Assert.Equal(host.UserId, storedResolvable.OpenedByUserId);
+            Assert.Equal(150m, storedResolvable.OpeningCashAmount);
+
+            var storedMovement = await db.CashMovements.AsNoTracking().SingleAsync(m => m.Id == resolvableMovementId);
+            Assert.Equal(host.UserId, storedMovement.PerformedByUserId);
+
+            var unresolvableExists = await db.CashSessions.AsNoTracking().AnyAsync(s => s.Id == unresolvableSessionId);
+            Assert.False(unresolvableExists, "A session whose actor username doesn't resolve locally must not be silently created and misattributed.");
+        });
+    }
+
+    /// <summary>
+    /// Mirrors the server-side regression in ApiIntegrationTests: a session this device has already
+    /// recorded as Closed must never be reopened by a later pull, even one claiming a higher SyncVersion
+    /// than this device has ever seen — that can only represent a device that fell out of sync with the
+    /// close, never a legitimate later edit.
+    /// </summary>
+    [Fact]
+    public async Task Pull_remote_cash_sessions_never_reopens_a_session_this_device_already_closed()
+    {
+        var registerId = Guid.Empty;
+        var sessionId = Guid.NewGuid();
+        var now = DateTime.UtcNow;
+        CashSessionSyncPullResultDto? results = null;
+
+        var handler = new FakeSyncHttpMessageHandler((request, _) =>
+        {
+            if (request.RequestUri?.AbsolutePath == "/api/auth/login")
+            {
+                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = JsonContent.Create(new { accessToken = "test-token" })
+                });
+            }
+
+            if (request.RequestUri?.AbsolutePath == "/api/sync/cash-sessions/pull")
+            {
+                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = JsonContent.Create(results)
+                });
+            }
+
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.NotFound));
+        });
+
+        await using var host = await TestServiceHost.CreateAsync(
+            new Dictionary<string, string?>
+            {
+                ["Sync:Enabled"] = "true",
+                ["Sync:ApiBaseUrl"] = "https://sync.example.test",
+                ["Sync:BatchSize"] = "10"
+            },
+            services =>
+            {
+                services.RemoveAll<IHttpClientFactory>();
+                services.AddSingleton<IHttpClientFactory>(new FakeHttpClientFactory(handler));
+            });
+
+        await host.ExecuteScopeAsync(async services =>
+        {
+            var sales = services.GetRequiredService<ISaleService>();
+            var cashSessions = services.GetRequiredService<ICashSessionService>();
+            var sync = services.GetRequiredService<IInvoiceSyncService>();
+            var dbFactory = services.GetRequiredService<IDbContextFactory<PosDbContext>>();
+
+            var invoiceId = await sales.StartNewSaleAsync();
+            await using var db = await dbFactory.CreateDbContextAsync();
+            registerId = (await db.Invoices.AsNoTracking().Where(i => i.Id == invoiceId).Select(i => i.RegisterId).SingleAsync())!.Value;
+            await sales.CancelInvoiceAsync(invoiceId);
+
+            // First pull: an Open session lands locally (as if pulled from another device).
+            results = new CashSessionSyncPullResultDto(
+                [new CashSessionSyncDto(
+                    sessionId, registerId, 1, host.UserId, "admin", now.AddMinutes(-20), 100m, "USD",
+                    CashSessionStatus.Open, false, null, null, null, null, null, null, null,
+                    now.AddMinutes(-20), now.AddMinutes(-20), false, [])],
+                $"{now.Ticks}");
+            await sync.PullRemoteCashSessionsAsync();
+
+            // This device closes it locally — a purely local, offline-capable operation.
+            var (closeOk, closeError, _) = await cashSessions.CloseSessionAsync(sessionId, 100m);
+            Assert.True(closeOk, closeError);
+            var closedLocally = await db.CashSessions.AsNoTracking().SingleAsync(s => s.Id == sessionId);
+            Assert.Equal(CashSessionStatus.Closed, closedLocally.Status);
+
+            // A later pull returns the SAME session, still Open, but at a SyncVersion higher than this
+            // device has ever recorded — a stale/corrupted broadcast attempting to reopen it.
+            results = new CashSessionSyncPullResultDto(
+                [new CashSessionSyncDto(
+                    sessionId, registerId, closedLocally.SyncVersion + 5, host.UserId, "admin", now.AddMinutes(-20), 999m, "USD",
+                    CashSessionStatus.Open, false, null, null, null, null, null, null, null,
+                    now.AddMinutes(-20), now, false, [])],
+                $"{now.Ticks + 1}");
+            await sync.PullRemoteCashSessionsAsync();
+
+            var stored = await db.CashSessions.AsNoTracking().SingleAsync(s => s.Id == sessionId);
+            Assert.Equal(CashSessionStatus.Closed, stored.Status);
+            Assert.Equal(100m, stored.OpeningCashAmount);
         });
     }
 

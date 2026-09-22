@@ -37,6 +37,9 @@ public static class DependencyInjection
         services.AddScoped<IUserManagementService, UserManagementService>();
         services.AddScoped<ITenantProvisioningService, TenantProvisioningService>();
         services.AddScoped<IDeviceManagementService, DeviceManagementService>();
+        services.AddScoped<CashSessionService>();
+        services.AddScoped<ICashSessionService>(sp => sp.GetRequiredService<CashSessionService>());
+        services.AddScoped<ICashMovementWriter>(sp => sp.GetRequiredService<CashSessionService>());
         services.AddScoped<IInvoiceSyncService, InvoiceSyncService>();
         services.AddScoped<IOfflineAuthorizationPolicy, OfflineAuthorizationPolicy>();
         services.AddScoped<IBusinessJoinService, BusinessJoinService>();

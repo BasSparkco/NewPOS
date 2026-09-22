@@ -22,19 +22,22 @@ internal sealed class SaleService : ISaleService
     private readonly ICurrentDevice _currentDevice;
     private readonly ICurrentSession _session;
     private readonly IConfiguration _configuration;
+    private readonly ICashMovementWriter _cashMovementWriter;
 
     public SaleService(
         IDbContextFactory<PosDbContext> dbFactory,
         ICurrentSession session,
         IAuditLogService auditLogService,
         ICurrentDevice currentDevice,
-        IConfiguration configuration)
+        IConfiguration configuration,
+        ICashMovementWriter cashMovementWriter)
     {
         _dbFactory = dbFactory;
         _auditLogService = auditLogService;
         _currentDevice = currentDevice;
         _session = session;
         _configuration = configuration;
+        _cashMovementWriter = cashMovementWriter;
     }
 
     public async Task<Guid> StartNewSaleAsync(CancellationToken cancellationToken = default)
@@ -53,6 +56,7 @@ internal sealed class SaleService : ISaleService
             TenantId    = tenantId,
             StoreId     = storeId,
             DeviceId    = device.Id,
+            RegisterId  = device.RegisterId,
             UserId      = userId,
             Status      = InvoiceStatus.Open,
             TotalAmount = 0,
@@ -556,8 +560,29 @@ internal sealed class SaleService : ISaleService
         invoice.Status = InvoiceStatus.Paid;
     MarkInvoicePendingSync(invoice, now);
 
-        await db.SaveChangesAsync(cancellationToken);
-        await tx.CommitAsync(cancellationToken);
+        // Writes the cash-drawer ledger entry into this same db/transaction — it commits or rolls back
+        // together with the sale, so a completed cash sale can never end up with a missing movement. A
+        // cash sale requires an open, authorized session on this register (tenant.md §5b) — no session
+        // means this fails outright rather than silently completing without a movement.
+        var (cashSuccess, cashError) = await _cashMovementWriter.WriteSalePaymentAsync(db, invoice, payment, cancellationToken);
+        if (!cashSuccess)
+        {
+            await tx.RollbackAsync(cancellationToken);
+            return new SaleCompletionResult(false, cashError, null);
+        }
+
+        try
+        {
+            await db.SaveChangesAsync(cancellationToken);
+            await tx.CommitAsync(cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            // The cash session was closed by someone else between our check above and this commit.
+            // Roll back the whole sale (nothing was persisted) rather than let it land with no movement.
+            await tx.RollbackAsync(cancellationToken);
+            return new SaleCompletionResult(false, "The cash session was closed while completing this sale. Reopen a session and try again.", null);
+        }
 
         await TryWriteAuditAsync(
             "SaleCompleted",
@@ -599,6 +624,7 @@ internal sealed class SaleService : ISaleService
 
         var invoice = await db.Invoices
             .Include(i => i.Items)
+            .Include(i => i.Payments)
             .FirstOrDefaultAsync(i => i.Id == invoiceId && !i.IsDeleted, cancellationToken);
 
         if (invoice is null)
@@ -644,8 +670,31 @@ internal sealed class SaleService : ISaleService
         invoice.Status = InvoiceStatus.Cancelled;
         MarkInvoicePendingSync(invoice, now);
 
-        await db.SaveChangesAsync(cancellationToken);
-        await tx.CommitAsync(cancellationToken);
+        // Same-transaction ledger write as the completed-sale path above — a refund can never post its
+        // inventory/status change while silently dropping the offsetting cash-drawer entry. A cash
+        // refund requires an open, authorized session on this register, same as completing a cash sale;
+        // a non-cash original payment is a no-op here (nothing to record on the drawer).
+        var originalPayment = invoice.Payments.Where(p => !p.IsDeleted).OrderByDescending(p => p.PaidAt).FirstOrDefault();
+        if (originalPayment is not null)
+        {
+            var (cashSuccess, cashError) = await _cashMovementWriter.WriteRefundPaymentAsync(db, invoice, originalPayment, cancellationToken);
+            if (!cashSuccess)
+            {
+                await tx.RollbackAsync(cancellationToken);
+                return (false, cashError);
+            }
+        }
+
+        try
+        {
+            await db.SaveChangesAsync(cancellationToken);
+            await tx.CommitAsync(cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            await tx.RollbackAsync(cancellationToken);
+            return (false, "The cash session was closed while completing this refund. Reopen a session and try again.");
+        }
 
         await TryWriteAuditAsync(
             "InvoiceRefunded",
@@ -765,12 +814,33 @@ internal sealed class SaleService : ISaleService
             throw new DeviceNotAuthorizedException($"This machine ('{deviceName}') is not a recognized Box. Ask an administrator to provision it first.");
 
         // Lenient default (API/Web hosts, or WPF with enrollment disabled): auto-create and treat as
-        // already-trusted, matching pre-enrollment behavior.
+        // already-trusted, matching pre-enrollment behavior. Also mints this device's own Register so
+        // it has a stable number/history from its very first sale (tenant.md Stage 4T cash-session work).
+        var nextNumber = (await db.Registers
+            .Where(r => r.StoreId == storeId)
+            .Select(r => (int?)r.Number)
+            .MaxAsync(cancellationToken) ?? 0) + 1;
+
+        var register = new Register
+        {
+            Id = Guid.NewGuid(),
+            TenantId = tenantId,
+            StoreId = storeId,
+            Number = nextNumber,
+            Name = deviceName,
+            IsActive = true,
+            SyncVersion = 1,
+            CreatedAt = now,
+            UpdatedAt = now
+        };
+        db.Registers.Add(register);
+
         var created = new Device
         {
             Id = Guid.NewGuid(),
             TenantId = tenantId,
             StoreId = storeId,
+            RegisterId = register.Id,
             Name = deviceName,
             SyncVersion = 1,
             EnrolledAt = now,

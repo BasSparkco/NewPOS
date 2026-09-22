@@ -228,6 +228,38 @@ internal sealed class TestServiceHost : IAsyncDisposable
         return new TestServiceHost(provider, dbPath, session, tenantId, storeId, userId, categoryId, baseCurrencyId, altCurrencyId);
     }
 
+    /// <summary>
+    /// Opens (idempotently) a cash session on this host's single auto-provisioned register, with a
+    /// generous opening float, so tests unrelated to cash-session behavior can still complete a cash
+    /// sale — completing one now requires an open, authorized session (tenant.md §5b). Every
+    /// <c>ISaleService.StartNewSaleAsync</c> call within the same host resolves to the same Device/
+    /// Register (keyed by <see cref="TestCurrentDevice"/>'s fixed name), so a throwaway invoice reliably
+    /// discovers/creates it without needing any register id from the caller.
+    /// </summary>
+    public async Task<Guid> OpenDefaultCashSessionAsync(decimal openingAmount = 1000m)
+    {
+        await using var scope = _services.CreateAsyncScope();
+        var sales = scope.ServiceProvider.GetRequiredService<ISaleService>();
+        var cashSessions = scope.ServiceProvider.GetRequiredService<ICashSessionService>();
+        var dbFactory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<PosDbContext>>();
+
+        var invoiceId = await sales.StartNewSaleAsync();
+        await using var db = await dbFactory.CreateDbContextAsync();
+        var registerId = await db.Invoices.AsNoTracking().Where(i => i.Id == invoiceId).Select(i => i.RegisterId).SingleAsync()
+            ?? throw new InvalidOperationException("Test setup: new invoice has no register.");
+        await sales.CancelInvoiceAsync(invoiceId);
+
+        var existing = await cashSessions.GetActiveSessionAsync(registerId);
+        if (existing is not null)
+            return existing.Id;
+
+        var (success, error, session) = await cashSessions.OpenSessionAsync(registerId, openingAmount);
+        if (!success)
+            throw new InvalidOperationException($"Test setup could not open a cash session: {error}");
+
+        return session!.Id;
+    }
+
     public async Task<T> ExecuteScopeAsync<T>(Func<IServiceProvider, Task<T>> action)
     {
         await using var scope = _services.CreateAsyncScope();
@@ -266,8 +298,15 @@ internal sealed class TestCurrentSession : ICurrentSession
     public string BaseCurrencyCode { get; private set; } = "USD";
     public string? CurrencySymbol { get; private set; }
     public bool IsAuthenticated => UserId != Guid.Empty && StoreId != Guid.Empty;
+    public bool HasSyncScope => StoreId != Guid.Empty;
     public string? Password { get; private set; }
     public DateTime? LastOnlineContactUtc { get; private set; }
+
+    public void SetDeviceSyncScope(Guid tenantId, Guid storeId)
+    {
+        TenantId = tenantId;
+        StoreId = storeId;
+    }
 
     public void Set(Guid tenantId, Guid userId, Guid storeId, string username, string roleName, int permissionsMask, string baseCurrencyCode, string? currencySymbol)
     {

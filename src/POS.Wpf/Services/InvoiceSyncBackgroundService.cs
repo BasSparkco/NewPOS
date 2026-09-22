@@ -33,6 +33,7 @@ public sealed class InvoiceSyncBackgroundService : BackgroundService
                 {
                     await using var scope = _scopeFactory.CreateAsyncScope();
                     var sync = scope.ServiceProvider.GetRequiredService<IInvoiceSyncService>();
+                    await sync.EnsureSyncScopeAsync(stoppingToken);
                     await sync.PushCurrencyPolicyAsync(stoppingToken);
                     await sync.PullCurrencyPolicyAsync(stoppingToken);
                     await sync.PushUpdatedSettingsAsync(stoppingToken);
@@ -45,8 +46,15 @@ public sealed class InvoiceSyncBackgroundService : BackgroundService
                     await sync.PullRemoteProductsAsync(stoppingToken);
                     await sync.PushUpdatedDevicesAsync(stoppingToken);
                     await sync.PullRemoteDevicesAsync(stoppingToken);
+                    // Registers must sync before CashSessions — a session's RegisterId is a required FK.
+                    await sync.PushUpdatedRegistersAsync(stoppingToken);
+                    await sync.PullRemoteRegistersAsync(stoppingToken);
                     await sync.PushUnsyncedInvoicesAsync(stoppingToken);
                     await sync.PullRemoteInvoicesAsync(stoppingToken);
+                    // CashSessions must sync after Invoices — a movement's InvoiceId/PaymentId FK may
+                    // reference a sale that was just pushed/pulled earlier in this same pass.
+                    await sync.PushUpdatedCashSessionsAsync(stoppingToken);
+                    await sync.PullRemoteCashSessionsAsync(stoppingToken);
                     await sync.PushUpdatedAuditLogsAsync(stoppingToken);
                     await sync.PullRemoteAuditLogsAsync(stoppingToken);
                 }

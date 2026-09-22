@@ -31,6 +31,10 @@ internal sealed class InvoiceConfiguration : IEntityTypeConfiguration<Invoice>
             .WithMany(d => d.Invoices)
             .HasForeignKey(e => e.DeviceId)
             .OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne(e => e.Register)
+            .WithMany(r => r.Invoices)
+            .HasForeignKey(e => e.RegisterId)
+            .OnDelete(DeleteBehavior.Restrict);
         builder.HasOne(e => e.User)
             .WithMany(u => u.Invoices)
             .HasForeignKey(e => e.UserId)

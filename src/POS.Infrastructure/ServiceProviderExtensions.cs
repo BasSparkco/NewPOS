@@ -12,6 +12,7 @@ public static class ServiceProviderExtensions
         var factory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<PosDbContext>>();
         using var db = factory.CreateDbContext();
         db.Database.Migrate();
+        RegisterBackfill.EnsureBackfilled(db);
 
         if (seedDemoData)
             DatabaseSeeder.SeedIfNeeded(db);

@@ -15,6 +15,13 @@ public interface ICurrentSession
     string? CurrencySymbol { get; }
     bool IsAuthenticated { get; }
     /// <summary>
+    /// True once TenantId/StoreId are populated — either by an interactive <see cref="Set"/> login or
+    /// by <see cref="SetDeviceSyncScope"/> restoring a device-scoped store binding after the interactive
+    /// user has logged out. The minimum a background sync pass needs to know which store to act on;
+    /// unlike <see cref="IsAuthenticated"/>, it does not imply an interactive identity is signed in.
+    /// </summary>
+    bool HasSyncScope { get; }
+    /// <summary>
     /// The verified plaintext password from the current login, kept in memory only, for
     /// re-authenticating this same identity against the API when a device needs its own HTTP
     /// session (e.g. the WPF background sync worker). Never persisted or logged.
@@ -28,6 +35,14 @@ public interface ICurrentSession
     DateTime? LastOnlineContactUtc { get; }
 
     void Set(Guid tenantId, Guid userId, Guid storeId, string username, string roleName, int permissionsMask, string baseCurrencyCode, string? currencySymbol);
+    /// <summary>
+    /// Restores TenantId/StoreId only (never UserId/Username/Password/permissions/IsAuthenticated) so
+    /// background device-credential sync can keep running after an interactive logout. A WPF install is
+    /// bound to exactly one store, so this only ever re-establishes which store to sync, never grants
+    /// any interactive access. No-op semantics beyond WPF's background sync worker — other hosts never
+    /// call this.
+    /// </summary>
+    void SetDeviceSyncScope(Guid tenantId, Guid storeId);
     void SetPassword(string? password);
     void SetLastOnlineContactUtc(DateTime? lastOnlineContactUtc);
     void Clear();

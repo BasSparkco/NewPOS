@@ -36,8 +36,14 @@ internal sealed class DeviceManagementService : IDeviceManagementService
             .AsNoTracking()
             .Where(d => d.StoreId == storeId && !d.IsDeleted)
             .OrderByDescending(d => d.CreatedAt)
-            .Select(d => new { d.Id, d.Name, d.EnrolledAt, d.IsRevoked, d.CreatedAt })
+            .Select(d => new { d.Id, d.Name, d.EnrolledAt, d.IsRevoked, d.CreatedAt, d.RegisterId })
             .ToListAsync(cancellationToken);
+
+        var registerNumbers = await db.Registers
+            .AsNoTracking()
+            .Where(r => r.StoreId == storeId)
+            .Select(r => new { r.Id, r.Number })
+            .ToDictionaryAsync(r => r.Id, r => r.Number, cancellationToken);
 
         return rows
             .Select(d => new DeviceListItemDto(
@@ -47,11 +53,42 @@ internal sealed class DeviceManagementService : IDeviceManagementService
                 d.IsRevoked,
                 d.EnrolledAt,
                 d.CreatedAt,
-                string.Equals(d.Name, currentName, StringComparison.Ordinal)))
+                string.Equals(d.Name, currentName, StringComparison.Ordinal),
+                d.RegisterId,
+                d.RegisterId is not null && registerNumbers.TryGetValue(d.RegisterId.Value, out var number) ? number : null))
             .ToList();
     }
 
-    public async Task<(bool Success, string? Error, string? EnrollmentCode)> ProvisionDeviceAsync(string name, CancellationToken cancellationToken = default)
+    public async Task<IReadOnlyList<RegisterListItemDto>> GetRegistersAsync(CancellationToken cancellationToken = default)
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken);
+        var storeId = _session.StoreId;
+
+        var registers = await db.Registers
+            .AsNoTracking()
+            .Where(r => r.StoreId == storeId && !r.IsDeleted)
+            .OrderBy(r => r.Number)
+            .ToListAsync(cancellationToken);
+
+        var devices = await db.Devices
+            .AsNoTracking()
+            .Where(d => d.StoreId == storeId && !d.IsDeleted && d.RegisterId != null && !d.IsRevoked)
+            .ToListAsync(cancellationToken);
+
+        return registers
+            .Select(r =>
+            {
+                var current = devices
+                    .Where(d => d.RegisterId == r.Id)
+                    .OrderByDescending(d => d.CreatedAt)
+                    .FirstOrDefault();
+                return new RegisterListItemDto(r.Id, r.Number, r.Name, r.IsActive, current?.Id, current?.Name);
+            })
+            .ToList();
+    }
+
+    public async Task<(bool Success, string? Error, string? EnrollmentCode)> ProvisionDeviceAsync(
+        string name, Guid? replaceRegisterId = null, CancellationToken cancellationToken = default)
     {
         name = (name ?? string.Empty).Trim();
         if (name.Length == 0)
@@ -71,13 +108,53 @@ internal sealed class DeviceManagementService : IDeviceManagementService
             .FirstOrDefaultAsync(cancellationToken)
             ?? throw new InvalidOperationException("Store not found.");
 
-        var enrollmentCode = RandomPasswordGenerator.Generate(12);
         var now = DateTime.UtcNow;
+        Guid registerId;
+
+        if (replaceRegisterId is { } targetRegisterId)
+        {
+            var register = await db.Registers
+                .FirstOrDefaultAsync(r => r.Id == targetRegisterId && r.StoreId == storeId && !r.IsDeleted, cancellationToken);
+            if (register is null)
+                return (false, "Register not found.", null);
+
+            var hasActiveDevice = await db.Devices
+                .AnyAsync(d => d.RegisterId == register.Id && !d.IsDeleted && !d.IsRevoked, cancellationToken);
+            if (hasActiveDevice)
+                return (false, "This register already has an active device. Revoke it first before binding a replacement.", null);
+
+            registerId = register.Id;
+        }
+        else
+        {
+            var nextNumber = (await db.Registers
+                .Where(r => r.StoreId == storeId)
+                .Select(r => (int?)r.Number)
+                .MaxAsync(cancellationToken) ?? 0) + 1;
+
+            var register = new Register
+            {
+                Id = Guid.NewGuid(),
+                TenantId = tenantId,
+                StoreId = storeId,
+                Number = nextNumber,
+                Name = name,
+                IsActive = true,
+                SyncVersion = 1,
+                CreatedAt = now,
+                UpdatedAt = now
+            };
+            db.Registers.Add(register);
+            registerId = register.Id;
+        }
+
+        var enrollmentCode = RandomPasswordGenerator.Generate(12);
         var device = new Device
         {
             Id = Guid.NewGuid(),
             TenantId = tenantId,
             StoreId = storeId,
+            RegisterId = registerId,
             Name = name,
             SyncVersion = 1,
             EnrollmentCodeHash = BCrypt.Net.BCrypt.HashPassword(enrollmentCode),
@@ -89,7 +166,11 @@ internal sealed class DeviceManagementService : IDeviceManagementService
         db.Devices.Add(device);
         await db.SaveChangesAsync(cancellationToken);
 
-        await TryWriteAuditAsync("DeviceProvisioned", nameof(Device), device.Id, $"Name={device.Name}", cancellationToken);
+        await TryWriteAuditAsync("DeviceProvisioned", nameof(Device), device.Id,
+            replaceRegisterId is null
+                ? $"Name={device.Name}"
+                : $"Name={device.Name}, replacing device on RegisterId={replaceRegisterId}",
+            cancellationToken);
 
         return (true, null, enrollmentCode);
     }
@@ -117,11 +198,11 @@ internal sealed class DeviceManagementService : IDeviceManagementService
         return (true, null);
     }
 
-    public async Task<(bool Success, string? Error)> EnrollCurrentMachineAsync(string enrollmentCode, CancellationToken cancellationToken = default)
+    public async Task<(bool Success, string? Error, string? DeviceSecret)> EnrollCurrentMachineAsync(string enrollmentCode, CancellationToken cancellationToken = default)
     {
         enrollmentCode = (enrollmentCode ?? string.Empty).Trim();
         if (enrollmentCode.Length == 0)
-            return (false, "Enrollment code is required.");
+            return (false, "Enrollment code is required.", null);
 
         await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken);
         var storeId = _session.StoreId;
@@ -142,24 +223,26 @@ internal sealed class DeviceManagementService : IDeviceManagementService
         }
 
         if (match is null)
-            return (false, "Invalid or already-used enrollment code.");
+            return (false, "Invalid or already-used enrollment code.", null);
 
         var nameConflict = await db.Devices.AnyAsync(
             d => d.StoreId == storeId && d.Id != match.Id && d.Name == machineName && !d.IsDeleted,
             cancellationToken);
         if (nameConflict)
-            return (false, $"Another device already uses this machine's name ('{machineName}'). Ask an administrator to resolve it.");
+            return (false, $"Another device already uses this machine's name ('{machineName}'). Ask an administrator to resolve it.", null);
 
+        var deviceSecret = RandomPasswordGenerator.Generate(32);
         var now = DateTime.UtcNow;
         match.Name = machineName;
         match.EnrolledAt = now;
         match.EnrollmentCodeHash = null; // one-time use — consume it
+        match.DeviceSecretHash = BCrypt.Net.BCrypt.HashPassword(deviceSecret);
         match.UpdatedAt = now;
         await db.SaveChangesAsync(cancellationToken);
 
         await TryWriteAuditAsync("DeviceEnrolled", nameof(Device), match.Id, $"Name={match.Name}", cancellationToken);
 
-        return (true, null);
+        return (true, null, deviceSecret);
     }
 
     private static bool VerifyCode(string code, string? hash)

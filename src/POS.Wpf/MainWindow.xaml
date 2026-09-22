@@ -64,7 +64,7 @@
 
                 <!-- Bottom: Logout -->
                 <StackPanel DockPanel.Dock="Bottom" HorizontalAlignment="Center" Margin="0,0,0,12">
-                    <Button Command="{Binding DataContext.GoHomeCommand,
+                    <Button Command="{Binding DataContext.LogoutCommand,
                                      RelativeSource={RelativeSource AncestorType=Window}}"
                             ToolTip="{Binding NavLogoutLabel}">
                         <Button.Style>
@@ -242,6 +242,28 @@
                                       Stretch="Fill"/>
                             </Viewbox>
                             <TextBlock Text="{Binding NavUsersLabel}" FontSize="9" FontWeight="Medium" HorizontalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
+
+                    <!-- Cash Session -->
+                    <Button Command="{Binding GoCashSessionCommand}">
+                        <Button.Style>
+                            <Style TargetType="Button" BasedOn="{StaticResource SidebarNavButton}">
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding SelectedPage}" Value="CashSession">
+                                        <Setter Property="Background" Value="{DynamicResource AccentLightBrush}"/>
+                                        <Setter Property="Foreground" Value="{DynamicResource AccentBrush}"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Button.Style>
+                        <StackPanel HorizontalAlignment="Center">
+                            <Viewbox Width="18" Height="18" Margin="0,0,0,2">
+                                <Path Data="{StaticResource IconCash}"
+                                      Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
+                                      Stretch="Fill"/>
+                            </Viewbox>
+                            <TextBlock Text="{Binding NavCashSessionLabel}" FontSize="9" FontWeight="Medium" HorizontalAlignment="Center"/>
                         </StackPanel>
                     </Button>
 

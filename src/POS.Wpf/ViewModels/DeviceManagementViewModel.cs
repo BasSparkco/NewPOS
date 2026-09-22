@@ -2,9 +2,12 @@ using System.Collections.ObjectModel;
 using System.Windows;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using POS.Application.Abstractions;
 using POS.Application.Models;
+using POS.Core.Entities;
+using POS.Infrastructure.Data;
 using POS.Wpf.Localization;
 
 namespace POS.Wpf.ViewModels;
@@ -136,13 +139,16 @@ public partial class DeviceManagementViewModel : ObservableObject
         {
             await using var scope = _scopeFactory.CreateAsyncScope();
             var devices = scope.ServiceProvider.GetRequiredService<IDeviceManagementService>();
-            var (success, error) = await devices.EnrollCurrentMachineAsync(code);
+            var (success, error, deviceSecret) = await devices.EnrollCurrentMachineAsync(code);
 
             if (!success)
             {
                 MessageBox.Show(error, Locale.Get("App_TitleShort"), MessageBoxButton.OK, MessageBoxImage.Warning);
                 return;
             }
+
+            if (!string.IsNullOrEmpty(deviceSecret))
+                await PersistDeviceSecretAsync(scope.ServiceProvider, deviceSecret);
 
             EnrollmentCodeText = string.Empty;
             StatusText = Locale.Get("Devices_EnrolledThisMachine");
@@ -152,5 +158,41 @@ public partial class DeviceManagementViewModel : ObservableObject
         {
             IsBusy = false;
         }
+    }
+
+    /// <summary>
+    /// Stores the persistent device secret locally (Settings key prefixed "Sync." so it never
+    /// leaves this machine through the ordinary settings sync surface) so a future device-credential
+    /// sync path can authenticate this terminal without an employee being logged in.
+    /// </summary>
+    private static async Task PersistDeviceSecretAsync(IServiceProvider services, string deviceSecret)
+    {
+        var session = services.GetRequiredService<ICurrentSession>();
+        var dbFactory = services.GetRequiredService<IDbContextFactory<PosDbContext>>();
+        await using var db = await dbFactory.CreateDbContextAsync();
+
+        const string key = "Sync.DeviceSecret";
+        var now = DateTime.UtcNow;
+        var setting = await db.Settings.FirstOrDefaultAsync(s => s.StoreId == session.StoreId && s.Key == key && !s.IsDeleted);
+        if (setting is null)
+        {
+            db.Settings.Add(new Setting
+            {
+                Id = Guid.NewGuid(),
+                TenantId = session.TenantId,
+                StoreId = session.StoreId,
+                Key = key,
+                Value = deviceSecret,
+                CreatedAt = now,
+                UpdatedAt = now
+            });
+        }
+        else
+        {
+            setting.Value = deviceSecret;
+            setting.UpdatedAt = now;
+        }
+
+        await db.SaveChangesAsync();
     }
 }

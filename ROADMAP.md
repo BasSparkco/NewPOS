@@ -102,9 +102,10 @@ multi-branch reporting. Preserve the existing desktop, sync and dashboard work.
 
 - [x] T0 — Audit actual code and approve ownership/migration decisions.
 - [~] T1 — Tenant schema, store access and verified data migration. (SQLite rehearsed; PostgreSQL rehearsal and read-side sync scoping still open — see STATUS.md.)
-- [~] T2 — Verified identity, enrollment and server-side authorization. (Password auth, device enrollment, tenant-scoped login, granular Web/API permissions, change/reset password, minimal tenant provisioning, rate limiting, offline auth expiry, broader API permission coverage, and a Web audit viewer all landed; an audit trail/UI for tenant provisioning and a per-request sync device credential remain — see STATUS.md "Remaining T2 scope".)
-- [~] T3 — Tenant/store-bound desktop profiles and offline access. (A WPF "join an existing business" bootstrap landed, letting a fresh install bind to an existing tenant/store instead of always seeding an independent one; re-pointing an already-provisioned device to a different tenant remains deferred — see STATUS.md.)
-- [ ] T4 — Scoped, authorized and replay-safe synchronization.
+- [~] T2 — Verified identity, enrollment and server-side authorization. (Password auth, device enrollment, tenant-scoped login, granular Web/API permissions, change/reset password, minimal tenant provisioning, rate limiting, offline auth expiry, broader API permission coverage, a Web audit viewer, a per-request device credential (`/api/devices/token`), and a fix to invoice-push actor validation all landed; an audit trail/UI for tenant provisioning and wiring the WPF sync worker to actually use its device credential when logged out remain — see STATUS.md "Remaining T2 scope".)
+- [~] T3 — Tenant/store-bound desktop profiles and offline access. (A WPF "join an existing business" bootstrap landed, letting a fresh install bind to an existing tenant/store instead of always seeding an independent one; a real WPF logout now exists — previously the sidebar "Logout" button silently just navigated home; re-pointing an already-provisioned device to a different tenant remains deferred — see STATUS.md.)
+- [~] T4 — Scoped, authorized and replay-safe synchronization. (A real cross-tenant data leak in categories/products pull+push is fixed and regression-tested; CashSession/CashMovement/Register now have a full sync surface. A line-by-line audit of every remaining endpoint for the same leak class, tombstone/hard-delete propagation, and the live PostgreSQL rehearsal remain — see STATUS.md.)
+- [~] T4.5 — Cash session management (added 2026-09-21, promoted from backlog — required before T7; see tenant.md §5b, §7). Cash payments/refunds now require an open, authorized session (offline-capable); closing is concurrency-safe rather than over-strict; CashSession/CashMovement now sync; a full WPF UI exists. `POS.Web` still has no equivalent screen — see STATUS.md.
 - [ ] T5 — Tenant-aware administration and store access.
 - [ ] T6 — Isolation, migration and resilience release tests.
 - [ ] T7 — Recovery rehearsal and controlled pilot.
@@ -123,6 +124,12 @@ invoice is keyed by tenant + branch (`StoreId`) + box (`DeviceId`) + user
 (`TenantId, StoreId, DeviceId, UserId`). UI/reporting should surface this as
 "Branch / Box / Cashier" even though the underlying columns stay `StoreId`
 and `DeviceId`.
+
+**Terminology amendment (2026-09-21, same day, follow-up):** `Device` was
+further split into physical machine (`Device`, unchanged meaning) vs. logical
+till (new `Register` entity — stable number/history, survives a hardware
+swap). `Invoice.RegisterId` was added alongside the existing `Invoice.DeviceId`.
+See tenant.md §2.3a for the full rationale and migration approach.
 
 ---
 
@@ -148,7 +155,7 @@ These are not separate stages yet. They are prioritized backlog candidates to pr
 
 ### Operational Extensions
 
-1. **Cash register management:** opening/closing register, denomination counting, expected-vs-actual reconciliation, cashier session history.
+1. ~~**Cash register management:** opening/closing register, denomination counting, expected-vs-actual reconciliation, cashier session history.~~ **Promoted 2026-09-21** out of this backlog into Stage 4T/T4.5 (required before the T7 pilot) — see [tenant.md](tenant.md) §5b and STATUS.md. Not optional/deferred anymore; kept here only as a pointer.
 2. **Customer groups and selling price groups:** retail/wholesale/VIP pricing, customer-tier price rules, location-aware price policy.
 3. **Invoice layouts and invoice schemes:** multiple receipt/invoice templates, configurable numbering prefixes/sequences, optional QR/compliance fields.
 4. **Stock transfers between stores:** request/dispatch/receive flow, in-transit status, reconciliation.
@@ -185,7 +192,7 @@ Only promote these if product scope expands beyond core retail POS:
 Best candidates to promote soon after the current Stage 3/4 work:
 
 1. granular role-based permissions (RBAC) — WPF/Core/sync portion done; Web + API auth enforcement remains
-2. cash register management
+2. ~~cash register management~~ — promoted to Stage 4T/T4.5, no longer a backlog candidate
 3. customer groups and selling price groups
 4. invoice layouts and invoice schemes
 5. stock transfers between stores
@@ -201,4 +208,4 @@ Best candidates to promote soon after the current Stage 3/4 work:
 
 ---
 
-*Last updated 2026-09-21: Stages 0–4 are complete (see their sections above for details; optional Stage 3 item 3 remains deferred). Stage 4T (multi-tenant SaaS foundation) is now the active work: T0 is complete, T1 and T2 are in progress — see [STATUS.md](STATUS.md) Stage 4T for the authoritative, detailed, continuously-updated record of exactly what has landed and what's left; this file's checklist above is kept in sync with it. Stage 5.1 (`POS.Web`) has a working baseline predating the Stage 4T pass and will need adaptation once T2–T5 land, per tenant.md.*
+*Last updated 2026-09-21 (third session, same day): Stages 0–4 are complete (see their sections above for details; optional Stage 3 item 3 remains deferred). Stage 4T (multi-tenant SaaS foundation) is now the active work: T0 is complete, T1–T3 are in progress, T4 is now in progress (was unstarted), and T4.5 (cash session management, promoted from the backlog — see tenant.md §5b) is substantially complete — see [STATUS.md](STATUS.md) Stage 4T for the authoritative, detailed, continuously-updated record of exactly what has landed and what's left; this file's checklist above is kept in sync with it. Earlier the same day: split `Device` from a new `Register` entity, added a device-scoped `/api/devices/token` credential, fixed an invoice-sync actor-misattribution gap, gave WPF a real logout, made cash-movement recording atomic with the sale/refund it belongs to, fixed a second actor-misattribution gap on the invoice-pull path, fixed a device-identity integrity bug in device sync, wired the WPF background sync worker to keep running under its own device credential after logout, and shipped a full WPF Cash Session UI. This session then corrected two design decisions at the project owner's direction (cash payments/refunds now require an open, authorized session instead of silently skipping the movement; closing a session is concurrency-safe instead of over-strictly blocking on every held invoice), built a full CashSession/CashMovement/Register sync surface (previously entirely local-only) with verified idempotency and closed-history preservation, found and fixed a real cross-tenant data leak in categories/products sync (regression-tested with two real tenants), and verified a complete offline-sale-to-reconnect-to-reconciliation workflow end to end. Stage 5.1 (`POS.Web`) has a working baseline predating the Stage 4T pass, still has no cash-session screen, and will need adaptation once T2–T5 land, per tenant.md.*

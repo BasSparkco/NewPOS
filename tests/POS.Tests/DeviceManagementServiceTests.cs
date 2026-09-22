@@ -35,9 +35,10 @@ public class DeviceManagementServiceTests
             var devices = services.GetRequiredService<IDeviceManagementService>();
             await devices.ProvisionDeviceAsync("Front Counter");
 
-            var (success, error) = await devices.EnrollCurrentMachineAsync("definitely-wrong-code");
+            var (success, error, secret) = await devices.EnrollCurrentMachineAsync("definitely-wrong-code");
             Assert.False(success);
             Assert.NotNull(error);
+            Assert.Null(secret);
         });
     }
 
@@ -51,16 +52,18 @@ public class DeviceManagementServiceTests
             var devices = services.GetRequiredService<IDeviceManagementService>();
             var (_, _, code) = await devices.ProvisionDeviceAsync("Front Counter");
 
-            var (success, error) = await devices.EnrollCurrentMachineAsync(code!);
+            var (success, error, deviceSecret) = await devices.EnrollCurrentMachineAsync(code!);
             Assert.True(success, error);
+            Assert.False(string.IsNullOrWhiteSpace(deviceSecret));
 
             var list = await devices.GetDevicesAsync();
             var enrolled = Assert.Single(list, d => d.Name == "POS.Tests");
             Assert.True(enrolled.IsEnrolled);
             Assert.True(enrolled.IsCurrentMachine);
+            Assert.NotNull(enrolled.RegisterId);
 
             // The code is one-time use.
-            var (reuseSuccess, reuseError) = await devices.EnrollCurrentMachineAsync(code!);
+            var (reuseSuccess, reuseError, _) = await devices.EnrollCurrentMachineAsync(code!);
             Assert.False(reuseSuccess);
             Assert.NotNull(reuseError);
         });
@@ -89,7 +92,7 @@ public class DeviceManagementServiceTests
         {
             var devices = services.GetRequiredService<IDeviceManagementService>();
             var (_, _, code) = await devices.ProvisionDeviceAsync("Front Counter");
-            var (enrollSuccess, enrollError) = await devices.EnrollCurrentMachineAsync(code!);
+            var (enrollSuccess, enrollError, _) = await devices.EnrollCurrentMachineAsync(code!);
             Assert.True(enrollSuccess, enrollError);
 
             var sales = services.GetRequiredService<ISaleService>();

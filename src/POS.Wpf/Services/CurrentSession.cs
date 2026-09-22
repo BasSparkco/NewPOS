@@ -13,8 +13,19 @@ public sealed class CurrentSession : ICurrentSession
     public string BaseCurrencyCode { get; private set; } = "ILS";
     public string? CurrencySymbol { get; private set; } = "₪";
     public bool IsAuthenticated { get; private set; }
+    public bool HasSyncScope => StoreId != Guid.Empty;
     public string? Password { get; private set; }
     public DateTime? LastOnlineContactUtc { get; private set; }
+
+    public void SetDeviceSyncScope(Guid tenantId, Guid storeId)
+    {
+        // Never override an interactive login's scope — Set() already establishes the real thing.
+        if (IsAuthenticated)
+            return;
+
+        TenantId = tenantId;
+        StoreId = storeId;
+    }
 
     public void Set(Guid tenantId, Guid userId, Guid storeId, string username, string roleName, int permissionsMask, string baseCurrencyCode, string? currencySymbol)
     {

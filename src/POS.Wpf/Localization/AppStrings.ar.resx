@@ -175,6 +175,38 @@
   <data name="Devices_RevokedFormat" xml:space="preserve"><value>تم إلغاء الثقة بالجهاز '{0}'.</value></data>
   <data name="Devices_CodeRequired" xml:space="preserve"><value>رمز التفعيل مطلوب.</value></data>
   <data name="Devices_EnrolledThisMachine" xml:space="preserve"><value>تم تفعيل هذا الجهاز الآن.</value></data>
+  <data name="CashSession_Title" xml:space="preserve"><value>جلسة النقد</value></data>
+  <data name="CashSession_Header" xml:space="preserve"><value>جلسة النقد</value></data>
+  <data name="CashSession_SummaryHeader" xml:space="preserve"><value>الإجماليات الجارية</value></data>
+  <data name="CashSession_SummaryTotalsFormat" xml:space="preserve"><value>الافتتاح {0:0.##} {1}  •  المبيعات {2:0.##} {3}  •  المرتجعات {4:0.##} {5}  •  إيداع نقدي {6:0.##} {7}  •  سحب نقدي {8:0.##} {9}  •  المتوقع {10:0.##} {11}</value></data>
+  <data name="CashSession_NoRegister" xml:space="preserve"><value>هذا الجهاز غير مرتبط بنقطة بيع بعد. قم بتزويده أو تفعيله من شاشة الأجهزة أولاً.</value></data>
+  <data name="CashSession_OpenHeader" xml:space="preserve"><value>فتح جلسة</value></data>
+  <data name="CashSession_OpenHint" xml:space="preserve"><value>عدّ النقد في الدرج وأدخله أدناه لفتح جلسة النقد لهذه النقطة.</value></data>
+  <data name="CashSession_OpeningAmountLabel" xml:space="preserve"><value>مبلغ الافتتاح</value></data>
+  <data name="CashSession_OpenButton" xml:space="preserve"><value>فتح الجلسة</value></data>
+  <data name="CashSession_ManualHeader" xml:space="preserve"><value>تسجيل إيداع / سحب نقدي</value></data>
+  <data name="CashSession_AmountLabel" xml:space="preserve"><value>المبلغ</value></data>
+  <data name="CashSession_NotesLabel" xml:space="preserve"><value>ملاحظات (اختياري)</value></data>
+  <data name="CashSession_ApproverLabel" xml:space="preserve"><value>اسم مستخدم المدير المعتمِد (للسحب النقدي فقط، عند الحاجة)</value></data>
+  <data name="CashSession_CashInButton" xml:space="preserve"><value>إيداع نقدي</value></data>
+  <data name="CashSession_CashOutButton" xml:space="preserve"><value>سحب نقدي</value></data>
+  <data name="CashSession_CloseHeader" xml:space="preserve"><value>إغلاق هذه الجلسة</value></data>
+  <data name="CashSession_CloseHint" xml:space="preserve"><value>عدّ الدرج وأدخل الإجمالي. يتم احتساب المبلغ المتوقع وأي فرق تلقائيًا.</value></data>
+  <data name="CashSession_ClosingAmountLabel" xml:space="preserve"><value>المبلغ المعدود</value></data>
+  <data name="CashSession_CloseButton" xml:space="preserve"><value>إغلاق الجلسة</value></data>
+  <data name="CashSession_ColTime" xml:space="preserve"><value>الوقت</value></data>
+  <data name="CashSession_ColType" xml:space="preserve"><value>النوع</value></data>
+  <data name="CashSession_ColAmount" xml:space="preserve"><value>المبلغ</value></data>
+  <data name="CashSession_ColMethod" xml:space="preserve"><value>الطريقة</value></data>
+  <data name="CashSession_ColUser" xml:space="preserve"><value>المستخدم</value></data>
+  <data name="CashSession_ColNotes" xml:space="preserve"><value>ملاحظات</value></data>
+  <data name="CashSession_InvalidAmount" xml:space="preserve"><value>أدخل مبلغًا صالحًا غير سالب.</value></data>
+  <data name="CashSession_Opened" xml:space="preserve"><value>تم فتح جلسة النقد.</value></data>
+  <data name="CashSession_ConfirmClose" xml:space="preserve"><value>إغلاق جلسة النقد هذه؟ لا يمكن التراجع عن هذا الإجراء.</value></data>
+  <data name="CashSession_ClosedFormat" xml:space="preserve"><value>تم إغلاق الجلسة. الفرق: {0:0.##} {1}</value></data>
+  <data name="CashSession_ApproverNotFound" xml:space="preserve"><value>لم يتم العثور على مستخدم نشط بهذا الاسم في هذا المتجر.</value></data>
+  <data name="CashSession_CashInRecorded" xml:space="preserve"><value>تم تسجيل الإيداع النقدي.</value></data>
+  <data name="CashSession_CashOutRecorded" xml:space="preserve"><value>تم تسجيل السحب النقدي.</value></data>
   <data name="ProductMgmt_Title" xml:space="preserve"><value>المنتجات والفئات</value></data>
   <data name="ProductMgmt_NewCategory" xml:space="preserve"><value>فئة جديدة:</value></data>
   <data name="ProductMgmt_AddCategory" xml:space="preserve"><value>إضافة فئة</value></data>

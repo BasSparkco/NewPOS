@@ -163,6 +163,7 @@ public partial class MainViewModel : ObservableObject
     public string NavAuditLabel => T("Audit", "التدقيق", "ביקורת");
     public string NavUsersLabel => T("Users", "المستخدمون", "משתמשים");
     public string NavDevicesLabel => T("Devices", "الأجهزة", "מכשירים");
+    public string NavCashSessionLabel => T("Cash", "النقد", "קופה");
     public string NavSettingsLabel => T("Settings", "الإعدادات", "הגדרות");
     public string NavLogoutLabel => T("Logout", "تسجيل الخروج", "התנתקות");
     public string OnlineLabel => T("Online", "متصل", "מחובר");
@@ -480,6 +481,30 @@ public partial class MainViewModel : ObservableObject
         await SearchAsync();
     }
 
+    /// <summary>
+    /// Raised when the cashier explicitly signs out. Handled by App.xaml.cs, which clears the in-memory
+    /// session and returns to the login screen — it never touches any open CashSession: that financial
+    /// state lives in the database keyed by Register/user, not in ICurrentSession, so it survives a
+    /// logout exactly like tenant.md's Stage 4T cash-session work requires.
+    /// </summary>
+    public event EventHandler? LogoutRequested;
+
+    /// <summary>Sidebar: Logout — ends this employee's session; sync (if enabled) may keep running on the device's own credential.</summary>
+    [RelayCommand]
+    private void Logout()
+    {
+        if (MessageBox.Show(
+                T("Sign out of this session?", "تسجيل الخروج من هذه الجلسة؟", "להתנתק מהפעלה זו?"),
+                AppTitle,
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Question) != MessageBoxResult.Yes)
+        {
+            return;
+        }
+
+        LogoutRequested?.Invoke(this, EventArgs.Empty);
+    }
+
     /// <summary>Sidebar: Customers (future feature).</summary>
     [RelayCommand]
     private void GoCustomers()
@@ -584,6 +609,18 @@ public partial class MainViewModel : ObservableObject
         window.Owner = System.Windows.Application.Current.MainWindow;
         if (window.ShowDialog() == true)
             StatusText = T("Password changed.", "تم تغيير كلمة المرور.", "הסיסמה שונתה.");
+    }
+
+    /// <summary>Sidebar: Cash Session → opens the cash-drawer open/close/movement window. No permission
+    /// gate — any signed-in cashier manages their own till, matching CashSessionService's own rules.</summary>
+    [RelayCommand]
+    private void GoCashSession()
+    {
+        SelectedPage = "CashSession";
+        var window = _services.GetRequiredService<CashSessionWindow>();
+        window.Owner = System.Windows.Application.Current.MainWindow;
+        window.ShowDialog();
+        SelectedPage = "Cashier";
     }
 
     /// <summary>Sidebar: Devices → opens the Box provisioning/enrollment/revocation window (requires ManageSettings).</summary>
@@ -1213,6 +1250,7 @@ public partial class MainViewModel : ObservableObject
         OnPropertyChanged(nameof(NavAuditLabel));
         OnPropertyChanged(nameof(NavUsersLabel));
         OnPropertyChanged(nameof(NavDevicesLabel));
+        OnPropertyChanged(nameof(NavCashSessionLabel));
         OnPropertyChanged(nameof(NavSettingsLabel));
         OnPropertyChanged(nameof(NavLogoutLabel));
         OnPropertyChanged(nameof(OnlineLabel));
