@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using POS.Core;
 using POS.Core.Entities;
 
@@ -78,6 +79,41 @@ public class PosDbContext : DbContext
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(PosDbContext).Assembly);
+    }
+
+    /// <summary>
+    /// Every DateTime in this app is UTC by convention (DateTime.UtcNow throughout) — but SQLite has no
+    /// concept of DateTimeKind and always hands back Kind=Unspecified, which is exactly what
+    /// PostgreSQL/Npgsql rejects for a "timestamp with time zone" column ("Cannot write DateTime with
+    /// Kind=Unspecified... only UTC is supported"). Found live during the staging WPF rehearsal: a real
+    /// SQLite-backed client's own DateTime values (device/register/invoice sync payloads), pushed to
+    /// the Postgres-backed API, crashed every push with an unhandled 500 — every earlier live-rehearsal
+    /// check had used hand-built JSON with explicit "Z"-suffixed timestamps, which masked this. Forcing
+    /// Kind=Utc on every DateTime property, both on write and on read, fixes it at the source for every
+    /// provider (a no-op for SQLite, which ignores Kind entirely) rather than patching each call site.
+    /// </summary>
+    protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
+    {
+        configurationBuilder.Properties<DateTime>().HaveConversion(typeof(UtcDateTimeConverter));
+        configurationBuilder.Properties<DateTime?>().HaveConversion(typeof(UtcNullableDateTimeConverter));
+    }
+
+    private sealed class UtcDateTimeConverter : ValueConverter<DateTime, DateTime>
+    {
+        public UtcDateTimeConverter() : base(
+            v => v.Kind == DateTimeKind.Utc ? v : DateTime.SpecifyKind(v, DateTimeKind.Utc),
+            v => DateTime.SpecifyKind(v, DateTimeKind.Utc))
+        {
+        }
+    }
+
+    private sealed class UtcNullableDateTimeConverter : ValueConverter<DateTime?, DateTime?>
+    {
+        public UtcNullableDateTimeConverter() : base(
+            v => v.HasValue ? (v.Value.Kind == DateTimeKind.Utc ? v.Value : DateTime.SpecifyKind(v.Value, DateTimeKind.Utc)) : v,
+            v => v.HasValue ? DateTime.SpecifyKind(v.Value, DateTimeKind.Utc) : v)
+        {
+        }
     }
 
     private IReadOnlyCollection<PendingSyncChange> CapturePendingSyncChanges()

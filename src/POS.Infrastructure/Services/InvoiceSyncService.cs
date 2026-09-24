@@ -42,6 +42,7 @@ internal sealed class InvoiceSyncService : IInvoiceSyncService
     private readonly ICurrencyService _currencyService;
     private readonly IDbContextFactory<PosDbContext> _dbFactory;
     private const string DeviceSecretSettingKey = "Sync.DeviceSecret";
+    private const string TenantSlugSettingKey = "Sync.TenantSlug";
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly ICurrentSession _session;
     private readonly ICurrentDevice _currentDevice;
@@ -2089,10 +2090,27 @@ internal sealed class InvoiceSyncService : IInvoiceSyncService
         if (string.IsNullOrEmpty(_session.Password))
             return await TryCreateDeviceAuthorizedClientAsync(apiBaseUrl, cancellationToken);
 
+        // The API can only auto-resolve an omitted tenant slug when exactly one active tenant exists
+        // system-wide (AuthService.ResolveTenantIdAsync) — true for a lone bootstrap tenant, false the
+        // moment a real second tenant is ever provisioned. This re-login previously omitted the slug
+        // entirely, so it silently failed closed (401) on any server with more than one tenant — found
+        // live during the staging WPF rehearsal, where sync ran every interval without error but never
+        // actually pushed anything. The slug is captured once at "join an existing business" time
+        // (BusinessJoinService) and persisted as a store-scoped setting for exactly this re-use.
+        await using var slugDb = await _dbFactory.CreateDbContextAsync(cancellationToken);
+        var tenantSlug = await slugDb.Settings
+            .AsNoTracking()
+            .Where(s => s.StoreId == _session.StoreId && s.Key == TenantSlugSettingKey && !s.IsDeleted)
+            .Select(s => s.Value)
+            .FirstOrDefaultAsync(cancellationToken);
+
         var client = _httpClientFactory.CreateClient();
         client.BaseAddress = new Uri(EnsureTrailingSlash(apiBaseUrl), UriKind.Absolute);
 
-        var loginResponse = await client.PostAsJsonAsync("api/auth/login", new { Username = _session.Username, Password = _session.Password }, cancellationToken);
+        var loginResponse = await client.PostAsJsonAsync(
+            "api/auth/login",
+            new { Username = _session.Username, Password = _session.Password, TenantSlug = string.IsNullOrWhiteSpace(tenantSlug) ? null : tenantSlug },
+            cancellationToken);
         if (!loginResponse.IsSuccessStatusCode)
             return null;
 

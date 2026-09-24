@@ -111,6 +111,15 @@ public partial class App : System.Windows.Application
             })
             .Build();
 
+        // Building the host only constructs the DI container — IHostedService.StartAsync (which is
+        // what actually runs InvoiceSyncBackgroundService.ExecuteAsync) is never invoked until the
+        // host itself is started. Without this call, background sync silently never runs at all in
+        // the real app; every prior verification of it was via tests that call the sync service's
+        // methods directly, bypassing the host lifecycle entirely — found live during the staging
+        // WPF rehearsal, where a fully "reconnected" device never pushed anything after several sync
+        // intervals. OnExit already calls _host.StopAsync, so this pairs correctly with that.
+        _host.Start();
+
         // Migrations always run; auto-seeding a brand-new independent business no longer happens
         // unconditionally — SetupWindow below decides that only on a genuinely fresh install.
         _host.Services.ApplyPosDatabaseMigrations(seedDemoData: false);

@@ -140,6 +140,29 @@ internal sealed class BusinessJoinService : IBusinessJoinService
                     IsDeleted = false
                 });
 
+                // Saved separately from the Setting insert below: mixing this RemoveRange (old
+                // bootstrap tenant) with a new tracked Setting in the same SaveChanges call trips EF's
+                // relationship-fixup logic ("association ... has been severed") even though the new
+                // Setting references the new tenant, not the one being removed.
+                await db.SaveChangesAsync(cancellationToken);
+
+                // The background sync worker's own re-login (InvoiceSyncService.TryCreateAuthorizedClientAsync)
+                // must supply this same slug — the server can only auto-resolve an omitted slug when exactly
+                // one active tenant exists system-wide, which stops being true the moment any second tenant is
+                // ever provisioned. Persisted here (store-scoped, matching the DeviceSecret/cursor settings
+                // convention) so that later re-login has it without needing an interactive prompt.
+                db.Settings.Add(new Setting
+                {
+                    Id = Guid.NewGuid(),
+                    TenantId = tenantId,
+                    StoreId = login.StoreId,
+                    Key = "Sync.TenantSlug",
+                    Value = normalizedSlug,
+                    CreatedAt = now,
+                    UpdatedAt = now,
+                    IsDeleted = false
+                });
+
                 await db.SaveChangesAsync(cancellationToken);
             }
 
