@@ -709,7 +709,11 @@ public partial class MainViewModel : ObservableObject
             return;
         }
 
-        _printer.Print(result.Receipt);
+        // Printing talks to the OS print spooler and can block for seconds if the current
+        // default printer is an unreachable network device — never let that delay the sale
+        // completing or the success message showing. Print() already swallows its own
+        // exceptions and falls back to a file, so firing it off without awaiting is safe.
+        _ = Task.Run(() => _printer.Print(result.Receipt));
         MessageBox.Show(
             $"{T("Sale complete!", "تمت عملية البيع!", "המכירה הושלמה!")}\n" +
             $"{TotalLabel}:   {Locale.ToDisplayDigits(result.Receipt.Total.ToString("N2", CultureInfo.InvariantCulture))} {CurrencySuffix}\n" +
